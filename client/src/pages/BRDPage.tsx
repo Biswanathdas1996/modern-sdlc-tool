@@ -11,6 +11,8 @@ import {
   ArrowRight,
   RefreshCw,
   Edit3,
+  FileText,
+  Link2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -316,6 +318,92 @@ export default function BRDPage() {
               </div>
             </CardHeader>
           </Card>
+
+          {/* Source Documentation Banner */}
+          {mockBRD.sourceDocumentation && (
+            <Card className="border-primary/30 bg-primary/5">
+              <CardContent className="py-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10">
+                    <Link2 className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">Based on Technical Documentation</p>
+                    <p className="text-sm text-muted-foreground">
+                      This BRD was generated using "{mockBRD.sourceDocumentation}" as the context source
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate("/documentation")}
+                    data-testid="button-view-source-docs"
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    View Documentation
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Existing System Context */}
+          {mockBRD.content.existingSystemContext && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Link2 className="h-5 w-5 text-primary" />
+                  Existing System Context
+                </CardTitle>
+                <CardDescription>
+                  Components, APIs, and data models from the documentation that this feature interacts with
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid md:grid-cols-3 gap-4">
+                  {mockBRD.content.existingSystemContext.relevantComponents?.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">Related Components</h4>
+                      <ul className="space-y-1">
+                        {mockBRD.content.existingSystemContext.relevantComponents.map((comp, i) => (
+                          <li key={i} className="text-sm text-muted-foreground flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 bg-primary rounded-full" />
+                            {comp}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {mockBRD.content.existingSystemContext.relevantAPIs?.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">Related APIs</h4>
+                      <ul className="space-y-1">
+                        {mockBRD.content.existingSystemContext.relevantAPIs.map((api, i) => (
+                          <li key={i} className="text-sm text-muted-foreground flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 bg-success rounded-full" />
+                            {api}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {mockBRD.content.existingSystemContext.dataModelsAffected?.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">Data Models Affected</h4>
+                      <ul className="space-y-1">
+                        {mockBRD.content.existingSystemContext.dataModelsAffected.map((model, i) => (
+                          <li key={i} className="text-sm text-muted-foreground flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 bg-warning rounded-full" />
+                            {model}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Streaming Content */}
           {isStreaming && (

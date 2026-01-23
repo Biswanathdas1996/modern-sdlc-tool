@@ -379,44 +379,102 @@ export async function transcribeAudio(audioBuffer: Buffer): Promise<string> {
 export async function generateBRD(
   featureRequest: FeatureRequest,
   analysis: RepoAnalysis | null,
+  documentation: Documentation | null,
   onChunk?: (chunk: string) => void
 ): Promise<Omit<BRD, "id" | "createdAt" | "updatedAt">> {
-  const contextInfo = analysis
-    ? `
-Repository Context:
+  // Build comprehensive context from documentation (primary) and analysis (fallback)
+  let documentationContext = "";
+  
+  if (documentation) {
+    // Parse the content if it's a JSON string, otherwise use as-is
+    let docContent: any = {};
+    try {
+      if (typeof documentation.content === 'string') {
+        docContent = JSON.parse(documentation.content);
+      } else {
+        docContent = documentation.content;
+      }
+    } catch (e) {
+      // If parsing fails, use the content as a string
+      docContent = { overview: documentation.content };
+    }
+    
+    documentationContext = `
+=== TECHNICAL DOCUMENTATION (Generated from Repository Analysis) ===
+This BRD is being generated based on the following technical documentation:
+
+Project: ${documentation.title}
+
+${docContent.overview ? `## Overview\n${docContent.overview}\n` : ""}
+
+${docContent.architecture ? `## Architecture\n${docContent.architecture}\n` : ""}
+
+${docContent.techStack ? `## Technology Stack\n${JSON.stringify(docContent.techStack, null, 2)}\n` : ""}
+
+${docContent.components && docContent.components.length > 0 ? `## Components\n${docContent.components.map((c: any) => `- ${c.name}: ${c.description}`).join("\n")}\n` : ""}
+
+${docContent.apiServices && docContent.apiServices.length > 0 ? `## API/Services\n${docContent.apiServices.map((a: any) => `- ${a.name}: ${a.description}`).join("\n")}\n` : ""}
+
+${docContent.dataModels && docContent.dataModels.length > 0 ? `## Data Models\n${docContent.dataModels.map((d: any) => `- ${d.name}: ${d.description}`).join("\n")}\n` : ""}
+
+${docContent.features && docContent.features.length > 0 ? `## Existing Features\n${docContent.features.map((f: any) => `- ${f.name}: ${f.description}`).join("\n")}\n` : ""}
+
+${docContent.dependencies ? `## Dependencies\n${JSON.stringify(docContent.dependencies, null, 2)}\n` : ""}
+
+${docContent.setupInstructions ? `## Setup Instructions\n${docContent.setupInstructions}\n` : ""}
+=== END OF DOCUMENTATION ===
+`;
+  } else if (analysis) {
+    // Fallback to analysis if no documentation
+    documentationContext = `
+Repository Context (from analysis):
 - Architecture: ${analysis.architecture}
 - Tech Stack: ${JSON.stringify(analysis.techStack)}
 - Existing Features: ${analysis.features?.map(f => f.name).join(", ")}
 - Testing Framework: ${analysis.testingFramework || "Not specified"}
-`
-    : "";
+`;
+  }
 
   const stream = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [
       {
         role: "system",
-        content: `You are a senior business analyst creating a Business Requirements Document (BRD). Generate a comprehensive, professional BRD based on the feature request and repository context.
+        content: `You are a senior business analyst creating a Business Requirements Document (BRD). 
+
+IMPORTANT: You are generating this BRD based on the TECHNICAL DOCUMENTATION that was generated from analyzing the repository. 
+Your BRD must:
+1. Reference the existing components, APIs, and features from the documentation
+2. Align technical considerations with the documented architecture and tech stack
+3. Consider existing data models and dependencies
+4. Build upon the documented features rather than reinventing them
 
 Return a JSON object with this structure:
 {
   "title": "BRD title",
   "version": "1.0",
   "status": "draft",
+  "sourceDocumentation": "Title of the source documentation this BRD is based on",
   "content": {
-    "overview": "Executive summary of the feature",
+    "overview": "Executive summary - MUST mention this is based on the technical documentation analysis",
     "objectives": ["List of business objectives"],
     "scope": {
-      "inScope": ["What's included"],
+      "inScope": ["What's included - reference existing components where relevant"],
       "outOfScope": ["What's excluded"]
+    },
+    "existingSystemContext": {
+      "relevantComponents": ["List existing components from docs that this feature will interact with"],
+      "relevantAPIs": ["List existing APIs that will be extended or used"],
+      "dataModelsAffected": ["List data models that will be modified or extended"]
     },
     "functionalRequirements": [
       {
         "id": "FR-001",
         "title": "Requirement title",
-        "description": "Detailed description",
+        "description": "Detailed description - reference existing components where applicable",
         "priority": "high|medium|low",
-        "acceptanceCriteria": ["List of criteria"]
+        "acceptanceCriteria": ["List of criteria"],
+        "relatedComponents": ["Existing components this requirement affects"]
       }
     ],
     "nonFunctionalRequirements": [
@@ -426,9 +484,9 @@ Return a JSON object with this structure:
         "description": "Requirement description"
       }
     ],
-    "technicalConsiderations": ["Technical notes aligned with existing stack"],
-    "dependencies": ["List of dependencies"],
-    "assumptions": ["List of assumptions"],
+    "technicalConsiderations": ["Technical notes aligned with documented stack and architecture"],
+    "dependencies": ["List of dependencies - include relevant documented dependencies"],
+    "assumptions": ["List of assumptions based on the documentation"],
     "risks": [
       {
         "description": "Risk description",
@@ -440,12 +498,13 @@ Return a JSON object with this structure:
       },
       {
         role: "user",
-        content: `Create a BRD for this feature request:
+        content: `Create a BRD for this feature request. Make sure to thoroughly review the technical documentation and reference it in your requirements.
 
+Feature Request:
 Title: ${featureRequest.title}
 Description: ${featureRequest.description}
 
-${contextInfo}`
+${documentationContext}`
       }
     ],
     response_format: { type: "json_object" },
@@ -491,10 +550,12 @@ ${contextInfo}`
     title: brdData.title || featureRequest.title,
     version: brdData.version || "1.0",
     status: "draft",
+    sourceDocumentation: brdData.sourceDocumentation || (documentation?.title) || null,
     content: {
       overview: brdContent.overview || featureRequest.description,
       objectives: brdContent.objectives || [],
       scope: brdContent.scope || { inScope: [], outOfScope: [] },
+      existingSystemContext: brdContent.existingSystemContext || null,
       functionalRequirements: brdContent.functionalRequirements || [],
       nonFunctionalRequirements: brdContent.nonFunctionalRequirements || [],
       technicalConsiderations: brdContent.technicalConsiderations || [],

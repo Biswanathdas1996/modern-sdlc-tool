@@ -86,6 +86,7 @@ export const brdSchema = z.object({
   title: z.string(),
   version: z.string(),
   status: z.enum(["draft", "review", "approved"]),
+  sourceDocumentation: z.string().nullable().optional(),
   content: z.object({
     overview: z.string(),
     objectives: z.array(z.string()),
@@ -93,12 +94,18 @@ export const brdSchema = z.object({
       inScope: z.array(z.string()),
       outOfScope: z.array(z.string()),
     }),
+    existingSystemContext: z.object({
+      relevantComponents: z.array(z.string()),
+      relevantAPIs: z.array(z.string()),
+      dataModelsAffected: z.array(z.string()),
+    }).nullable().optional(),
     functionalRequirements: z.array(z.object({
       id: z.string(),
       title: z.string(),
       description: z.string(),
       priority: z.enum(["high", "medium", "low"]),
       acceptanceCriteria: z.array(z.string()),
+      relatedComponents: z.array(z.string()).optional(),
     })),
     nonFunctionalRequirements: z.array(z.object({
       id: z.string(),

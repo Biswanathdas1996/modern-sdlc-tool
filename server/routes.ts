@@ -230,6 +230,7 @@ export async function registerRoutes(
       }
 
       const analysis = await storage.getAnalysis(projects[0].id);
+      const documentation = await storage.getDocumentation(projects[0].id);
 
       // Set up SSE with proper headers
       res.setHeader("Content-Type", "text/event-stream");
@@ -252,10 +253,11 @@ export async function registerRoutes(
       }, 15000);
 
       try {
-        // Generate BRD
+        // Generate BRD using documentation as context
         const brd = await generateBRD(
           featureRequest,
           analysis || null,
+          documentation || null,
           (chunk) => {
             if (isClientConnected) {
               res.write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
