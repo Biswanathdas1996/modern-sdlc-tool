@@ -568,11 +568,47 @@ ${documentationContext}`
 
 export async function generateTestCases(
   brd: BRD,
-  analysis: RepoAnalysis | null
+  analysis: RepoAnalysis | null,
+  documentation: Documentation | null
 ): Promise<Omit<TestCase, "id" | "createdAt">[]> {
   const testingContext = analysis?.testingFramework
     ? `Use ${analysis.testingFramework} syntax for code snippets.`
     : "Use Jest with TypeScript for code snippets.";
+
+  // Build documentation context for test cases
+  let documentationContext = "";
+  if (documentation) {
+    let docContent: any = {};
+    try {
+      if (typeof documentation.content === 'string') {
+        docContent = JSON.parse(documentation.content);
+      } else {
+        docContent = documentation.content;
+      }
+    } catch (e) {
+      docContent = { overview: documentation.content };
+    }
+    
+    documentationContext = `
+=== REPOSITORY DOCUMENTATION (Use this as the authoritative source for test context) ===
+
+${docContent.overview ? `## System Overview\n${docContent.overview}\n` : ""}
+
+${docContent.architecture ? `## Architecture\n${docContent.architecture}\n` : ""}
+
+${docContent.components && docContent.components.length > 0 ? `## Components to Test Against\n${docContent.components.map((c: any) => `- ${c.name}: ${c.description}${c.filePath ? ` (${c.filePath})` : ""}`).join("\n")}\n` : ""}
+
+${docContent.apiServices && docContent.apiServices.length > 0 ? `## API Endpoints to Test\n${docContent.apiServices.map((a: any) => `- ${a.name}: ${a.description}${a.endpoint ? ` [${a.method || 'GET'} ${a.endpoint}]` : ""}`).join("\n")}\n` : ""}
+
+${docContent.dataModels && docContent.dataModels.length > 0 ? `## Data Models (for test data structure)\n${docContent.dataModels.map((d: any) => `- ${d.name}: ${d.description}${d.fields ? ` - Fields: ${JSON.stringify(d.fields)}` : ""}`).join("\n")}\n` : ""}
+
+${docContent.features && docContent.features.length > 0 ? `## Existing Features\n${docContent.features.map((f: any) => `- ${f.name}: ${f.description}`).join("\n")}\n` : ""}
+
+${docContent.techStack ? `## Technology Stack\n${JSON.stringify(docContent.techStack, null, 2)}\n` : ""}
+
+=== END DOCUMENTATION ===
+`;
+  }
 
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
@@ -581,7 +617,20 @@ export async function generateTestCases(
         role: "system",
         content: `You are a senior QA engineer creating comprehensive test cases from a BRD. Generate test cases for each functional requirement.
 
+CRITICAL: Your test cases MUST be based on the repository documentation provided. Reference actual:
+- Components and their file paths from the documentation
+- API endpoints with their actual routes and methods
+- Data models with their actual field names
+- Existing features that the new feature interacts with
+
 ${testingContext}
+
+Test cases should:
+1. Reference actual component names and file paths from the documentation
+2. Use actual API endpoint paths and HTTP methods from the documentation
+3. Include realistic test data based on documented data models
+4. Consider integration with existing documented features
+5. Include code snippets that match the actual codebase structure
 
 Return a JSON object with this structure:
 {
@@ -601,21 +650,36 @@ Return a JSON object with this structure:
         }
       ],
       "expectedOutcome": "Overall expected result",
-      "codeSnippet": "Optional code example for automated testing"
+      "codeSnippet": "Optional code example for automated testing",
+      "relatedComponents": ["List of components from documentation this test covers"],
+      "relatedAPIs": ["List of API endpoints from documentation this test covers"]
     }
   ]
 }`
       },
       {
         role: "user",
-        content: `Generate test cases for this BRD:
+        content: `Generate test cases for this BRD based on the repository documentation:
 
+${documentationContext}
+
+=== BRD TO CREATE TEST CASES FOR ===
 Title: ${brd.title}
+
 Functional Requirements:
 ${JSON.stringify(brd.content.functionalRequirements, null, 2)}
 
 Non-Functional Requirements:
-${JSON.stringify(brd.content.nonFunctionalRequirements, null, 2)}`
+${JSON.stringify(brd.content.nonFunctionalRequirements, null, 2)}
+
+${brd.content.existingSystemContext ? `
+Existing System Context (from BRD):
+- Relevant Components: ${brd.content.existingSystemContext.relevantComponents?.join(", ") || "None specified"}
+- Relevant APIs: ${brd.content.existingSystemContext.relevantAPIs?.join(", ") || "None specified"}
+- Data Models Affected: ${brd.content.existingSystemContext.dataModelsAffected?.join(", ") || "None specified"}
+` : ""}
+
+IMPORTANT: Create test cases that reference the actual components, APIs, and data models from the documentation above. Do not use generic or placeholder names.`
       }
     ],
     response_format: { type: "json_object" },
@@ -641,14 +705,47 @@ ${JSON.stringify(brd.content.nonFunctionalRequirements, null, 2)}`
 
 export async function generateTestData(
   testCases: TestCase[],
-  brd: BRD
+  brd: BRD,
+  documentation: Documentation | null
 ): Promise<Omit<TestData, "id" | "createdAt">[]> {
+  // Build documentation context for test data
+  let documentationContext = "";
+  if (documentation) {
+    let docContent: any = {};
+    try {
+      if (typeof documentation.content === 'string') {
+        docContent = JSON.parse(documentation.content);
+      } else {
+        docContent = documentation.content;
+      }
+    } catch (e) {
+      docContent = { overview: documentation.content };
+    }
+    
+    documentationContext = `
+=== REPOSITORY DOCUMENTATION (Use for realistic test data) ===
+
+${docContent.dataModels && docContent.dataModels.length > 0 ? `## Data Models (use these field names and types)\n${docContent.dataModels.map((d: any) => `- ${d.name}: ${d.description}${d.fields ? `\n  Fields: ${JSON.stringify(d.fields, null, 2)}` : ""}`).join("\n")}\n` : ""}
+
+${docContent.apiServices && docContent.apiServices.length > 0 ? `## API Endpoints (test data should match expected request/response formats)\n${docContent.apiServices.map((a: any) => `- ${a.name}: ${a.description}${a.endpoint ? ` [${a.method || 'GET'} ${a.endpoint}]` : ""}`).join("\n")}\n` : ""}
+
+${docContent.components && docContent.components.length > 0 ? `## Components (for UI test data context)\n${docContent.components.map((c: any) => `- ${c.name}: ${c.description}`).join("\n")}\n` : ""}
+
+=== END DOCUMENTATION ===
+`;
+  }
+
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [
       {
         role: "system",
         content: `You are a senior QA engineer creating test data for test cases. Generate comprehensive test datasets including valid, invalid, edge, and boundary cases.
+
+CRITICAL: Your test data MUST be based on the repository documentation provided. Use:
+- Actual field names and types from documented data models
+- Realistic values that match the documented API formats
+- Data structures that align with the codebase
 
 Return a JSON object with this structure:
 {
@@ -659,7 +756,7 @@ Return a JSON object with this structure:
       "description": "What this test data represents",
       "dataType": "valid|invalid|edge|boundary",
       "data": {
-        "Any relevant test data as key-value pairs"
+        "Use actual field names from documentation"
       }
     }
   ]
@@ -667,14 +764,19 @@ Return a JSON object with this structure:
       },
       {
         role: "user",
-        content: `Generate test data for these test cases:
+        content: `Generate test data for these test cases based on the repository documentation:
 
+${documentationContext}
+
+=== TEST CASES TO GENERATE DATA FOR ===
 BRD Title: ${brd.title}
 Test Cases:
 ${testCases.map(tc => `- ${tc.id || tc.title}: ${tc.description}`).join("\n")}
 
 Requirements context:
-${JSON.stringify(brd.content.functionalRequirements.slice(0, 3), null, 2)}`
+${JSON.stringify(brd.content.functionalRequirements.slice(0, 3), null, 2)}
+
+IMPORTANT: Generate test data that uses actual field names and data structures from the documentation. Do not use generic placeholder names.`
       }
     ],
     response_format: { type: "json_object" },

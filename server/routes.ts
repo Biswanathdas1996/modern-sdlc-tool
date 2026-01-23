@@ -315,8 +315,9 @@ export async function registerRoutes(
 
       const projects = await storage.getAllProjects();
       const analysis = projects.length > 0 ? await storage.getAnalysis(projects[0].id) : null;
+      const documentation = projects.length > 0 ? await storage.getDocumentation(projects[0].id) : null;
 
-      const testCases = await generateTestCases(brd, analysis || null);
+      const testCases = await generateTestCases(brd, analysis || null, documentation || null);
       if (!testCases || testCases.length === 0) {
         return res.status(500).json({ error: "Failed to generate test cases - no cases returned" });
       }
@@ -353,7 +354,10 @@ export async function registerRoutes(
         return res.status(400).json({ error: "No test cases found. Please generate test cases first." });
       }
 
-      const testData = await generateTestData(testCases, brd);
+      const projects = await storage.getAllProjects();
+      const documentation = projects.length > 0 ? await storage.getDocumentation(projects[0].id) : null;
+
+      const testData = await generateTestData(testCases, brd, documentation || null);
       if (!testData || testData.length === 0) {
         return res.status(500).json({ error: "Failed to generate test data - no data returned" });
       }
