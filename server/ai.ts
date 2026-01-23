@@ -6,133 +6,174 @@ const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
 });
 
-// Fetch repository contents from GitHub
+// GitHub API headers with authentication
+function getGitHubHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Accept": "application/vnd.github.v3+json",
+    "User-Agent": "DocuGen-AI",
+  };
+  
+  const token = process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  
+  return headers;
+}
+
+// Fetch repository contents from GitHub with authentication
 async function fetchRepoContents(repoUrl: string): Promise<string> {
   const match = repoUrl.match(/github\.com\/([^/]+)\/([^/]+)/);
   if (!match) throw new Error("Invalid GitHub URL");
   
   const owner = match[1];
   const repo = match[2].replace(/\.git$/, "");
+  const headers = getGitHubHeaders();
   
   try {
     // Fetch repository info
-    const repoResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}`);
-    if (!repoResponse.ok) throw new Error("Failed to fetch repository");
+    const repoResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
+    if (!repoResponse.ok) throw new Error(`Failed to fetch repository: ${repoResponse.status}`);
     const repoData = await repoResponse.json();
     
-    // Fetch file tree
-    const treeResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/main?recursive=1`);
+    const defaultBranch = repoData.default_branch || "main";
+    
+    // Fetch file tree with authentication
     let treeData: any = { tree: [] };
+    const treeResponse = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`,
+      { headers }
+    );
     if (treeResponse.ok) {
       treeData = await treeResponse.json();
-    } else {
-      // Try master branch
-      const masterResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/master?recursive=1`);
-      if (masterResponse.ok) {
-        treeData = await masterResponse.json();
-      }
     }
     
-    // Get all files for structure
-    const allFiles = treeData.tree
-      ?.filter((f: any) => f.type === "blob")
-      .map((f: any) => f.path) || [];
-    
-    // Identify important files to fetch (config, entry points, components, services)
-    const priorityPatterns = [
-      /^package\.json$/,
-      /^README\.md$/i,
-      /^\.env\.example$/,
-      /^tsconfig\.json$/,
-      /^vite\.config\.(ts|js)$/,
-      /^next\.config\.(js|mjs|ts)$/,
-      /^app\.(tsx?|jsx?)$/,
-      /^index\.(tsx?|jsx?)$/,
-      /^main\.(tsx?|jsx?)$/,
-      /src\/index\.(tsx?|jsx?)$/,
-      /src\/App\.(tsx?|jsx?)$/,
-      /src\/main\.(tsx?|jsx?)$/,
-      /pages\/index\.(tsx?|jsx?)$/,
-      /pages\/_app\.(tsx?|jsx?)$/,
-      /components\/.*\.(tsx?|jsx?)$/,
-      /services\/.*\.(tsx?|js)$/,
-      /hooks\/.*\.(tsx?|js)$/,
-      /utils\/.*\.(tsx?|js)$/,
-      /lib\/.*\.(tsx?|js)$/,
-      /api\/.*\.(tsx?|js)$/,
-      /routes\/.*\.(tsx?|js)$/,
-      /models\/.*\.(tsx?|js)$/,
-      /controllers\/.*\.(tsx?|js)$/,
+    // Get all code files (exclude images, binaries, etc.)
+    const codeExtensions = [
+      '.js', '.jsx', '.ts', '.tsx', '.py', '.java', '.go', '.rs', '.rb', '.php',
+      '.html', '.css', '.scss', '.sass', '.less', '.vue', '.svelte',
+      '.json', '.yaml', '.yml', '.toml', '.xml', '.md', '.txt',
+      '.sql', '.graphql', '.prisma', '.env.example', '.gitignore',
+      '.sh', '.bash', '.zsh', '.dockerfile', '.config.js', '.config.ts'
     ];
     
-    // Find files matching priority patterns
-    const filesToFetch: string[] = [];
-    for (const file of allFiles) {
-      if (priorityPatterns.some(pattern => pattern.test(file))) {
-        filesToFetch.push(file);
-      }
-    }
+    const allFiles = treeData.tree
+      ?.filter((f: any) => {
+        if (f.type !== "blob") return false;
+        const path = f.path.toLowerCase();
+        // Exclude node_modules, dist, build, etc.
+        if (path.includes('node_modules/') || path.includes('/dist/') || 
+            path.includes('/build/') || path.includes('/.git/') ||
+            path.includes('/coverage/') || path.includes('/.next/')) {
+          return false;
+        }
+        // Include files with code extensions or no extension (like Dockerfile)
+        return codeExtensions.some(ext => path.endsWith(ext)) || 
+               !path.includes('.') ||
+               path.endsWith('dockerfile') ||
+               path.endsWith('makefile');
+      })
+      .map((f: any) => ({ path: f.path, size: f.size || 0 })) || [];
     
-    // Limit to prevent rate limiting (fetch up to 25 important files)
-    const limitedFiles = filesToFetch.slice(0, 25);
+    // Sort files by importance
+    const priorityOrder = (path: string): number => {
+      const lower = path.toLowerCase();
+      if (lower === 'readme.md') return 0;
+      if (lower === 'package.json') return 1;
+      if (lower.includes('index.') || lower.includes('main.') || lower.includes('app.')) return 2;
+      if (lower.startsWith('src/')) return 3;
+      if (lower.includes('/components/')) return 4;
+      if (lower.includes('/pages/')) return 5;
+      if (lower.includes('/api/') || lower.includes('/routes/')) return 6;
+      if (lower.includes('/services/') || lower.includes('/hooks/')) return 7;
+      if (lower.includes('/utils/') || lower.includes('/lib/')) return 8;
+      if (lower.includes('config')) return 9;
+      return 10;
+    };
     
-    // Fetch file contents in parallel with rate limiting
+    allFiles.sort((a: any, b: any) => priorityOrder(a.path) - priorityOrder(b.path));
+    
+    // Fetch ALL important files (up to 50 files, max 3000 chars each)
+    const filesToFetch = allFiles.slice(0, 50);
     const fileContents: string[] = [];
-    const fetchFile = async (filePath: string): Promise<string | null> => {
+    let totalChars = 0;
+    const maxTotalChars = 100000; // Limit total context to ~100k chars
+    
+    const fetchFile = async (filePath: string): Promise<{ path: string; content: string } | null> => {
       try {
-        const contentResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${filePath}`);
+        const contentResponse = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}`,
+          { headers }
+        );
         if (contentResponse.ok) {
           const contentData = await contentResponse.json();
           if (contentData.content) {
             const decoded = Buffer.from(contentData.content, "base64").toString("utf-8");
-            // Limit individual file content to 2000 chars for context window
-            const truncated = decoded.length > 2000 ? decoded.substring(0, 2000) + "\n... [truncated]" : decoded;
-            return `--- ${filePath} ---\n${truncated}\n`;
+            return { path: filePath, content: decoded };
           }
         }
-      } catch {
-        // File fetch failed, skip
+      } catch (err) {
+        console.error(`Error fetching ${filePath}:`, err);
       }
       return null;
     };
     
-    // Batch fetch files (5 at a time to avoid rate limiting)
-    for (let i = 0; i < limitedFiles.length; i += 5) {
-      const batch = limitedFiles.slice(i, i + 5);
-      const results = await Promise.all(batch.map(fetchFile));
-      results.forEach(r => r && fileContents.push(r));
+    // Batch fetch files (10 at a time for authenticated requests)
+    for (let i = 0; i < filesToFetch.length && totalChars < maxTotalChars; i += 10) {
+      const batch = filesToFetch.slice(i, i + 10);
+      const results = await Promise.all(batch.map((f: any) => fetchFile(f.path)));
+      
+      for (const result of results) {
+        if (result && totalChars < maxTotalChars) {
+          // Truncate large files but keep enough context
+          const maxFileChars = 4000;
+          const content = result.content.length > maxFileChars 
+            ? result.content.substring(0, maxFileChars) + "\n... [truncated - file continues]"
+            : result.content;
+          
+          fileContents.push(`\n=== FILE: ${result.path} ===\n${content}`);
+          totalChars += content.length;
+        }
+      }
     }
     
-    // Group files by directory for better structure understanding
+    // Build comprehensive directory structure
     const dirStructure: Record<string, string[]> = {};
     for (const file of allFiles) {
-      const parts = file.split("/");
+      const parts = file.path.split("/");
       const dir = parts.length > 1 ? parts.slice(0, -1).join("/") : "(root)";
       if (!dirStructure[dir]) dirStructure[dir] = [];
       dirStructure[dir].push(parts[parts.length - 1]);
     }
     
     const structureText = Object.entries(dirStructure)
-      .map(([dir, files]) => `${dir}/\n  ${files.join("\n  ")}`)
+      .slice(0, 30) // Limit directories shown
+      .map(([dir, files]) => `${dir}/\n  ${files.slice(0, 20).join("\n  ")}${files.length > 20 ? `\n  ... and ${files.length - 20} more files` : ""}`)
       .join("\n\n");
     
+    console.log(`Fetched ${fileContents.length} files, ${totalChars} total characters for ${owner}/${repo}`);
+    
     return `
+=== REPOSITORY INFORMATION ===
 Repository: ${repoData.full_name}
-Description: ${repoData.description || "No description"}
+Description: ${repoData.description || "No description provided"}
 Primary Language: ${repoData.language || "Unknown"}
 Stars: ${repoData.stargazers_count}
+Forks: ${repoData.forks_count}
 Topics: ${repoData.topics?.join(", ") || "None"}
-Default Branch: ${repoData.default_branch || "main"}
+Default Branch: ${defaultBranch}
+License: ${repoData.license?.name || "Not specified"}
+Total Files Analyzed: ${fileContents.length}
 
 === DIRECTORY STRUCTURE ===
 ${structureText}
 
-=== FILE CONTENTS ===
+=== COMPLETE FILE CONTENTS ===
 ${fileContents.join("\n")}
     `.trim();
   } catch (error) {
     console.error("Error fetching repo contents:", error);
-    return `Repository: ${owner}/${repo}\nNote: Limited access - could not fetch detailed contents.`;
+    throw new Error(`Failed to fetch repository: ${error instanceof Error ? error.message : "Unknown error"}`);
   }
 }
 
