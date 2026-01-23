@@ -241,71 +241,89 @@ export async function generateDocumentation(
   analysis: RepoAnalysis,
   project: Project
 ): Promise<Omit<Documentation, "id" | "createdAt">> {
+  // Fetch raw repository contents again for accurate documentation
+  let repoContext = "";
+  try {
+    repoContext = await fetchRepoContents(project.repoUrl);
+    console.log(`Documentation: Re-fetched repo contents for ${project.name}`);
+  } catch (err) {
+    console.error("Failed to fetch repo for documentation:", err);
+  }
+  
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [
       {
         role: "system",
-        content: `You are a technical writer creating ACCURATE and DETAILED documentation for a software project. Generate documentation that is SPECIFIC to this project based on the analysis provided.
+        content: `You are a technical writer creating ACCURATE and DETAILED documentation for a software project. You have access to the ACTUAL SOURCE CODE files. Read them carefully and generate documentation that EXACTLY matches what the code does.
 
-IMPORTANT INSTRUCTIONS:
-1. Use EXACT names from the analysis - component names, feature names, file paths
-2. Document the ACTUAL features identified in the analysis
-3. Include REAL technical details from the tech stack
-4. Do NOT add generic content that doesn't apply to this specific project
-5. Reference ACTUAL file paths and component names from the analysis
-6. Keep descriptions accurate to what the code actually does
+CRITICAL INSTRUCTIONS:
+1. READ the actual file contents provided - they contain the real implementation
+2. Extract EXACT component names, function names, and features from the code
+3. Document what each file ACTUALLY does based on its code
+4. Include REAL dependencies from package.json
+5. Do NOT invent features that don't exist in the code
+6. Do NOT use placeholder or example content - everything must come from the actual code
+7. If you see a component like "CardOnboarding" in the code, document "CardOnboarding" - not a generic name
 
 Return a JSON object with this structure:
 {
   "title": "Project Name - Technical Documentation",
-  "content": "Full markdown overview of the project",
+  "content": "Full markdown overview based on actual code",
   "sections": [
     {
       "title": "Overview",
-      "content": "Detailed markdown describing what this specific project does"
+      "content": "Description based on README and actual code purpose"
     },
     {
       "title": "Architecture",
-      "content": "The actual architecture pattern used with specific file/folder references"
+      "content": "Architecture based on actual file structure and imports"
     },
     {
       "title": "Features",
-      "content": "Each feature with its actual implementation details"
+      "content": "Features extracted from actual components and functions in the code"
+    },
+    {
+      "title": "Components",
+      "content": "List of actual React/UI components found in the code with their purposes"
     },
     {
       "title": "Technology Stack",
-      "content": "Exact technologies with versions where available"
+      "content": "Technologies from package.json dependencies"
+    },
+    {
+      "title": "API/Services",
+      "content": "Any API endpoints or services found in the code"
     },
     {
       "title": "Getting Started",
-      "content": "How to run this specific project based on its configuration"
+      "content": "Based on package.json scripts and README"
     },
     {
       "title": "Project Structure",
-      "content": "Key files and directories with their purposes"
+      "content": "Actual file structure from the repository"
     }
   ]
 }`
       },
       {
         role: "user",
-        content: `Generate accurate technical documentation for this project:
+        content: `Generate accurate technical documentation by reading the ACTUAL SOURCE CODE below.
 
 Project Name: ${project.name}
 Repository URL: ${project.repoUrl}
 
-Analysis (use these EXACT details in your documentation):
+=== ACTUAL SOURCE CODE FILES ===
+${repoContext}
+
+=== ANALYSIS SUMMARY (for reference) ===
 - Summary: ${analysis.summary}
-- Architecture: ${analysis.architecture}
 - Tech Stack: ${JSON.stringify(analysis.techStack, null, 2)}
-- Features: ${JSON.stringify(analysis.features, null, 2)}
-- Code Patterns: ${analysis.codePatterns?.join(", ")}
-- Testing Framework: ${analysis.testingFramework || "Not specified"}`
+- Features Found: ${JSON.stringify(analysis.features, null, 2)}`
       }
     ],
     response_format: { type: "json_object" },
-    max_completion_tokens: 4096,
+    max_completion_tokens: 8192,
   });
 
   const rawContent = response.choices[0]?.message?.content || "{}";
