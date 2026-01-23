@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { GitBranch, Search, ArrowRight, ExternalLink, Folder, FileCode, Clock, Star, GitFork } from "lucide-react";
@@ -23,25 +23,44 @@ const workflowSteps = [
 
 export default function AnalyzePage() {
   const [repoUrl, setRepoUrl] = useState("");
+  const [analyzingProjectId, setAnalyzingProjectId] = useState<string | null>(null);
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
 
+  // Poll for projects to check status
   const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
+    refetchInterval: analyzingProjectId ? 2000 : false, // Poll every 2s when analyzing
   });
+
+  // Check if analyzing project is complete
+  useEffect(() => {
+    if (analyzingProjectId && projects) {
+      const project = projects.find(p => p.id === analyzingProjectId);
+      if (project && project.status === "completed") {
+        setAnalyzingProjectId(null);
+        queryClient.invalidateQueries({ queryKey: ["/api/analysis/current"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/documentation/current"] });
+        navigate("/documentation");
+      } else if (project && project.status === "error") {
+        setAnalyzingProjectId(null);
+      }
+    }
+  }, [projects, analyzingProjectId, navigate, queryClient]);
 
   const analyzeMutation = useMutation({
     mutationFn: async (url: string) => {
       const response = await apiRequest("POST", "/api/projects/analyze", { repoUrl: url });
       return response.json();
     },
-    onSuccess: (data) => {
+    onSuccess: (data: Project) => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analysis/current"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/documentation/current"] });
-      navigate("/documentation");
+      setAnalyzingProjectId(data.id); // Start polling for this project
     },
   });
+
+  const isAnalyzing = analyzeMutation.isPending || !!analyzingProjectId;
+  const analyzingProject = projects?.find(p => p.id === analyzingProjectId);
 
   const handleAnalyze = () => {
     if (repoUrl.trim()) {
@@ -60,10 +79,13 @@ export default function AnalyzePage() {
 
   return (
     <div className="flex flex-col h-full">
-      {analyzeMutation.isPending && (
+      {isAnalyzing && (
         <LoadingOverlay 
           message="Analyzing Repository..." 
-          subMessage="Extracting code structure, features, and tech stack"
+          subMessage={analyzingProject 
+            ? `Status: ${analyzingProject.status} - Fetching files, analyzing code, and generating documentation...`
+            : "Extracting code structure, features, and tech stack"
+          }
         />
       )}
 
@@ -101,10 +123,10 @@ export default function AnalyzePage() {
                 </div>
                 <Button
                   onClick={handleAnalyze}
-                  disabled={!isValidGitHubUrl(repoUrl) || analyzeMutation.isPending}
+                  disabled={!isValidGitHubUrl(repoUrl) || isAnalyzing}
                   data-testid="button-analyze"
                 >
-                  {analyzeMutation.isPending ? (
+                  {isAnalyzing ? (
                     <LoadingSpinner size="sm" />
                   ) : (
                     <>
