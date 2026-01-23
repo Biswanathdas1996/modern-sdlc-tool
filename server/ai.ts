@@ -33,42 +33,101 @@ async function fetchRepoContents(repoUrl: string): Promise<string> {
       }
     }
     
-    // Get key files content
-    const keyFiles = ["package.json", "README.md", "requirements.txt", "Cargo.toml", "go.mod", "pom.xml"];
-    const fileContents: string[] = [];
+    // Get all files for structure
+    const allFiles = treeData.tree
+      ?.filter((f: any) => f.type === "blob")
+      .map((f: any) => f.path) || [];
     
-    for (const file of keyFiles) {
+    // Identify important files to fetch (config, entry points, components, services)
+    const priorityPatterns = [
+      /^package\.json$/,
+      /^README\.md$/i,
+      /^\.env\.example$/,
+      /^tsconfig\.json$/,
+      /^vite\.config\.(ts|js)$/,
+      /^next\.config\.(js|mjs|ts)$/,
+      /^app\.(tsx?|jsx?)$/,
+      /^index\.(tsx?|jsx?)$/,
+      /^main\.(tsx?|jsx?)$/,
+      /src\/index\.(tsx?|jsx?)$/,
+      /src\/App\.(tsx?|jsx?)$/,
+      /src\/main\.(tsx?|jsx?)$/,
+      /pages\/index\.(tsx?|jsx?)$/,
+      /pages\/_app\.(tsx?|jsx?)$/,
+      /components\/.*\.(tsx?|jsx?)$/,
+      /services\/.*\.(tsx?|js)$/,
+      /hooks\/.*\.(tsx?|js)$/,
+      /utils\/.*\.(tsx?|js)$/,
+      /lib\/.*\.(tsx?|js)$/,
+      /api\/.*\.(tsx?|js)$/,
+      /routes\/.*\.(tsx?|js)$/,
+      /models\/.*\.(tsx?|js)$/,
+      /controllers\/.*\.(tsx?|js)$/,
+    ];
+    
+    // Find files matching priority patterns
+    const filesToFetch: string[] = [];
+    for (const file of allFiles) {
+      if (priorityPatterns.some(pattern => pattern.test(file))) {
+        filesToFetch.push(file);
+      }
+    }
+    
+    // Limit to prevent rate limiting (fetch up to 25 important files)
+    const limitedFiles = filesToFetch.slice(0, 25);
+    
+    // Fetch file contents in parallel with rate limiting
+    const fileContents: string[] = [];
+    const fetchFile = async (filePath: string): Promise<string | null> => {
       try {
-        const contentResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${file}`);
+        const contentResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${filePath}`);
         if (contentResponse.ok) {
           const contentData = await contentResponse.json();
           if (contentData.content) {
             const decoded = Buffer.from(contentData.content, "base64").toString("utf-8");
-            fileContents.push(`--- ${file} ---\n${decoded}\n`);
+            // Limit individual file content to 2000 chars for context window
+            const truncated = decoded.length > 2000 ? decoded.substring(0, 2000) + "\n... [truncated]" : decoded;
+            return `--- ${filePath} ---\n${truncated}\n`;
           }
         }
       } catch {
-        // File doesn't exist, skip
+        // File fetch failed, skip
       }
+      return null;
+    };
+    
+    // Batch fetch files (5 at a time to avoid rate limiting)
+    for (let i = 0; i < limitedFiles.length; i += 5) {
+      const batch = limitedFiles.slice(i, i + 5);
+      const results = await Promise.all(batch.map(fetchFile));
+      results.forEach(r => r && fileContents.push(r));
     }
     
-    // Build context
-    const files = treeData.tree
-      ?.filter((f: any) => f.type === "blob")
-      .map((f: any) => f.path)
-      .slice(0, 100) || [];
+    // Group files by directory for better structure understanding
+    const dirStructure: Record<string, string[]> = {};
+    for (const file of allFiles) {
+      const parts = file.split("/");
+      const dir = parts.length > 1 ? parts.slice(0, -1).join("/") : "(root)";
+      if (!dirStructure[dir]) dirStructure[dir] = [];
+      dirStructure[dir].push(parts[parts.length - 1]);
+    }
+    
+    const structureText = Object.entries(dirStructure)
+      .map(([dir, files]) => `${dir}/\n  ${files.join("\n  ")}`)
+      .join("\n\n");
     
     return `
 Repository: ${repoData.full_name}
 Description: ${repoData.description || "No description"}
-Language: ${repoData.language || "Unknown"}
+Primary Language: ${repoData.language || "Unknown"}
 Stars: ${repoData.stargazers_count}
 Topics: ${repoData.topics?.join(", ") || "None"}
+Default Branch: ${repoData.default_branch || "main"}
 
-Files in repository:
-${files.join("\n")}
+=== DIRECTORY STRUCTURE ===
+${structureText}
 
-Key file contents:
+=== FILE CONTENTS ===
 ${fileContents.join("\n")}
     `.trim();
   } catch (error) {
@@ -85,32 +144,41 @@ export async function analyzeRepository(repoUrl: string, projectId: string): Pro
     messages: [
       {
         role: "system",
-        content: `You are a senior software architect analyzing GitHub repositories. Analyze the provided repository information and generate comprehensive documentation about its structure, features, and technology stack.
+        content: `You are a senior software architect analyzing GitHub repositories. Carefully examine ALL provided file contents, directory structure, and code to generate an ACCURATE and DETAILED analysis.
+
+IMPORTANT INSTRUCTIONS:
+1. Read EVERY file content provided - each file reveals important details
+2. Extract EXACT feature names, component names, and function names from the actual code
+3. Identify the REAL purpose from the code logic, not generic descriptions
+4. List ACTUAL dependencies from package.json or similar config files
+5. Describe the SPECIFIC architecture based on the directory structure and imports
+6. Do NOT make up features that don't exist in the code
+7. Do NOT use generic descriptions - be specific to THIS repository
 
 Return your analysis as a JSON object with this exact structure:
 {
-  "summary": "Brief overview of what this repository does",
-  "architecture": "Description of the architectural patterns and structure",
+  "summary": "Specific description of what this application does based on the actual code",
+  "architecture": "Detailed description of the architectural patterns observed in the code structure",
   "features": [
     {
-      "name": "Feature name",
-      "description": "What this feature does",
-      "files": ["list", "of", "relevant", "files"]
+      "name": "Actual feature name from the code",
+      "description": "What this feature does based on examining the code",
+      "files": ["actual/file/paths.tsx", "from/the/repo.ts"]
     }
   ],
   "techStack": {
-    "languages": ["list of programming languages"],
-    "frameworks": ["list of frameworks"],
-    "databases": ["list of databases if any"],
-    "tools": ["list of tools like Docker, CI/CD, etc"]
+    "languages": ["languages from package.json/actual files"],
+    "frameworks": ["exact framework names and versions from dependencies"],
+    "databases": ["databases if referenced in code"],
+    "tools": ["actual tools found in config files"]
   },
-  "testingFramework": "Testing framework used if any",
-  "codePatterns": ["list of design patterns or coding patterns observed"]
+  "testingFramework": "Testing framework from devDependencies if any",
+  "codePatterns": ["patterns actually observed in the code like hooks, components, services, etc"]
 }`
       },
       {
         role: "user",
-        content: `Analyze this repository:\n\n${repoContext}`
+        content: `Analyze this repository carefully. Read all file contents and provide an accurate analysis:\n\n${repoContext}`
       }
     ],
     response_format: { type: "json_object" },
@@ -137,32 +205,60 @@ export async function generateDocumentation(
     messages: [
       {
         role: "system",
-        content: `You are a technical writer creating comprehensive documentation for a software project. Based on the repository analysis provided, generate detailed technical documentation.
+        content: `You are a technical writer creating ACCURATE and DETAILED documentation for a software project. Generate documentation that is SPECIFIC to this project based on the analysis provided.
+
+IMPORTANT INSTRUCTIONS:
+1. Use EXACT names from the analysis - component names, feature names, file paths
+2. Document the ACTUAL features identified in the analysis
+3. Include REAL technical details from the tech stack
+4. Do NOT add generic content that doesn't apply to this specific project
+5. Reference ACTUAL file paths and component names from the analysis
+6. Keep descriptions accurate to what the code actually does
 
 Return a JSON object with this structure:
 {
-  "title": "Project Documentation Title",
-  "content": "Full markdown content of the documentation",
+  "title": "Project Name - Technical Documentation",
+  "content": "Full markdown overview of the project",
   "sections": [
     {
-      "title": "Section title",
-      "content": "Section content in markdown"
+      "title": "Overview",
+      "content": "Detailed markdown describing what this specific project does"
+    },
+    {
+      "title": "Architecture",
+      "content": "The actual architecture pattern used with specific file/folder references"
+    },
+    {
+      "title": "Features",
+      "content": "Each feature with its actual implementation details"
+    },
+    {
+      "title": "Technology Stack",
+      "content": "Exact technologies with versions where available"
+    },
+    {
+      "title": "Getting Started",
+      "content": "How to run this specific project based on its configuration"
+    },
+    {
+      "title": "Project Structure",
+      "content": "Key files and directories with their purposes"
     }
   ]
 }`
       },
       {
         role: "user",
-        content: `Generate documentation for this project:
+        content: `Generate accurate technical documentation for this project:
 
 Project Name: ${project.name}
 Repository URL: ${project.repoUrl}
 
-Analysis:
+Analysis (use these EXACT details in your documentation):
 - Summary: ${analysis.summary}
 - Architecture: ${analysis.architecture}
-- Tech Stack: ${JSON.stringify(analysis.techStack)}
-- Features: ${JSON.stringify(analysis.features)}
+- Tech Stack: ${JSON.stringify(analysis.techStack, null, 2)}
+- Features: ${JSON.stringify(analysis.features, null, 2)}
 - Code Patterns: ${analysis.codePatterns?.join(", ")}
 - Testing Framework: ${analysis.testingFramework || "Not specified"}`
       }
