@@ -13,27 +13,32 @@ mermaid.initialize({
   theme: "base",
   securityLevel: "strict",
   themeVariables: {
-    primaryColor: "#3b82f6",
-    primaryTextColor: "#ffffff",
-    primaryBorderColor: "#2563eb",
-    lineColor: "#64748b",
-    secondaryColor: "#f1f5f9",
-    tertiaryColor: "#e2e8f0",
+    primaryColor: "#dbeafe",
+    primaryTextColor: "#1e3a5f",
+    primaryBorderColor: "#3b82f6",
+    lineColor: "#1e40af",
+    secondaryColor: "#e0f2fe",
+    tertiaryColor: "#f0f9ff",
     background: "#ffffff",
-    mainBkg: "#f8fafc",
-    nodeBorder: "#cbd5e1",
-    clusterBkg: "#f1f5f9",
-    clusterBorder: "#e2e8f0",
-    titleColor: "#1e293b",
+    mainBkg: "#ffffff",
+    nodeBorder: "#3b82f6",
+    clusterBkg: "#f8fafc",
+    clusterBorder: "#94a3b8",
+    titleColor: "#0f172a",
     edgeLabelBackground: "#ffffff",
+    textColor: "#0f172a",
+    nodeTextColor: "#0f172a",
+    fontSize: "14px",
+    fontFamily: "Inter, system-ui, sans-serif",
   },
   flowchart: {
     useMaxWidth: false,
     htmlLabels: false,
     curve: "basis",
     padding: 20,
-    nodeSpacing: 50,
-    rankSpacing: 60,
+    nodeSpacing: 60,
+    rankSpacing: 80,
+    diagramPadding: 20,
   },
 });
 
@@ -54,7 +59,15 @@ export function MermaidDiagram({ chart, className = "" }: MermaidDiagramProps) {
       try {
         const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
         const { svg: renderedSvg } = await mermaid.render(id, chart);
-        setSvg(renderedSvg);
+        
+        // Enhance SVG for better visibility
+        const enhancedSvg = renderedSvg
+          .replace(/stroke-width:\s*1(?:px)?/g, 'stroke-width: 2px')
+          .replace(/stroke-width:\s*2(?:px)?/g, 'stroke-width: 2.5px')
+          .replace(/<text /g, '<text font-weight="500" ')
+          .replace(/font-size:\s*\d+px/g, 'font-size: 14px');
+        
+        setSvg(enhancedSvg);
         setError(null);
         setZoom(1);
         setPosition({ x: 0, y: 0 });
@@ -193,8 +206,8 @@ export function MermaidDiagram({ chart, className = "" }: MermaidDiagramProps) {
 
       <div
         ref={viewportRef}
-        className="overflow-hidden rounded-lg border bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 cursor-grab active:cursor-grabbing"
-        style={{ minHeight: "450px" }}
+        className="overflow-hidden rounded-lg border-2 border-border bg-white dark:bg-slate-950 cursor-grab active:cursor-grabbing"
+        style={{ minHeight: "500px" }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -204,7 +217,7 @@ export function MermaidDiagram({ chart, className = "" }: MermaidDiagramProps) {
       >
         <div
           ref={containerRef}
-          className="p-8 transition-transform duration-100 ease-out"
+          className="p-8 transition-transform duration-100 ease-out [&_text]:fill-slate-800 dark:[&_text]:fill-slate-200 [&_.node_rect]:stroke-2 [&_.edgePath_path]:stroke-2 [&_.flowchart-link]:stroke-2 [&_path]:stroke-[2.5px] [&_.marker]:fill-blue-600"
           style={{
             transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
             transformOrigin: "center center",
