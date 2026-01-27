@@ -645,10 +645,10 @@ export async function registerRoutes(
       const auth = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
       const jiraBaseUrl = `https://${jiraInstanceUrl}/rest/api/3`;
       
-      // Fetch all stories from the project
+      // Fetch all stories from the project using new JIRA search API
       const jql = encodeURIComponent(`project = ${jiraProjectKey} AND issuetype = Story ORDER BY created DESC`);
       const response = await fetch(
-        `${jiraBaseUrl}/search?jql=${jql}&fields=summary,description,status,priority,labels,subtasks`,
+        `${jiraBaseUrl}/search/jql?jql=${jql}&fields=summary,description,status,priority,labels,subtasks`,
         {
           method: 'GET',
           headers: {
@@ -705,9 +705,9 @@ export async function registerRoutes(
       const auth = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
       const jiraBaseUrl = `https://${jiraInstanceUrl}/rest/api/3`;
       
-      // Fetch all stories from the project - try without issue type filter first
+      // Fetch all stories from the project using new JIRA search API
       const jql = encodeURIComponent(`project = ${jiraProjectKey} ORDER BY created DESC`);
-      const fetchUrl = `${jiraBaseUrl}/search?jql=${jql}&fields=summary,description,status,priority,labels,issuetype&maxResults=100`;
+      const fetchUrl = `${jiraBaseUrl}/search/jql?jql=${jql}&fields=summary,description,status,priority,labels,issuetype&maxResults=100`;
       console.log("Fetching JIRA stories:", fetchUrl);
       
       const response = await fetch(
