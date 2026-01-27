@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, ArrowRight, Bookmark, RefreshCw, Clock, Layers, Tag, CheckCircle2, AlertCircle, Loader2, Wand2, Copy, Check, Upload, Pencil, Plus, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bookmark, RefreshCw, Clock, Layers, Tag, CheckCircle2, AlertCircle, Loader2, Wand2, Copy, Check, Upload, Pencil, Plus, X, GitBranch } from "lucide-react";
 import { SiJira } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,11 +12,19 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { EmptyState } from "@/components/EmptyState";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { BRD, UserStory } from "@shared/schema";
+
+interface RelatedJiraStory {
+  key: string;
+  summary: string;
+  relevanceScore: number;
+  reason: string;
+}
 
 export default function UserStoriesPage() {
   const [, navigate] = useLocation();
@@ -27,6 +35,11 @@ export default function UserStoriesPage() {
   const [editingStory, setEditingStory] = useState<UserStory | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [newCriteria, setNewCriteria] = useState("");
+  const [relatedStoriesDialogOpen, setRelatedStoriesDialogOpen] = useState(false);
+  const [relatedStories, setRelatedStories] = useState<RelatedJiraStory[]>([]);
+  const [isCheckingRelated, setIsCheckingRelated] = useState(false);
+  const [selectedParentKey, setSelectedParentKey] = useState<string | null>(null);
+  const [creationMode, setCreationMode] = useState<"new" | "subtask">("new");
   const { toast } = useToast();
 
   const { data: brd, isLoading: brdLoading } = useQuery<BRD>({
@@ -44,14 +57,63 @@ export default function UserStoriesPage() {
   });
 
   const generateStoriesMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/user-stories/generate");
+    mutationFn: async (parentKey?: string) => {
+      const body = parentKey ? { parentJiraKey: parentKey } : {};
+      const response = await apiRequest("POST", "/api/user-stories/generate", body);
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/user-stories", brd?.id] });
+      setRelatedStoriesDialogOpen(false);
+      setSelectedParentKey(null);
+      setCreationMode("new");
+      toast({
+        title: "User Stories Generated",
+        description: "User stories have been successfully generated from the BRD.",
+      });
     },
   });
+
+  // Check for related JIRA stories before generating
+  const checkRelatedStories = async () => {
+    if (!brd) return;
+    
+    setIsCheckingRelated(true);
+    try {
+      const featureDescription = `${brd.title}\n\n${brd.content.overview}\n\nObjectives:\n${brd.content.objectives.join("\n")}`;
+      
+      console.log("Checking for related JIRA stories...");
+      const response = await apiRequest("POST", "/api/jira/find-related", {
+        featureDescription,
+      });
+      const data = await response.json();
+      console.log("Related stories response:", data);
+      
+      if (data.relatedStories && data.relatedStories.length > 0) {
+        console.log("Found related stories:", data.relatedStories.length);
+        setRelatedStories(data.relatedStories);
+        setRelatedStoriesDialogOpen(true);
+      } else {
+        console.log("No related stories found, generating directly");
+        // No related stories found, generate directly
+        generateStoriesMutation.mutate(undefined);
+      }
+    } catch (error) {
+      console.error("Error checking related stories:", error);
+      // If error, just proceed with generation
+      generateStoriesMutation.mutate(undefined);
+    } finally {
+      setIsCheckingRelated(false);
+    }
+  };
+
+  const handleGenerateWithChoice = () => {
+    if (creationMode === "subtask" && selectedParentKey) {
+      generateStoriesMutation.mutate(selectedParentKey);
+    } else {
+      generateStoriesMutation.mutate(undefined);
+    }
+  };
 
   const generateTestCasesMutation = useMutation({
     mutationFn: async () => {
@@ -283,14 +345,14 @@ export default function UserStoriesPage() {
             </Button>
           )}
           <Button
-            onClick={() => generateStoriesMutation.mutate()}
-            disabled={generateStoriesMutation.isPending}
+            onClick={checkRelatedStories}
+            disabled={generateStoriesMutation.isPending || isCheckingRelated}
             data-testid="button-generate-stories"
           >
-            {generateStoriesMutation.isPending ? (
+            {generateStoriesMutation.isPending || isCheckingRelated ? (
               <>
                 <LoadingSpinner size="sm" className="mr-2" />
-                Generating...
+                {isCheckingRelated ? "Checking JIRA..." : "Generating..."}
               </>
             ) : userStories && userStories.length > 0 ? (
               <>
@@ -444,7 +506,7 @@ export default function UserStoriesPage() {
           description="Generate JIRA-style user stories from your BRD to break down the requirements into actionable development tasks."
           action={{
             label: "Generate User Stories",
-            onClick: () => generateStoriesMutation.mutate(),
+            onClick: checkRelatedStories,
           }}
         />
       )}
@@ -665,6 +727,108 @@ export default function UserStoriesPage() {
                 </>
               ) : (
                 "Save Changes"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Related JIRA Stories Dialog */}
+      <Dialog open={relatedStoriesDialogOpen} onOpenChange={setRelatedStoriesDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GitBranch className="h-5 w-5 text-primary" />
+              Related JIRA Stories Found
+            </DialogTitle>
+            <DialogDescription>
+              We found existing JIRA stories that may be related to your new feature. You can create the new stories as subtasks of an existing story, or create them as new independent stories.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <RadioGroup value={creationMode} onValueChange={(v) => setCreationMode(v as "new" | "subtask")}>
+              <div className="flex items-start space-x-3 p-3 rounded-md border hover-elevate">
+                <RadioGroupItem value="new" id="new-stories" />
+                <div className="flex-1">
+                  <Label htmlFor="new-stories" className="font-medium cursor-pointer">
+                    Create as new stories
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Create independent user stories that are not linked to existing work
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-start space-x-3 p-3 rounded-md border hover-elevate mt-2">
+                <RadioGroupItem value="subtask" id="subtask-stories" />
+                <div className="flex-1">
+                  <Label htmlFor="subtask-stories" className="font-medium cursor-pointer">
+                    Create as subtasks of an existing story
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Link the new stories as subtasks under a parent story
+                  </p>
+                </div>
+              </div>
+            </RadioGroup>
+
+            {creationMode === "subtask" && (
+              <div className="mt-4 space-y-2">
+                <Label>Select parent story:</Label>
+                <ScrollArea className="h-48 border rounded-md p-2">
+                  {relatedStories.map((related) => (
+                    <div
+                      key={related.key}
+                      className={`p-3 rounded-md border mb-2 cursor-pointer transition-colors ${
+                        selectedParentKey === related.key
+                          ? "border-primary bg-primary/5"
+                          : "hover-elevate"
+                      }`}
+                      onClick={() => setSelectedParentKey(related.key)}
+                      data-testid={`related-story-${related.key}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="font-mono text-xs">
+                            {related.key}
+                          </Badge>
+                          <span className="font-medium text-sm">{related.summary}</span>
+                        </div>
+                        <Badge 
+                          variant={related.relevanceScore >= 80 ? "default" : "secondary"}
+                          className="text-xs"
+                        >
+                          {related.relevanceScore}% match
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{related.reason}</p>
+                    </div>
+                  ))}
+                </ScrollArea>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setRelatedStoriesDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleGenerateWithChoice}
+              disabled={generateStoriesMutation.isPending || (creationMode === "subtask" && !selectedParentKey)}
+              data-testid="button-confirm-generate"
+            >
+              {generateStoriesMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Bookmark className="h-4 w-4 mr-2" />
+                  Generate Stories
+                </>
               )}
             </Button>
           </DialogFooter>
