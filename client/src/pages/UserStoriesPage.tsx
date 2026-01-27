@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, ArrowRight, Bookmark, RefreshCw, Clock, Layers, Tag, CheckCircle2, AlertCircle, Loader2, Wand2, Copy, Check } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bookmark, RefreshCw, Clock, Layers, Tag, CheckCircle2, AlertCircle, Loader2, Wand2, Copy, Check, Upload } from "lucide-react";
+import { SiJira } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { EmptyState } from "@/components/EmptyState";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import type { BRD, UserStory } from "@shared/schema";
 
 export default function UserStoriesPage() {
@@ -18,6 +20,7 @@ export default function UserStoriesPage() {
   const [copilotPrompt, setCopilotPrompt] = useState<string | null>(null);
   const [promptDialogOpen, setPromptDialogOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
 
   const { data: brd, isLoading: brdLoading } = useQuery<BRD>({
     queryKey: ["/api/brd/current"],
@@ -67,6 +70,27 @@ export default function UserStoriesPage() {
     onSuccess: (data) => {
       setCopilotPrompt(data.prompt);
       setPromptDialogOpen(true);
+    },
+  });
+
+  const syncToJiraMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/jira/sync");
+      return response.json();
+    },
+    onSuccess: (data) => {
+      const successCount = data.results?.filter((r: any) => r.jiraKey).length || 0;
+      toast({
+        title: "JIRA Sync Complete",
+        description: `Successfully synced ${successCount} user stories to JIRA.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "JIRA Sync Failed",
+        description: error.message || "Failed to sync to JIRA. Please check your credentials.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -176,6 +200,26 @@ export default function UserStoriesPage() {
                 </ScrollArea>
               </DialogContent>
             </Dialog>
+          )}
+          {userStories && userStories.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => syncToJiraMutation.mutate()}
+              disabled={syncToJiraMutation.isPending}
+              data-testid="button-sync-jira"
+            >
+              {syncToJiraMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Syncing to JIRA...
+                </>
+              ) : (
+                <>
+                  <SiJira className="h-4 w-4 mr-2" />
+                  Sync to JIRA
+                </>
+              )}
+            </Button>
           )}
           <Button
             onClick={() => generateStoriesMutation.mutate()}

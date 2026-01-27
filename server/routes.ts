@@ -430,5 +430,134 @@ export async function registerRoutes(
     }
   });
 
+  // Sync user stories to JIRA
+  app.post("/api/jira/sync", async (req: Request, res: Response) => {
+    try {
+      const jiraEmail = process.env.JIRA_EMAIL;
+      const jiraToken = process.env.JIRA_API_TOKEN;
+      const jiraInstanceUrl = process.env.JIRA_INSTANCE_URL || "daspapun21.atlassian.net";
+      const jiraProjectKey = process.env.JIRA_PROJECT_KEY || "KAN";
+
+      if (!jiraEmail || !jiraToken) {
+        return res.status(400).json({ 
+          error: "JIRA credentials not configured. Please add JIRA_EMAIL and JIRA_API_TOKEN secrets." 
+        });
+      }
+
+      const brd = await storage.getCurrentBRD();
+      if (!brd) {
+        return res.status(400).json({ error: "No BRD found. Please generate a BRD first." });
+      }
+
+      const userStories = await storage.getUserStories(brd.id);
+      if (!userStories || userStories.length === 0) {
+        return res.status(400).json({ error: "No user stories found. Please generate user stories first." });
+      }
+
+      const auth = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
+      const jiraBaseUrl = `https://${jiraInstanceUrl}/rest/api/3`;
+      
+      const results: { storyKey: string; jiraKey?: string; error?: string }[] = [];
+
+      for (const story of userStories) {
+        try {
+          const description = {
+            type: "doc",
+            version: 1,
+            content: [
+              {
+                type: "paragraph",
+                content: [
+                  { type: "text", text: `As a ${story.asA}, I want ${story.iWant}, so that ${story.soThat}` }
+                ]
+              },
+              ...(story.description ? [{
+                type: "paragraph",
+                content: [{ type: "text", text: story.description }]
+              }] : []),
+              {
+                type: "heading",
+                attrs: { level: 3 },
+                content: [{ type: "text", text: "Acceptance Criteria" }]
+              },
+              {
+                type: "bulletList",
+                content: story.acceptanceCriteria.map(criteria => ({
+                  type: "listItem",
+                  content: [{
+                    type: "paragraph",
+                    content: [{ type: "text", text: criteria }]
+                  }]
+                }))
+              },
+              ...(story.technicalNotes ? [
+                {
+                  type: "heading",
+                  attrs: { level: 3 },
+                  content: [{ type: "text", text: "Technical Notes" }]
+                },
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: story.technicalNotes }]
+                }
+              ] : [])
+            ]
+          };
+
+          const priorityMap: Record<string, string> = {
+            'highest': 'Highest',
+            'high': 'High',
+            'medium': 'Medium',
+            'low': 'Low',
+            'lowest': 'Lowest'
+          };
+
+          const issueData = {
+            fields: {
+              project: { key: jiraProjectKey },
+              summary: story.title,
+              description: description,
+              issuetype: { name: "Story" },
+              labels: story.labels || []
+            }
+          };
+
+          const response = await fetch(`${jiraBaseUrl}/issue`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Basic ${auth}`,
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(issueData)
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            results.push({ storyKey: story.storyKey, jiraKey: data.key });
+          } else {
+            const errorData = await response.text();
+            console.error(`JIRA API error for ${story.storyKey}:`, errorData);
+            results.push({ storyKey: story.storyKey, error: `Failed to create issue: ${response.status}` });
+          }
+        } catch (err) {
+          console.error(`Error syncing story ${story.storyKey}:`, err);
+          results.push({ storyKey: story.storyKey, error: String(err) });
+        }
+      }
+
+      const successCount = results.filter(r => r.jiraKey).length;
+      const failCount = results.filter(r => r.error).length;
+
+      res.json({ 
+        message: `Synced ${successCount} stories to JIRA. ${failCount > 0 ? `${failCount} failed.` : ''}`,
+        results 
+      });
+    } catch (error) {
+      console.error("Error syncing to JIRA:", error);
+      res.status(500).json({ error: "Failed to sync to JIRA" });
+    }
+  });
+
   return httpServer;
 }
