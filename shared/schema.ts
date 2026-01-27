@@ -55,6 +55,21 @@ export const documentationSchema = z.object({
 
 export type Documentation = z.infer<typeof documentationSchema>;
 
+// BPMN Diagram - user journey flowcharts for each feature
+export const bpmnDiagramSchema = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  documentationId: z.string(),
+  diagrams: z.array(z.object({
+    featureName: z.string(),
+    description: z.string(),
+    mermaidCode: z.string(),
+  })),
+  createdAt: z.string(),
+});
+
+export type BPMNDiagram = z.infer<typeof bpmnDiagramSchema>;
+
 // Feature Request - input describing a new feature
 export const featureRequestSchema = z.object({
   id: z.string(),

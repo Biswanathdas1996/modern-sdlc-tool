@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import type { RepoAnalysis, FeatureRequest, BRD, TestCase, TestData, Documentation, Project, UserStory } from "@shared/schema";
+import type { RepoAnalysis, FeatureRequest, BRD, TestCase, TestData, Documentation, Project, UserStory, BPMNDiagram } from "@shared/schema";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -361,6 +361,83 @@ ${repoContext}
     title: docData.title || `${project.name} Documentation`,
     content: docData.content || analysis.summary || "",
     sections: docData.sections || [],
+  };
+}
+
+export async function generateBPMNDiagram(
+  documentation: Documentation,
+  analysis: RepoAnalysis
+): Promise<Omit<BPMNDiagram, "id" | "createdAt">> {
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "system",
+        content: `You are an expert at creating BPMN-style user journey diagrams using Mermaid.js flowchart syntax.
+
+For each feature in the application, create a user journey flowchart that shows:
+1. Start point (user action that initiates the feature)
+2. Key steps/interactions in the flow
+3. Decision points where applicable
+4. Success and error paths
+5. End point
+
+Use Mermaid flowchart syntax with these guidelines:
+- Use flowchart TD (top-down) or LR (left-right) as appropriate
+- Use proper node shapes: ([Start/End]), {Decision}, [Process], ((Event))
+- Use clear, readable labels
+- Include subgraphs for complex sections
+- Use meaningful connection labels
+
+Return a JSON object with this structure:
+{
+  "diagrams": [
+    {
+      "featureName": "Feature Name",
+      "description": "Brief description of the user journey",
+      "mermaidCode": "flowchart TD\\n    A([Start]) --> B[Step 1]\\n    B --> C{Decision}\\n    C -->|Yes| D[Action]\\n    C -->|No| E[Other Action]\\n    D --> F([End])\\n    E --> F"
+    }
+  ]
+}
+
+IMPORTANT:
+- Create one diagram per major feature
+- Keep diagrams focused and readable (5-10 nodes max)
+- Use escaped newlines (\\n) in the mermaidCode string
+- Ensure valid Mermaid syntax`
+      },
+      {
+        role: "user",
+        content: `Generate BPMN-style user journey diagrams for this application based on its documentation and analysis.
+
+=== DOCUMENTATION ===
+Title: ${documentation.title}
+${documentation.sections.map(s => `## ${s.title}\n${s.content}`).join('\n\n')}
+
+=== FEATURES IDENTIFIED ===
+${JSON.stringify(analysis.features, null, 2)}
+
+Create a user journey diagram for each major feature showing the complete user flow.`
+      }
+    ],
+    response_format: { type: "json_object" },
+    max_completion_tokens: 4096,
+  });
+
+  const rawContent = response.choices[0]?.message?.content || "{}";
+  
+  let diagramData: any;
+  try {
+    diagramData = JSON.parse(rawContent);
+  } catch (parseError) {
+    console.error("Failed to parse BPMN diagram JSON:", parseError);
+    diagramData = { diagrams: [] };
+  }
+
+  return {
+    projectId: documentation.projectId,
+    documentationId: documentation.id,
+    diagrams: diagramData.diagrams || [],
   };
 }
 

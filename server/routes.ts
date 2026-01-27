@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import { z } from "zod";
 import { storage } from "./storage";
-import { analyzeRepository, generateDocumentation, generateBRD, generateTestCases, generateTestData, generateUserStories, generateCopilotPrompt, transcribeAudio } from "./ai";
+import { analyzeRepository, generateDocumentation, generateBPMNDiagram, generateBRD, generateTestCases, generateTestData, generateUserStories, generateCopilotPrompt, transcribeAudio } from "./ai";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -94,7 +94,18 @@ export async function registerRoutes(
               const updatedProject = await storage.getProject(project.id);
               if (updatedProject) {
                 const documentation = await generateDocumentation(analysis, updatedProject);
-                await storage.createDocumentation(documentation);
+                const savedDoc = await storage.createDocumentation(documentation);
+                
+                // Generate BPMN diagrams after documentation is created
+                try {
+                  console.log("Generating BPMN diagrams for features...");
+                  const bpmnData = await generateBPMNDiagram(savedDoc, analysis);
+                  await storage.createBPMNDiagram(bpmnData);
+                  console.log("BPMN diagrams generated successfully");
+                } catch (bpmnError) {
+                  console.error("BPMN diagram generation error:", bpmnError);
+                  // Continue - documentation succeeded, just BPMN failed
+                }
               }
             } catch (docError) {
               console.error("Documentation generation error:", docError);
@@ -153,6 +164,28 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching documentation:", error);
       res.status(500).json({ error: "Failed to fetch documentation" });
+    }
+  });
+
+  // Get BPMN diagrams for current documentation
+  app.get("/api/bpmn/current", async (req: Request, res: Response) => {
+    try {
+      const projects = await storage.getAllProjects();
+      if (projects.length === 0) {
+        return res.status(404).json({ error: "No projects found" });
+      }
+      const doc = await storage.getDocumentation(projects[0].id);
+      if (!doc) {
+        return res.status(404).json({ error: "No documentation found" });
+      }
+      const bpmn = await storage.getBPMNDiagram(doc.id);
+      if (!bpmn) {
+        return res.status(404).json({ error: "No BPMN diagrams found" });
+      }
+      res.json(bpmn);
+    } catch (error) {
+      console.error("Error fetching BPMN diagrams:", error);
+      res.status(500).json({ error: "Failed to fetch BPMN diagrams" });
     }
   });
 

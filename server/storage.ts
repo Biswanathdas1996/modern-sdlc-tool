@@ -7,7 +7,8 @@ import type {
   BRD, 
   TestCase, 
   TestData,
-  UserStory
+  UserStory,
+  BPMNDiagram
 } from "@shared/schema";
 
 export interface IStorage {
@@ -57,6 +58,10 @@ export interface IStorage {
   createUserStories(stories: Omit<UserStory, "id" | "createdAt">[]): Promise<UserStory[]>;
   updateUserStory(id: string, updates: Partial<UserStory>): Promise<UserStory | undefined>;
   deleteUserStory(id: string): Promise<boolean>;
+  
+  // BPMN Diagrams
+  getBPMNDiagram(documentationId: string): Promise<BPMNDiagram | undefined>;
+  createBPMNDiagram(diagram: Omit<BPMNDiagram, "id" | "createdAt">): Promise<BPMNDiagram>;
 }
 
 export class MemStorage implements IStorage {
@@ -68,6 +73,7 @@ export class MemStorage implements IStorage {
   private testCases: Map<string, TestCase> = new Map();
   private testData: Map<string, TestData> = new Map();
   private userStories: Map<string, UserStory> = new Map();
+  private bpmnDiagrams: Map<string, BPMNDiagram> = new Map();
   
   private currentProjectId: string | null = null;
   private currentFeatureRequestId: string | null = null;
@@ -280,6 +286,21 @@ export class MemStorage implements IStorage {
 
   async deleteUserStory(id: string): Promise<boolean> {
     return this.userStories.delete(id);
+  }
+
+  async getBPMNDiagram(documentationId: string): Promise<BPMNDiagram | undefined> {
+    return Array.from(this.bpmnDiagrams.values()).find(d => d.documentationId === documentationId);
+  }
+
+  async createBPMNDiagram(diagram: Omit<BPMNDiagram, "id" | "createdAt">): Promise<BPMNDiagram> {
+    const id = randomUUID();
+    const newDiagram: BPMNDiagram = {
+      ...diagram,
+      id,
+      createdAt: new Date().toISOString(),
+    };
+    this.bpmnDiagrams.set(id, newDiagram);
+    return newDiagram;
   }
 }
 
