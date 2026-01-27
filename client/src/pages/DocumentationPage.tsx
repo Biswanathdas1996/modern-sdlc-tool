@@ -66,7 +66,7 @@ export default function DocumentationPage() {
       ],
     },
     { id: "features", title: "Features", level: 0 },
-    { id: "user-journeys", title: "User Journeys", level: 0 },
+    { id: "user-journeys", title: "Business Flow", level: 0 },
     { id: "code-patterns", title: "Code Patterns", level: 0 },
     { id: "testing", title: "Testing", level: 0 },
   ];
@@ -303,14 +303,14 @@ export default function DocumentationPage() {
                 </div>
               </section>
 
-              {/* User Journeys / BPMN Diagrams Section */}
+              {/* Business Flow Diagram Section */}
               <section id="user-journeys" className="space-y-4 animate-fade-in">
                 <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
                   <GitBranch className="h-6 w-6 text-primary" />
-                  User Journeys
+                  Business Flow
                 </h2>
                 <p className="text-muted-foreground">
-                  Visual flowcharts showing user interactions for each feature in the application.
+                  Complete end-to-end business process flow showing how users progress through the entire application.
                 </p>
                 
                 {bpmnLoading ? (
@@ -318,39 +318,35 @@ export default function DocumentationPage() {
                     <CardContent className="pt-6 flex items-center justify-center py-12">
                       <div className="flex items-center gap-3 text-muted-foreground">
                         <Loader2 className="h-5 w-5 animate-spin" />
-                        <span>Generating user journey diagrams...</span>
+                        <span>Generating business flow diagram...</span>
                       </div>
                     </CardContent>
                   </Card>
                 ) : bpmnDiagrams?.diagrams && bpmnDiagrams.diagrams.length > 0 ? (
-                  <div className="space-y-6">
-                    {bpmnDiagrams.diagrams.map((diagram, index) => (
-                      <Card key={index} data-testid={`card-bpmn-diagram-${index}`}>
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-lg flex items-center gap-2">
-                            <Badge variant="outline" className="text-xs">
-                              Flow {index + 1}
-                            </Badge>
-                            {diagram.featureName}
-                          </CardTitle>
-                          <CardDescription>{diagram.description}</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="bg-muted/30 rounded-lg p-4 overflow-x-auto">
-                            <MermaidDiagram 
-                              chart={diagram.mermaidCode} 
-                              className="min-h-[200px]"
-                            />
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                  <Card data-testid="card-bpmn-diagram">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Badge className="bg-primary/10 text-primary border-primary/30">
+                          BPMN
+                        </Badge>
+                        {bpmnDiagrams.diagrams[0].featureName}
+                      </CardTitle>
+                      <CardDescription>{bpmnDiagrams.diagrams[0].description}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="bg-muted/30 rounded-lg p-6 overflow-x-auto">
+                        <MermaidDiagram 
+                          chart={bpmnDiagrams.diagrams[0].mermaidCode} 
+                          className="min-h-[400px]"
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
                 ) : (
                   <Card>
                     <CardContent className="pt-6">
                       <p className="text-muted-foreground text-center py-4">
-                        No user journey diagrams available yet. They will be generated automatically after analyzing a repository.
+                        No business flow diagram available yet. It will be generated automatically after analyzing a repository.
                       </p>
                     </CardContent>
                   </Card>

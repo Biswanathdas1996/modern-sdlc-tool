@@ -127,11 +127,11 @@ The project includes pre-built integrations in `server/replit_integrations/` and
 - **Parent Context**: When creating subtasks, the parent story's content is used as context for more relevant generation
 - **Edit Before Sync**: All user stories are editable (title, description, acceptance criteria, etc.) before syncing to JIRA
 
-### BPMN User Journey Diagrams
-- **Automatic Generation**: After documentation is generated, BPMN diagrams are automatically created for each feature
-- **Mermaid.js Rendering**: Flowcharts are rendered using Mermaid.js with strict security mode
-- **Feature-wise Flows**: Each feature gets its own user journey diagram showing start points, key steps, decision points, success/error paths, and endpoints
-- **Visual Documentation**: Diagrams appear in the "User Journeys" section of the Documentation page
+### BPMN Business Flow Diagram
+- **Automatic Generation**: After documentation is generated, a comprehensive BPMN diagram is automatically created
+- **Mermaid.js Rendering**: Flowchart is rendered using Mermaid.js with strict security mode
+- **Complete Business Flow**: Single diagram shows the entire end-to-end business process with all workflow stages
+- **Visual Documentation**: Diagram appears in the "Business Flow" section of the Documentation page
 
 ## Development Guidelines
 
