@@ -385,6 +385,8 @@ export async function registerRoutes(
   // Generate user stories from BRD
   app.post("/api/user-stories/generate", async (req: Request, res: Response) => {
     try {
+      const { parentJiraKey } = req.body || {};
+      
       const brd = await storage.getCurrentBRD();
       if (!brd) {
         return res.status(400).json({ error: "No BRD found. Please generate a BRD first." });
@@ -393,12 +395,49 @@ export async function registerRoutes(
       const projects = await storage.getAllProjects();
       const documentation = projects.length > 0 ? await storage.getDocumentation(projects[0].id) : null;
 
-      const userStories = await generateUserStories(brd, documentation || null);
+      // If there's a parent JIRA key, fetch its content for context
+      let parentContext: string | null = null;
+      if (parentJiraKey) {
+        try {
+          const jiraEmail = process.env.JIRA_EMAIL;
+          const jiraToken = process.env.JIRA_API_TOKEN;
+          const jiraInstanceUrl = process.env.JIRA_INSTANCE_URL || "daspapun21.atlassian.net";
+          
+          if (jiraEmail && jiraToken) {
+            const auth = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
+            const response = await fetch(
+              `https://${jiraInstanceUrl}/rest/api/3/issue/${parentJiraKey}?fields=summary,description`,
+              {
+                headers: {
+                  'Authorization': `Basic ${auth}`,
+                  'Accept': 'application/json'
+                }
+              }
+            );
+            if (response.ok) {
+              const issue = await response.json();
+              // Extract text from ADF description
+              const descriptionText = extractTextFromADF(issue.fields.description);
+              parentContext = `Parent Story [${parentJiraKey}]: ${issue.fields.summary}${descriptionText ? `\n\nDescription: ${descriptionText}` : ""}`;
+            }
+          }
+        } catch (err) {
+          console.error("Error fetching parent JIRA story:", err);
+        }
+      }
+
+      const userStories = await generateUserStories(brd, documentation || null, parentContext);
       if (!userStories || userStories.length === 0) {
         return res.status(500).json({ error: "Failed to generate user stories - no stories returned" });
       }
       
-      const savedStories = await storage.createUserStories(userStories);
+      // Set parentJiraKey on all stories if provided
+      const storiesWithParent = userStories.map(story => ({
+        ...story,
+        parentJiraKey: parentJiraKey || null
+      }));
+      
+      const savedStories = await storage.createUserStories(storiesWithParent);
       res.json(savedStories);
     } catch (error) {
       console.error("Error generating user stories:", error);
@@ -529,15 +568,23 @@ export async function registerRoutes(
             'lowest': 'Lowest'
           };
 
-          const issueData = {
+          // Determine if this is a subtask or a regular story
+          const isSubtask = !!story.parentJiraKey;
+          
+          const issueData: any = {
             fields: {
               project: { key: jiraProjectKey },
               summary: story.title,
               description: description,
-              issuetype: { name: "Story" },
+              issuetype: { name: isSubtask ? "Subtask" : "Story" },
               labels: story.labels || []
             }
           };
+
+          // Add parent reference for subtasks
+          if (isSubtask && story.parentJiraKey) {
+            issueData.fields.parent = { key: story.parentJiraKey };
+          }
 
           const response = await fetch(`${jiraBaseUrl}/issue`, {
             method: 'POST',
@@ -551,7 +598,12 @@ export async function registerRoutes(
 
           if (response.ok) {
             const data = await response.json();
-            results.push({ storyKey: story.storyKey, jiraKey: data.key });
+            const resultInfo: any = { storyKey: story.storyKey, jiraKey: data.key };
+            if (isSubtask) {
+              resultInfo.parentKey = story.parentJiraKey;
+              resultInfo.isSubtask = true;
+            }
+            results.push(resultInfo);
           } else {
             const errorData = await response.text();
             console.error(`JIRA API error for ${story.storyKey}:`, errorData);
@@ -576,5 +628,264 @@ export async function registerRoutes(
     }
   });
 
+  // Fetch all stories from JIRA board
+  app.get("/api/jira/stories", async (req: Request, res: Response) => {
+    try {
+      const jiraEmail = process.env.JIRA_EMAIL;
+      const jiraToken = process.env.JIRA_API_TOKEN;
+      const jiraInstanceUrl = process.env.JIRA_INSTANCE_URL || "daspapun21.atlassian.net";
+      const jiraProjectKey = process.env.JIRA_PROJECT_KEY || "KAN";
+
+      if (!jiraEmail || !jiraToken) {
+        return res.status(400).json({ 
+          error: "JIRA credentials not configured. Please add JIRA_EMAIL and JIRA_API_TOKEN secrets." 
+        });
+      }
+
+      const auth = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
+      const jiraBaseUrl = `https://${jiraInstanceUrl}/rest/api/3`;
+      
+      // Fetch all stories from the project
+      const jql = encodeURIComponent(`project = ${jiraProjectKey} AND issuetype = Story ORDER BY created DESC`);
+      const response = await fetch(
+        `${jiraBaseUrl}/search?jql=${jql}&fields=summary,description,status,priority,labels,subtasks`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Basic ${auth}`,
+            'Accept': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error("JIRA API error:", errorData);
+        return res.status(response.status).json({ error: "Failed to fetch JIRA stories" });
+      }
+
+      const data = await response.json();
+      const stories = data.issues.map((issue: any) => ({
+        key: issue.key,
+        summary: issue.fields.summary,
+        description: extractTextFromADF(issue.fields.description),
+        status: issue.fields.status?.name || "Unknown",
+        priority: issue.fields.priority?.name || "Medium",
+        labels: issue.fields.labels || [],
+        subtaskCount: issue.fields.subtasks?.length || 0
+      }));
+
+      res.json(stories);
+    } catch (error) {
+      console.error("Error fetching JIRA stories:", error);
+      res.status(500).json({ error: "Failed to fetch JIRA stories" });
+    }
+  });
+
+  // Find related JIRA stories using semantic search
+  app.post("/api/jira/find-related", async (req: Request, res: Response) => {
+    try {
+      const { featureDescription } = req.body;
+      if (!featureDescription) {
+        return res.status(400).json({ error: "Feature description is required" });
+      }
+
+      const jiraEmail = process.env.JIRA_EMAIL;
+      const jiraToken = process.env.JIRA_API_TOKEN;
+      const jiraInstanceUrl = process.env.JIRA_INSTANCE_URL || "daspapun21.atlassian.net";
+      const jiraProjectKey = process.env.JIRA_PROJECT_KEY || "KAN";
+
+      if (!jiraEmail || !jiraToken) {
+        return res.status(200).json({ relatedStories: [] }); // Return empty if no JIRA config
+      }
+
+      const auth = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
+      const jiraBaseUrl = `https://${jiraInstanceUrl}/rest/api/3`;
+      
+      // Fetch all stories from the project
+      const jql = encodeURIComponent(`project = ${jiraProjectKey} AND issuetype = Story ORDER BY created DESC`);
+      const response = await fetch(
+        `${jiraBaseUrl}/search?jql=${jql}&fields=summary,description,status,priority,labels&maxResults=100`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Basic ${auth}`,
+            'Accept': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        return res.status(200).json({ relatedStories: [] });
+      }
+
+      const data = await response.json();
+      const jiraStories = data.issues.map((issue: any) => ({
+        key: issue.key,
+        summary: issue.fields.summary,
+        description: extractTextFromADF(issue.fields.description),
+        status: issue.fields.status?.name || "Unknown",
+        priority: issue.fields.priority?.name || "Medium",
+        labels: issue.fields.labels || []
+      }));
+
+      if (jiraStories.length === 0) {
+        return res.json({ relatedStories: [] });
+      }
+
+      // Use OpenAI to find semantically related stories
+      const { findRelatedStories } = await import("./ai");
+      const relatedStories = await findRelatedStories(featureDescription, jiraStories);
+      
+      res.json({ relatedStories });
+    } catch (error) {
+      console.error("Error finding related stories:", error);
+      res.status(500).json({ error: "Failed to find related stories" });
+    }
+  });
+
+  // Sync a single story as a subtask of a parent JIRA issue
+  app.post("/api/jira/sync-subtask", async (req: Request, res: Response) => {
+    try {
+      const { storyId, parentKey } = req.body;
+      
+      if (!storyId || !parentKey) {
+        return res.status(400).json({ error: "Story ID and parent JIRA key are required" });
+      }
+
+      const jiraEmail = process.env.JIRA_EMAIL;
+      const jiraToken = process.env.JIRA_API_TOKEN;
+      const jiraInstanceUrl = process.env.JIRA_INSTANCE_URL || "daspapun21.atlassian.net";
+      const jiraProjectKey = process.env.JIRA_PROJECT_KEY || "KAN";
+
+      if (!jiraEmail || !jiraToken) {
+        return res.status(400).json({ 
+          error: "JIRA credentials not configured. Please add JIRA_EMAIL and JIRA_API_TOKEN secrets." 
+        });
+      }
+
+      const brd = await storage.getCurrentBRD();
+      if (!brd) {
+        return res.status(400).json({ error: "No BRD found" });
+      }
+
+      const userStories = await storage.getUserStories(brd.id);
+      const story = userStories?.find(s => s.id === storyId);
+      
+      if (!story) {
+        return res.status(404).json({ error: "User story not found" });
+      }
+
+      const auth = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
+      const jiraBaseUrl = `https://${jiraInstanceUrl}/rest/api/3`;
+
+      const description = {
+        type: "doc",
+        version: 1,
+        content: [
+          {
+            type: "paragraph",
+            content: [
+              { type: "text", text: `As a ${story.asA}, I want ${story.iWant}, so that ${story.soThat}` }
+            ]
+          },
+          ...(story.description ? [{
+            type: "paragraph",
+            content: [{ type: "text", text: story.description }]
+          }] : []),
+          {
+            type: "heading",
+            attrs: { level: 3 },
+            content: [{ type: "text", text: "Acceptance Criteria" }]
+          },
+          {
+            type: "bulletList",
+            content: story.acceptanceCriteria.map(criteria => ({
+              type: "listItem",
+              content: [{
+                type: "paragraph",
+                content: [{ type: "text", text: criteria }]
+              }]
+            }))
+          },
+          ...(story.technicalNotes ? [
+            {
+              type: "heading",
+              attrs: { level: 3 },
+              content: [{ type: "text", text: "Technical Notes" }]
+            },
+            {
+              type: "paragraph",
+              content: [{ type: "text", text: story.technicalNotes }]
+            }
+          ] : [])
+        ]
+      };
+
+      const issueData = {
+        fields: {
+          project: { key: jiraProjectKey },
+          parent: { key: parentKey },
+          summary: story.title,
+          description: description,
+          issuetype: { name: "Subtask" },
+          labels: story.labels || []
+        }
+      };
+
+      const response = await fetch(`${jiraBaseUrl}/issue`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(issueData)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Update the story with parent reference
+        await storage.updateUserStory(storyId, { 
+          parentJiraKey: parentKey,
+          jiraKey: data.key 
+        });
+        res.json({ 
+          storyKey: story.storyKey, 
+          jiraKey: data.key, 
+          parentKey,
+          message: `Created subtask ${data.key} under ${parentKey}` 
+        });
+      } else {
+        const errorData = await response.text();
+        console.error(`JIRA API error:`, errorData);
+        res.status(response.status).json({ error: `Failed to create subtask: ${response.status}` });
+      }
+    } catch (error) {
+      console.error("Error creating JIRA subtask:", error);
+      res.status(500).json({ error: "Failed to create JIRA subtask" });
+    }
+  });
+
   return httpServer;
+}
+
+// Helper function to extract plain text from Atlassian Document Format
+function extractTextFromADF(adf: any): string {
+  if (!adf) return "";
+  if (typeof adf === "string") return adf;
+  
+  let text = "";
+  
+  function traverse(node: any) {
+    if (node.text) {
+      text += node.text + " ";
+    }
+    if (node.content && Array.isArray(node.content)) {
+      node.content.forEach(traverse);
+    }
+  }
+  
+  traverse(adf);
+  return text.trim();
 }

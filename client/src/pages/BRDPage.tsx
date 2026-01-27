@@ -18,18 +18,39 @@ import {
   Clock,
   Users,
   Layers,
+  Loader2,
+  GitBranch,
+  Plus,
 } from "lucide-react";
+import { SiJira } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import { WorkflowHeader } from "@/components/WorkflowHeader";
 import { LoadingSpinner, LoadingOverlay } from "@/components/LoadingSpinner";
 import { EmptyState } from "@/components/EmptyState";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 import type { BRD, UserStory } from "@shared/schema";
+
+interface RelatedJiraStory {
+  story: {
+    key: string;
+    summary: string;
+    description: string;
+    status: string;
+    priority: string;
+    labels: string[];
+  };
+  relevanceScore: number;
+  reason: string;
+}
 
 const workflowSteps = [
   { id: "analyze", label: "Analyze", completed: true, active: false },
@@ -45,6 +66,14 @@ export default function BRDPage() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const contentRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
+  
+  // Related stories state
+  const [relatedStoriesDialogOpen, setRelatedStoriesDialogOpen] = useState(false);
+  const [relatedStories, setRelatedStories] = useState<RelatedJiraStory[]>([]);
+  const [selectedParentKey, setSelectedParentKey] = useState<string | null>(null);
+  const [creationMode, setCreationMode] = useState<"subtask" | "new">("new");
+  const [isCheckingRelated, setIsCheckingRelated] = useState(false);
 
   const { data: brd, isLoading: brdLoading, error } = useQuery<BRD>({
     queryKey: ["/api/brd/current"],
@@ -114,14 +143,59 @@ export default function BRDPage() {
   });
 
   const generateStoriesMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/user-stories/generate");
+    mutationFn: async (parentKey?: string) => {
+      const body = parentKey ? { parentJiraKey: parentKey } : {};
+      const response = await apiRequest("POST", "/api/user-stories/generate", body);
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/user-stories", brd?.id] });
+      setRelatedStoriesDialogOpen(false);
+      setSelectedParentKey(null);
+      setCreationMode("new");
+      toast({
+        title: "User Stories Generated",
+        description: "User stories have been successfully generated from the BRD.",
+      });
     },
   });
+
+  // Check for related JIRA stories before generating
+  const checkRelatedStories = async () => {
+    if (!brd) return;
+    
+    setIsCheckingRelated(true);
+    try {
+      const featureDescription = `${brd.title}\n\n${brd.content.overview}\n\nObjectives:\n${brd.content.objectives.join("\n")}`;
+      
+      const response = await apiRequest("POST", "/api/jira/find-related", {
+        featureDescription,
+      });
+      const data = await response.json();
+      
+      if (data.relatedStories && data.relatedStories.length > 0) {
+        setRelatedStories(data.relatedStories);
+        setRelatedStoriesDialogOpen(true);
+      } else {
+        // No related stories found, generate directly
+        generateStoriesMutation.mutate(undefined);
+      }
+    } catch (error) {
+      console.error("Error checking related stories:", error);
+      // If error, just proceed with generation
+      generateStoriesMutation.mutate(undefined);
+    } finally {
+      setIsCheckingRelated(false);
+    }
+  };
+
+  const handleGenerateWithChoice = () => {
+    if (creationMode === "subtask" && selectedParentKey) {
+      generateStoriesMutation.mutate(selectedParentKey);
+    } else {
+      generateStoriesMutation.mutate(undefined);
+    }
+  };
 
   // Auto-scroll during streaming
   useEffect(() => {
@@ -629,15 +703,15 @@ export default function BRDPage() {
                   User Stories
                 </CardTitle>
                 <Button
-                  onClick={() => generateStoriesMutation.mutate()}
-                  disabled={generateStoriesMutation.isPending || !brd}
+                  onClick={checkRelatedStories}
+                  disabled={generateStoriesMutation.isPending || isCheckingRelated || !brd}
                   size="sm"
                   data-testid="button-generate-user-stories"
                 >
-                  {generateStoriesMutation.isPending ? (
+                  {generateStoriesMutation.isPending || isCheckingRelated ? (
                     <>
-                      <LoadingSpinner size="sm" className="mr-2" />
-                      Generating...
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      {isCheckingRelated ? "Checking JIRA..." : "Generating..."}
                     </>
                   ) : userStories && userStories.length > 0 ? (
                     <>
@@ -784,6 +858,130 @@ export default function BRDPage() {
           </div>
         </div>
       </div>
+
+      {/* Related Stories Dialog */}
+      <Dialog open={relatedStoriesDialogOpen} onOpenChange={setRelatedStoriesDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <SiJira className="h-5 w-5 text-[#0052CC]" />
+              Related JIRA Stories Found
+            </DialogTitle>
+            <DialogDescription>
+              We found existing stories in your JIRA board that may be related to this feature.
+              Choose how you'd like to proceed.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <ScrollArea className="max-h-[50vh] pr-4">
+            <div className="space-y-4">
+              <RadioGroup
+                value={creationMode}
+                onValueChange={(value) => {
+                  setCreationMode(value as "subtask" | "new");
+                  if (value === "new") {
+                    setSelectedParentKey(null);
+                  }
+                }}
+              >
+                <div className="space-y-3">
+                  <div className="flex items-start space-x-3 p-3 rounded-lg border bg-card hover-elevate">
+                    <RadioGroupItem value="subtask" id="subtask" className="mt-1" />
+                    <div className="flex-1">
+                      <Label htmlFor="subtask" className="text-base font-medium cursor-pointer">
+                        <GitBranch className="h-4 w-4 inline mr-2" />
+                        Create as Subtasks
+                      </Label>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Generate user stories as subtasks of an existing story. The parent story's context will be used to create more relevant content.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start space-x-3 p-3 rounded-lg border bg-card hover-elevate">
+                    <RadioGroupItem value="new" id="new" className="mt-1" />
+                    <div className="flex-1">
+                      <Label htmlFor="new" className="text-base font-medium cursor-pointer">
+                        <Plus className="h-4 w-4 inline mr-2" />
+                        Create as New Stories
+                      </Label>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Generate user stories as independent stories that will be synced to JIRA as new issues.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </RadioGroup>
+
+              {creationMode === "subtask" && (
+                <div className="mt-4">
+                  <Label className="text-sm font-medium mb-2 block">Select Parent Story:</Label>
+                  <div className="space-y-2">
+                    {relatedStories.map((related) => (
+                      <div
+                        key={related.story.key}
+                        onClick={() => setSelectedParentKey(related.story.key)}
+                        className={cn(
+                          "p-3 rounded-lg border cursor-pointer transition-colors",
+                          selectedParentKey === related.story.key
+                            ? "border-primary bg-primary/5"
+                            : "hover-elevate"
+                        )}
+                        data-testid={`related-story-${related.story.key}`}
+                      >
+                        <div className="flex items-start justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="font-mono text-xs">
+                              {related.story.key}
+                            </Badge>
+                            <Badge variant="secondary">
+                              {related.relevanceScore}% match
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              {related.story.status}
+                            </Badge>
+                          </div>
+                        </div>
+                        <h4 className="font-medium mt-2">{related.story.summary}</h4>
+                        <p className="text-sm text-muted-foreground mt-1">{related.reason}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+
+          <DialogFooter className="gap-2 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setRelatedStoriesDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleGenerateWithChoice}
+              disabled={
+                generateStoriesMutation.isPending ||
+                (creationMode === "subtask" && !selectedParentKey)
+              }
+              data-testid="button-confirm-generation"
+            >
+              {generateStoriesMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  Generate User Stories
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

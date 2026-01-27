@@ -803,7 +803,8 @@ IMPORTANT: Generate test data that uses actual field names and data structures f
 
 export async function generateUserStories(
   brd: BRD,
-  documentation: Documentation | null
+  documentation: Documentation | null,
+  parentContext?: string | null
 ): Promise<Omit<UserStory, "id" | "createdAt">[]> {
   // Build documentation context
   let documentationContext = "";
@@ -884,7 +885,15 @@ Return a JSON object with this structure:
 
 ${documentationContext}
 
-=== BUSINESS REQUIREMENTS DOCUMENT ===
+${parentContext ? `=== PARENT STORY CONTEXT ===
+These user stories will be created as subtasks of an existing JIRA story. Use this context to ensure the subtasks are aligned with and complement the parent story:
+
+${parentContext}
+
+Generate subtasks that break down the parent story's work into specific, actionable items.
+=== END PARENT CONTEXT ===
+
+` : ""}=== BUSINESS REQUIREMENTS DOCUMENT ===
 
 Title: ${brd.title}
 Version: ${brd.version}
@@ -922,7 +931,7 @@ IMPORTANT:
 1. Create user stories that reference actual components and APIs from the documentation
 2. Include technical notes that guide developers on how to integrate with existing code
 3. Ensure acceptance criteria are specific and testable
-4. Group related stories under logical epics`
+4. Group related stories under logical epics${parentContext ? "\n5. Since these will be subtasks, make them more granular and specific to support the parent story" : ""}`
       }
     ],
     response_format: { type: "json_object" },
@@ -1041,4 +1050,100 @@ Format the output as a ready-to-use Copilot prompt that can be pasted directly i
   });
 
   return response.choices[0]?.message?.content || "Failed to generate prompt";
+}
+
+// Semantic search to find related JIRA stories
+export interface JiraStoryForSearch {
+  key: string;
+  summary: string;
+  description: string;
+  status: string;
+  priority: string;
+  labels: string[];
+}
+
+export interface RelatedStoryResult {
+  story: JiraStoryForSearch;
+  relevanceScore: number;
+  reason: string;
+}
+
+export async function findRelatedStories(
+  featureDescription: string,
+  jiraStories: JiraStoryForSearch[]
+): Promise<RelatedStoryResult[]> {
+  if (jiraStories.length === 0) {
+    return [];
+  }
+
+  const storiesContext = jiraStories.map((story, i) => 
+    `${i + 1}. [${story.key}] ${story.summary}\n   Description: ${story.description?.slice(0, 200) || "N/A"}...`
+  ).join("\n\n");
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "system",
+        content: `You are an expert at analyzing user stories and feature requirements to find semantic relationships.
+Your task is to identify existing JIRA stories that are related to a new feature request.
+
+Consider stories related if they:
+- Address similar functionality or user needs
+- Work on the same area of the application
+- Have overlapping acceptance criteria or goals
+- Could serve as a parent story for subtasks
+
+Return a JSON array of related stories with relevance scores (0-100) and reasons.
+Only include stories with relevance score >= 60.
+Return at most 5 related stories, sorted by relevance.
+
+Response format:
+{
+  "relatedStories": [
+    {
+      "storyKey": "KAN-123",
+      "relevanceScore": 85,
+      "reason": "Brief explanation of why this story is related"
+    }
+  ]
+}`
+      },
+      {
+        role: "user",
+        content: `## New Feature Request:
+${featureDescription}
+
+## Existing JIRA Stories:
+${storiesContext}
+
+Analyze the feature request and find which existing stories are semantically related. Return empty array if no strong matches found.`
+      }
+    ],
+    response_format: { type: "json_object" },
+    max_completion_tokens: 1024,
+  });
+
+  try {
+    const content = response.choices[0]?.message?.content || '{"relatedStories":[]}';
+    const result = JSON.parse(content);
+    
+    const relatedStories: RelatedStoryResult[] = (result.relatedStories || [])
+      .map((match: any) => {
+        const story = jiraStories.find(s => s.key === match.storyKey);
+        if (!story) return null;
+        return {
+          story,
+          relevanceScore: match.relevanceScore,
+          reason: match.reason
+        };
+      })
+      .filter((s: RelatedStoryResult | null): s is RelatedStoryResult => s !== null)
+      .sort((a: RelatedStoryResult, b: RelatedStoryResult) => b.relevanceScore - a.relevanceScore);
+    
+    return relatedStories;
+  } catch (error) {
+    console.error("Error parsing related stories response:", error);
+    return [];
+  }
 }

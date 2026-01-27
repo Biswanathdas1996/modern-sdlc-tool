@@ -110,8 +110,20 @@ The project includes pre-built integrations in `server/replit_integrations/` and
 - `GET /api/projects` - List all projects
 - `POST /api/requirements` - Submit feature requirements (supports file/audio)
 - `POST /api/brd/generate` - Generate BRD with SSE streaming
+- `POST /api/user-stories/generate` - Generate user stories (supports parentJiraKey for subtasks)
+- `PATCH /api/user-stories/:id` - Update a user story
 - `POST /api/test-cases/generate` - Generate test cases
 - `POST /api/test-data/generate` - Generate test data
+- `POST /api/jira/sync` - Sync user stories to JIRA (creates stories or subtasks)
+- `GET /api/jira/stories` - Fetch existing stories from JIRA board
+- `POST /api/jira/find-related` - Semantic search for related JIRA stories
+- `POST /api/jira/sync-subtask` - Create a single story as a JIRA subtask
+
+### JIRA Integration Features
+- **Smart Story Detection**: Before generating user stories, the app fetches existing JIRA stories and uses AI semantic search to find related ones
+- **Subtask Creation**: Users can choose to create new user stories as subtasks of existing JIRA stories
+- **Parent Context**: When creating subtasks, the parent story's content is used as context for more relevant generation
+- **Edit Before Sync**: All user stories are editable (title, description, acceptance criteria, etc.) before syncing to JIRA
 
 ## Development Guidelines
 

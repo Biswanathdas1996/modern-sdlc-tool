@@ -179,6 +179,8 @@ export const userStorySchema = z.object({
   relatedRequirementId: z.string().nullable().optional(),
   technicalNotes: z.string().nullable().optional(),
   dependencies: z.array(z.string()),
+  jiraKey: z.string().nullable().optional(),
+  parentJiraKey: z.string().nullable().optional(),
   createdAt: z.string(),
 });
 
