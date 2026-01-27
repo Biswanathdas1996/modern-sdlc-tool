@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { FileText, Upload, Mic, MicOff, FileUp, X, ArrowRight, Check, AlertCircle } from "lucide-react";
+import { FileText, Upload, Mic, MicOff, FileUp, X, ArrowRight, Check, AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -35,18 +35,71 @@ export default function RequirementsPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
+  const [isGeneratingBRD, setIsGeneratingBRD] = useState(false);
+  const [generationStatus, setGenerationStatus] = useState("");
+
   const submitMutation = useMutation({
     mutationFn: async (data: FormData) => {
+      // Step 1: Submit requirements
+      setGenerationStatus("Submitting requirements...");
       const response = await fetch("/api/requirements", {
         method: "POST",
         body: data,
       });
       if (!response.ok) throw new Error("Failed to submit requirements");
-      return response.json();
+      const requirements = await response.json();
+
+      // Step 2: Generate BRD (with streaming)
+      setIsGeneratingBRD(true);
+      setGenerationStatus("Generating BRD...");
+      
+      const brdResponse = await fetch("/api/brd/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      
+      if (!brdResponse.ok) throw new Error("Failed to generate BRD");
+
+      // Read the streaming response to completion
+      const reader = brdResponse.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+      let brdComplete = false;
+
+      while (!brdComplete) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.done) {
+                brdComplete = true;
+              }
+            } catch (e) {
+              // Ignore parse errors
+            }
+          }
+        }
+      }
+
+      return requirements;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/requirements"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/brd/current"] });
+      setIsGeneratingBRD(false);
+      setGenerationStatus("");
       navigate("/brd");
+    },
+    onError: () => {
+      setIsGeneratingBRD(false);
+      setGenerationStatus("");
     },
   });
 
@@ -325,7 +378,7 @@ export default function RequirementsPage() {
           )}
 
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => navigate("/documentation")}>
+            <Button variant="outline" onClick={() => navigate("/documentation")} disabled={submitMutation.isPending}>
               Back
             </Button>
             <Button
@@ -333,8 +386,17 @@ export default function RequirementsPage() {
               disabled={!isValid || submitMutation.isPending}
               data-testid="button-submit-requirements"
             >
-              Generate BRD
-              <ArrowRight className="ml-2 h-4 w-4" />
+              {submitMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {generationStatus || "Processing..."}
+                </>
+              ) : (
+                <>
+                  Generate BRD
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </>
+              )}
             </Button>
           </div>
         </div>
