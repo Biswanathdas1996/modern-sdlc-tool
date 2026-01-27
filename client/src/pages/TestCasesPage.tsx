@@ -11,6 +11,7 @@ import {
   Play,
   Filter,
   Search,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +55,17 @@ export default function TestCasesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/test-cases"] });
+    },
+  });
+
+  const generateTestDataMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/test-data/generate");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/test-data"] });
+      navigate("/test-data");
     },
   });
 
@@ -453,12 +465,25 @@ export default function TestCasesPage() {
 
           {/* Navigation */}
           <div className="flex justify-between gap-3 pt-4">
-            <Button variant="outline" onClick={() => navigate("/brd")}>
+            <Button variant="outline" onClick={() => navigate("/user-stories")} disabled={generateTestDataMutation.isPending}>
               Back
             </Button>
-            <Button onClick={() => navigate("/test-data")} data-testid="button-next-test-data">
-              Generate Test Data
-              <ArrowRight className="ml-2 h-4 w-4" />
+            <Button 
+              onClick={() => generateTestDataMutation.mutate()} 
+              disabled={generateTestDataMutation.isPending}
+              data-testid="button-next-test-data"
+            >
+              {generateTestDataMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generating Test Data...
+                </>
+              ) : (
+                <>
+                  Generate Test Data
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </>
+              )}
             </Button>
           </div>
         </div>
