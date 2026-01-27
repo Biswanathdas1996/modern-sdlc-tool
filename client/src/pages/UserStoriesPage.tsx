@@ -61,7 +61,7 @@ export default function UserStoriesPage() {
   }
 
   return (
-    <div className="container max-w-6xl mx-auto py-8 px-4">
+    <div className="container max-w-6xl mx-auto py-8 px-4 h-full overflow-auto">
       <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
