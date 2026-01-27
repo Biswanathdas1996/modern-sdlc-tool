@@ -20,8 +20,13 @@ import { useToast } from "@/hooks/use-toast";
 import type { BRD, UserStory } from "@shared/schema";
 
 interface RelatedJiraStory {
-  key: string;
-  summary: string;
+  story: {
+    key: string;
+    summary: string;
+    description?: string;
+    status?: string;
+    priority?: string;
+  };
   relevanceScore: number;
   reason: string;
 }
@@ -779,21 +784,21 @@ export default function UserStoriesPage() {
                 <ScrollArea className="h-48 border rounded-md p-2">
                   {relatedStories.map((related) => (
                     <div
-                      key={related.key}
+                      key={related.story.key}
                       className={`p-3 rounded-md border mb-2 cursor-pointer transition-colors ${
-                        selectedParentKey === related.key
+                        selectedParentKey === related.story.key
                           ? "border-primary bg-primary/5"
                           : "hover-elevate"
                       }`}
-                      onClick={() => setSelectedParentKey(related.key)}
-                      data-testid={`related-story-${related.key}`}
+                      onClick={() => setSelectedParentKey(related.story.key)}
+                      data-testid={`related-story-${related.story.key}`}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <Badge variant="outline" className="font-mono text-xs">
-                            {related.key}
+                            {related.story.key}
                           </Badge>
-                          <span className="font-medium text-sm">{related.summary}</span>
+                          <span className="font-medium text-sm">{related.story.summary}</span>
                         </div>
                         <Badge 
                           variant={related.relevanceScore >= 80 ? "default" : "secondary"}
