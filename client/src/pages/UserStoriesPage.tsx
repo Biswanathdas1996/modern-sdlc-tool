@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Link } from "wouter";
-import { ArrowLeft, ArrowRight, Bookmark, RefreshCw, Clock, Layers, Tag, CheckCircle2, AlertCircle } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { ArrowLeft, ArrowRight, Bookmark, RefreshCw, Clock, Layers, Tag, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +11,9 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { BRD, UserStory } from "@shared/schema";
 
 export default function UserStoriesPage() {
+  const [, navigate] = useLocation();
+  const [isGeneratingTests, setIsGeneratingTests] = useState(false);
+
   const { data: brd, isLoading: brdLoading } = useQuery<BRD>({
     queryKey: ["/api/brd/current"],
   });
@@ -31,6 +35,22 @@ export default function UserStoriesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/user-stories", brd?.id] });
+    },
+  });
+
+  const generateTestCasesMutation = useMutation({
+    mutationFn: async () => {
+      setIsGeneratingTests(true);
+      const response = await apiRequest("POST", "/api/test-cases/generate");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/test-cases"] });
+      setIsGeneratingTests(false);
+      navigate("/test-cases");
+    },
+    onError: () => {
+      setIsGeneratingTests(false);
     },
   });
 
@@ -230,17 +250,28 @@ export default function UserStoriesPage() {
 
       <div className="flex justify-between mt-8 pt-4 border-t gap-4 flex-wrap">
         <Link href="/brd">
-          <Button variant="outline" data-testid="button-back-to-brd">
+          <Button variant="outline" data-testid="button-back-to-brd" disabled={generateTestCasesMutation.isPending}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to BRD
           </Button>
         </Link>
-        <Link href="/test-cases">
-          <Button data-testid="button-next-test-cases">
-            Test Cases
-            <ArrowRight className="h-4 w-4 ml-2" />
-          </Button>
-        </Link>
+        <Button 
+          onClick={() => generateTestCasesMutation.mutate()}
+          disabled={generateTestCasesMutation.isPending || !brd}
+          data-testid="button-next-test-cases"
+        >
+          {generateTestCasesMutation.isPending ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Generating Test Cases...
+            </>
+          ) : (
+            <>
+              Generate Test Cases
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </>
+          )}
+        </Button>
       </div>
     </div>
   );
