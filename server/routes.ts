@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import { z } from "zod";
 import { storage } from "./storage";
-import { analyzeRepository, generateDocumentation, generateBRD, generateTestCases, generateTestData, generateUserStories, transcribeAudio } from "./ai";
+import { analyzeRepository, generateDocumentation, generateBRD, generateTestCases, generateTestData, generateUserStories, generateCopilotPrompt, transcribeAudio } from "./ai";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -402,6 +402,31 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error generating user stories:", error);
       res.status(500).json({ error: "Failed to generate user stories" });
+    }
+  });
+
+  // Generate Copilot prompt from user stories
+  app.post("/api/copilot-prompt/generate", async (req: Request, res: Response) => {
+    try {
+      const brd = await storage.getCurrentBRD();
+      if (!brd) {
+        return res.status(400).json({ error: "No BRD found. Please generate a BRD first." });
+      }
+
+      const userStories = await storage.getUserStories(brd.id);
+      if (!userStories || userStories.length === 0) {
+        return res.status(400).json({ error: "No user stories found. Please generate user stories first." });
+      }
+
+      const projects = await storage.getAllProjects();
+      const documentation = projects.length > 0 ? await storage.getDocumentation(projects[0].id) : null;
+      const analysis = projects.length > 0 ? await storage.getAnalysis(projects[0].id) : null;
+
+      const prompt = await generateCopilotPrompt(userStories, documentation || null, analysis || null);
+      res.json({ prompt });
+    } catch (error) {
+      console.error("Error generating Copilot prompt:", error);
+      res.status(500).json({ error: "Failed to generate Copilot prompt" });
     }
   });
 

@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, ArrowRight, Bookmark, RefreshCw, Clock, Layers, Tag, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bookmark, RefreshCw, Clock, Layers, Tag, CheckCircle2, AlertCircle, Loader2, Wand2, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { EmptyState } from "@/components/EmptyState";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -13,6 +15,9 @@ import type { BRD, UserStory } from "@shared/schema";
 export default function UserStoriesPage() {
   const [, navigate] = useLocation();
   const [isGeneratingTests, setIsGeneratingTests] = useState(false);
+  const [copilotPrompt, setCopilotPrompt] = useState<string | null>(null);
+  const [promptDialogOpen, setPromptDialogOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const { data: brd, isLoading: brdLoading } = useQuery<BRD>({
     queryKey: ["/api/brd/current"],
@@ -54,6 +59,25 @@ export default function UserStoriesPage() {
     },
   });
 
+  const generatePromptMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/copilot-prompt/generate");
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setCopilotPrompt(data.prompt);
+      setPromptDialogOpen(true);
+    },
+  });
+
+  const copyToClipboard = async () => {
+    if (copilotPrompt) {
+      await navigator.clipboard.writeText(copilotPrompt);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   const isLoading = brdLoading || storiesLoading;
 
   if (isLoading) {
@@ -92,28 +116,90 @@ export default function UserStoriesPage() {
             JIRA-style user stories generated from your BRD and repository documentation
           </p>
         </div>
-        <Button
-          onClick={() => generateStoriesMutation.mutate()}
-          disabled={generateStoriesMutation.isPending}
-          data-testid="button-generate-stories"
-        >
-          {generateStoriesMutation.isPending ? (
-            <>
-              <LoadingSpinner size="sm" className="mr-2" />
-              Generating...
-            </>
-          ) : userStories && userStories.length > 0 ? (
-            <>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Regenerate Stories
-            </>
-          ) : (
-            <>
-              <Bookmark className="h-4 w-4 mr-2" />
-              Generate User Stories
-            </>
+        <div className="flex items-center gap-2 flex-wrap">
+          {userStories && userStories.length > 0 && (
+            <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  onClick={() => generatePromptMutation.mutate()}
+                  disabled={generatePromptMutation.isPending}
+                  data-testid="button-generate-prompt"
+                >
+                  {generatePromptMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Generating Prompt...
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="h-4 w-4 mr-2" />
+                      Prompt
+                    </>
+                  )}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[80vh]">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Wand2 className="h-5 w-5 text-primary" />
+                    VS Code Copilot Prompt
+                  </DialogTitle>
+                  <DialogDescription>
+                    Copy this prompt and paste it into VS Code Copilot to implement the features
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex justify-end mb-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={copyToClipboard}
+                    data-testid="button-copy-prompt"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="h-4 w-4 mr-2 text-success" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-4 w-4 mr-2" />
+                        Copy to Clipboard
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <ScrollArea className="h-[60vh] rounded-md border p-4">
+                  <pre className="text-sm whitespace-pre-wrap font-mono text-foreground">
+                    {copilotPrompt || "Loading..."}
+                  </pre>
+                </ScrollArea>
+              </DialogContent>
+            </Dialog>
           )}
-        </Button>
+          <Button
+            onClick={() => generateStoriesMutation.mutate()}
+            disabled={generateStoriesMutation.isPending}
+            data-testid="button-generate-stories"
+          >
+            {generateStoriesMutation.isPending ? (
+              <>
+                <LoadingSpinner size="sm" className="mr-2" />
+                Generating...
+              </>
+            ) : userStories && userStories.length > 0 ? (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Regenerate Stories
+              </>
+            ) : (
+              <>
+                <Bookmark className="h-4 w-4 mr-2" />
+                Generate User Stories
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {generateStoriesMutation.isError && (

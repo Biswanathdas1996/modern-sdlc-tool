@@ -944,3 +944,95 @@ IMPORTANT:
     dependencies: story.dependencies || [],
   }));
 }
+
+// Generate VS Code Copilot prompt for implementing features
+export async function generateCopilotPrompt(
+  userStories: UserStory[],
+  documentation: Documentation | null,
+  analysis: RepoAnalysis | null
+): Promise<string> {
+  // Build folder structure from analysis features and architecture
+  const folderStructure = analysis
+    ? analysis.features
+        .flatMap((f: any) => f.files || [])
+        .slice(0, 50)
+        .join("\n")
+    : "Not available";
+
+  // Format user stories
+  const storiesText = userStories.map(story => `
+### ${story.storyKey}: ${story.title}
+**User Story:** As a ${story.asA}, I want ${story.iWant}, so that ${story.soThat}
+**Priority:** ${story.priority} | **Story Points:** ${story.storyPoints || "N/A"}
+**Acceptance Criteria:**
+${story.acceptanceCriteria.map(c => `- ${c}`).join("\n")}
+${story.technicalNotes ? `**Technical Notes:** ${story.technicalNotes}` : ""}
+${story.dependencies.length > 0 ? `**Dependencies:** ${story.dependencies.join(", ")}` : ""}
+`).join("\n");
+
+  // Format documentation context (content is a string, sections have title/content)
+  const docsContext = documentation ? `
+## Existing Documentation
+
+${documentation.content}
+
+${documentation.sections.map((s: any) => `### ${s.title}\n${s.content}`).join("\n\n")}
+` : "";
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "system",
+        content: `You are an expert at creating detailed implementation prompts for VS Code Copilot agents.
+Your task is to generate a comprehensive, actionable prompt that a developer can use with GitHub Copilot
+to implement the requested features.
+
+The prompt should:
+1. Clearly describe what needs to be built
+2. Reference the existing codebase architecture and folder structure
+3. Specify which files to create or modify
+4. Include code patterns to follow based on existing code
+5. List step-by-step implementation instructions
+6. Include testing requirements
+7. Be formatted for easy copy-paste into VS Code Copilot chat`
+      },
+      {
+        role: "user",
+        content: `Generate a VS Code Copilot implementation prompt based on the following context:
+
+## User Stories to Implement
+${storiesText}
+
+${docsContext}
+
+## Project Architecture & Tech Stack
+${analysis ? `
+Languages: ${analysis.techStack.languages.join(", ")}
+Frameworks: ${analysis.techStack.frameworks.join(", ")}
+Tools: ${analysis.techStack.tools.join(", ")}
+` : "Not available"}
+
+## Folder Structure
+\`\`\`
+${folderStructure}
+\`\`\`
+
+Generate a comprehensive Copilot prompt that:
+1. Starts with a clear objective
+2. Lists the user stories to implement
+3. Describes the existing architecture to work within
+4. Specifies files to create/modify with their paths
+5. Provides step-by-step implementation guide
+6. Includes code patterns and conventions to follow
+7. Lists acceptance criteria as checkboxes
+8. Adds testing requirements
+
+Format the output as a ready-to-use Copilot prompt that can be pasted directly into VS Code.`
+      }
+    ],
+    max_completion_tokens: 4096,
+  });
+
+  return response.choices[0]?.message?.content || "Failed to generate prompt";
+}
