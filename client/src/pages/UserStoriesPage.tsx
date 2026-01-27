@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, ArrowRight, Bookmark, RefreshCw, Clock, Layers, Tag, CheckCircle2, AlertCircle, Loader2, Wand2, Copy, Check, Upload, Pencil, Plus, X, GitBranch } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bookmark, RefreshCw, Clock, Layers, Tag, CheckCircle2, AlertCircle, Loader2, Wand2, Copy, Check, Upload, Pencil, Plus, X, GitBranch, Trash2 } from "lucide-react";
 import { SiJira } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -186,6 +186,27 @@ export default function UserStoriesPage() {
       toast({
         title: "Update Failed",
         description: "Failed to update user story. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteStoryMutation = useMutation({
+    mutationFn: async (storyId: string) => {
+      const response = await apiRequest("DELETE", `/api/user-stories/${storyId}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user-stories", brd?.id] });
+      toast({
+        title: "Story Deleted",
+        description: "User story has been removed.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Delete Failed",
+        description: "Failed to delete user story. Please try again.",
         variant: "destructive",
       });
     },
@@ -437,6 +458,15 @@ export default function UserStoriesPage() {
                       data-testid={`button-edit-${story.storyKey}`}
                     >
                       <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteStoryMutation.mutate(story.id)}
+                      disabled={deleteStoryMutation.isPending}
+                      data-testid={`button-delete-${story.storyKey}`}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
                 </div>

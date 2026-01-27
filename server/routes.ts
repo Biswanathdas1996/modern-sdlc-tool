@@ -461,6 +461,20 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/user-stories/:id", async (req: Request, res: Response) => {
+    try {
+      const id = req.params.id as string;
+      const deleted = await storage.deleteUserStory(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "User story not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting user story:", error);
+      res.status(500).json({ error: "Failed to delete user story" });
+    }
+  });
+
   // Generate Copilot prompt from user stories
   app.post("/api/copilot-prompt/generate", async (req: Request, res: Response) => {
     try {

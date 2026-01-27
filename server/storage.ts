@@ -56,6 +56,7 @@ export interface IStorage {
   createUserStory(story: Omit<UserStory, "id" | "createdAt">): Promise<UserStory>;
   createUserStories(stories: Omit<UserStory, "id" | "createdAt">[]): Promise<UserStory[]>;
   updateUserStory(id: string, updates: Partial<UserStory>): Promise<UserStory | undefined>;
+  deleteUserStory(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -275,6 +276,10 @@ export class MemStorage implements IStorage {
     const updatedStory = { ...story, ...updates, id: story.id, createdAt: story.createdAt };
     this.userStories.set(id, updatedStory);
     return updatedStory;
+  }
+
+  async deleteUserStory(id: string): Promise<boolean> {
+    return this.userStories.delete(id);
   }
 }
 
