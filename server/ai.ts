@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import type { RepoAnalysis, FeatureRequest, BRD, TestCase, TestData, Documentation, Project } from "@shared/schema";
+import type { RepoAnalysis, FeatureRequest, BRD, TestCase, TestData, Documentation, Project, UserStory } from "@shared/schema";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -792,5 +792,155 @@ IMPORTANT: Generate test data that uses actual field names and data structures f
     description: td.description,
     dataType: td.dataType || "valid",
     data: td.data || {},
+  }));
+}
+
+export async function generateUserStories(
+  brd: BRD,
+  documentation: Documentation | null
+): Promise<Omit<UserStory, "id" | "createdAt">[]> {
+  // Build documentation context
+  let documentationContext = "";
+  if (documentation) {
+    let docContent: any = {};
+    try {
+      if (typeof documentation.content === 'string') {
+        docContent = JSON.parse(documentation.content);
+      } else {
+        docContent = documentation.content;
+      }
+    } catch (e) {
+      docContent = { overview: documentation.content };
+    }
+    
+    documentationContext = `
+=== REPOSITORY DOCUMENTATION ===
+
+${docContent.overview ? `## System Overview\n${docContent.overview}\n` : ""}
+
+${docContent.components && docContent.components.length > 0 ? `## Existing Components\n${docContent.components.map((c: any) => `- ${c.name}: ${c.description}`).join("\n")}\n` : ""}
+
+${docContent.apiServices && docContent.apiServices.length > 0 ? `## API Endpoints\n${docContent.apiServices.map((a: any) => `- ${a.name}: ${a.description}${a.endpoint ? ` [${a.method || 'GET'} ${a.endpoint}]` : ""}`).join("\n")}\n` : ""}
+
+${docContent.dataModels && docContent.dataModels.length > 0 ? `## Data Models\n${docContent.dataModels.map((d: any) => `- ${d.name}: ${d.description}`).join("\n")}\n` : ""}
+
+${docContent.features && docContent.features.length > 0 ? `## Existing Features\n${docContent.features.map((f: any) => `- ${f.name}: ${f.description}`).join("\n")}\n` : ""}
+
+=== END DOCUMENTATION ===
+`;
+  }
+
+  // Get project prefix from BRD title (first 3-4 chars uppercase)
+  const projectPrefix = brd.title.split(/\s+/)[0]?.substring(0, 4).toUpperCase() || "PROJ";
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "system",
+        content: `You are a senior product manager creating JIRA-style user stories from a Business Requirements Document (BRD).
+
+Create well-structured user stories that:
+1. Follow the format: "As a [user type], I want [feature], so that [benefit]"
+2. Include clear, testable acceptance criteria
+3. Have appropriate story point estimates (1, 2, 3, 5, 8, 13)
+4. Include relevant labels based on the feature area
+5. Reference the documentation to ensure stories align with existing system architecture
+6. Group related stories under appropriate epics
+
+Use the following story key format: ${projectPrefix}-XXX (e.g., ${projectPrefix}-001, ${projectPrefix}-002)
+
+Return a JSON object with this structure:
+{
+  "userStories": [
+    {
+      "storyKey": "${projectPrefix}-001",
+      "title": "Brief story title",
+      "description": "Detailed description of what needs to be built",
+      "asA": "type of user",
+      "iWant": "what the user wants to do",
+      "soThat": "the benefit they get",
+      "acceptanceCriteria": ["Given X, When Y, Then Z", ...],
+      "priority": "highest|high|medium|low|lowest",
+      "storyPoints": 3,
+      "labels": ["frontend", "api", "database", etc.],
+      "epic": "Name of the epic this belongs to",
+      "relatedRequirementId": "FR-001",
+      "technicalNotes": "Any technical implementation notes based on the documentation",
+      "dependencies": ["${projectPrefix}-002", "External API setup", etc.]
+    }
+  ]
+}`
+      },
+      {
+        role: "user",
+        content: `Generate JIRA-style user stories for this BRD based on the repository documentation:
+
+${documentationContext}
+
+=== BUSINESS REQUIREMENTS DOCUMENT ===
+
+Title: ${brd.title}
+Version: ${brd.version}
+
+Overview:
+${brd.content.overview}
+
+Objectives:
+${brd.content.objectives.map((o, i) => `${i + 1}. ${o}`).join("\n")}
+
+Scope:
+- In Scope: ${brd.content.scope.inScope.join(", ")}
+- Out of Scope: ${brd.content.scope.outOfScope.join(", ")}
+
+Functional Requirements:
+${JSON.stringify(brd.content.functionalRequirements, null, 2)}
+
+Non-Functional Requirements:
+${JSON.stringify(brd.content.nonFunctionalRequirements, null, 2)}
+
+Technical Considerations:
+${brd.content.technicalConsiderations.join("\n")}
+
+Dependencies:
+${brd.content.dependencies.join(", ")}
+
+${brd.content.existingSystemContext ? `
+Existing System Context:
+- Relevant Components: ${brd.content.existingSystemContext.relevantComponents?.join(", ") || "None"}
+- Relevant APIs: ${brd.content.existingSystemContext.relevantAPIs?.join(", ") || "None"}
+- Data Models Affected: ${brd.content.existingSystemContext.dataModelsAffected?.join(", ") || "None"}
+` : ""}
+
+IMPORTANT: 
+1. Create user stories that reference actual components and APIs from the documentation
+2. Include technical notes that guide developers on how to integrate with existing code
+3. Ensure acceptance criteria are specific and testable
+4. Group related stories under logical epics`
+      }
+    ],
+    response_format: { type: "json_object" },
+    max_completion_tokens: 4096,
+  });
+
+  const content = response.choices[0]?.message?.content || '{"userStories":[]}';
+  const data = JSON.parse(content);
+  
+  return data.userStories.map((story: any, index: number) => ({
+    brdId: brd.id,
+    storyKey: story.storyKey || `${projectPrefix}-${String(index + 1).padStart(3, "0")}`,
+    title: story.title,
+    description: story.description,
+    asA: story.asA,
+    iWant: story.iWant,
+    soThat: story.soThat,
+    acceptanceCriteria: story.acceptanceCriteria || [],
+    priority: story.priority || "medium",
+    storyPoints: story.storyPoints || null,
+    labels: story.labels || [],
+    epic: story.epic || null,
+    relatedRequirementId: story.relatedRequirementId || null,
+    technicalNotes: story.technicalNotes || null,
+    dependencies: story.dependencies || [],
   }));
 }
