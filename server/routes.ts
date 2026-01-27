@@ -35,7 +35,8 @@ export async function registerRoutes(
 
   app.get("/api/projects/:id", async (req: Request, res: Response) => {
     try {
-      const project = await storage.getProject(req.params.id);
+      const id = req.params.id as string;
+      const project = await storage.getProject(id);
       if (!project) {
         return res.status(404).json({ error: "Project not found" });
       }
