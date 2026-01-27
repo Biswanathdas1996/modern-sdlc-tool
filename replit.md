@@ -96,6 +96,7 @@ The project includes pre-built integrations in `server/replit_integrations/` and
 - `LoadingSpinner/LoadingOverlay` - AI processing feedback
 - `EmptyState` - Helpful empty state messages
 - `ThemeProvider/ThemeToggle` - Dark mode support
+- `MermaidDiagram` - Renders Mermaid.js flowcharts for BPMN diagrams (strict security mode)
 
 ### Pages Implemented
 - `AnalyzePage` - Repository URL input and project listing
@@ -117,6 +118,7 @@ The project includes pre-built integrations in `server/replit_integrations/` and
 - `POST /api/jira/sync` - Sync user stories to JIRA (creates stories or subtasks)
 - `GET /api/jira/stories` - Fetch existing stories from JIRA board
 - `POST /api/jira/find-related` - Semantic search for related JIRA stories
+- `GET /api/bpmn/current` - Get BPMN user journey diagrams for current documentation
 - `POST /api/jira/sync-subtask` - Create a single story as a JIRA subtask
 
 ### JIRA Integration Features
@@ -124,6 +126,12 @@ The project includes pre-built integrations in `server/replit_integrations/` and
 - **Subtask Creation**: Users can choose to create new user stories as subtasks of existing JIRA stories
 - **Parent Context**: When creating subtasks, the parent story's content is used as context for more relevant generation
 - **Edit Before Sync**: All user stories are editable (title, description, acceptance criteria, etc.) before syncing to JIRA
+
+### BPMN User Journey Diagrams
+- **Automatic Generation**: After documentation is generated, BPMN diagrams are automatically created for each feature
+- **Mermaid.js Rendering**: Flowcharts are rendered using Mermaid.js with strict security mode
+- **Feature-wise Flows**: Each feature gets its own user journey diagram showing start points, key steps, decision points, success/error paths, and endpoints
+- **Visual Documentation**: Diagrams appear in the "User Journeys" section of the Documentation page
 
 ## Development Guidelines
 
