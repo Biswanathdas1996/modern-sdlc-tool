@@ -406,6 +406,22 @@ export async function registerRoutes(
     }
   });
 
+  // Update a user story
+  app.patch("/api/user-stories/:id", async (req: Request, res: Response) => {
+    try {
+      const id = req.params.id as string;
+      const updates = req.body;
+      const updatedStory = await storage.updateUserStory(id, updates);
+      if (!updatedStory) {
+        return res.status(404).json({ error: "User story not found" });
+      }
+      res.json(updatedStory);
+    } catch (error) {
+      console.error("Error updating user story:", error);
+      res.status(500).json({ error: "Failed to update user story" });
+    }
+  });
+
   // Generate Copilot prompt from user stories
   app.post("/api/copilot-prompt/generate", async (req: Request, res: Response) => {
     try {

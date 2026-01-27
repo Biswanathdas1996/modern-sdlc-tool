@@ -55,6 +55,7 @@ export interface IStorage {
   getUserStories(brdId: string): Promise<UserStory[]>;
   createUserStory(story: Omit<UserStory, "id" | "createdAt">): Promise<UserStory>;
   createUserStories(stories: Omit<UserStory, "id" | "createdAt">[]): Promise<UserStory[]>;
+  updateUserStory(id: string, updates: Partial<UserStory>): Promise<UserStory | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -266,6 +267,14 @@ export class MemStorage implements IStorage {
 
   async createUserStories(stories: Omit<UserStory, "id" | "createdAt">[]): Promise<UserStory[]> {
     return Promise.all(stories.map((s) => this.createUserStory(s)));
+  }
+
+  async updateUserStory(id: string, updates: Partial<UserStory>): Promise<UserStory | undefined> {
+    const story = this.userStories.get(id);
+    if (!story) return undefined;
+    const updatedStory = { ...story, ...updates, id: story.id, createdAt: story.createdAt };
+    this.userStories.set(id, updatedStory);
+    return updatedStory;
   }
 }
 
