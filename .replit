@@ -40,3 +40,9 @@ waitForPort = 5000
 
 [agent]
 integrations = ["javascript_openai_ai_integrations:2.0.0"]
+
+[userenv]
+
+[userenv.shared]
+JIRA_INSTANCE_URL = "daspapun21.atlassian.net"
+JIRA_PROJECT_KEY = "KAN"

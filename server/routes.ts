@@ -695,17 +695,23 @@ export async function registerRoutes(
       const jiraInstanceUrl = process.env.JIRA_INSTANCE_URL || "daspapun21.atlassian.net";
       const jiraProjectKey = process.env.JIRA_PROJECT_KEY || "KAN";
 
+      console.log("JIRA find-related config:", { jiraEmail: jiraEmail ? "set" : "not set", jiraToken: jiraToken ? "set" : "not set", jiraInstanceUrl, jiraProjectKey });
+
       if (!jiraEmail || !jiraToken) {
+        console.log("Missing JIRA credentials, returning empty");
         return res.status(200).json({ relatedStories: [] }); // Return empty if no JIRA config
       }
 
       const auth = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
       const jiraBaseUrl = `https://${jiraInstanceUrl}/rest/api/3`;
       
-      // Fetch all stories from the project
-      const jql = encodeURIComponent(`project = ${jiraProjectKey} AND issuetype = Story ORDER BY created DESC`);
+      // Fetch all stories from the project - try without issue type filter first
+      const jql = encodeURIComponent(`project = ${jiraProjectKey} ORDER BY created DESC`);
+      const fetchUrl = `${jiraBaseUrl}/search?jql=${jql}&fields=summary,description,status,priority,labels,issuetype&maxResults=100`;
+      console.log("Fetching JIRA stories:", fetchUrl);
+      
       const response = await fetch(
-        `${jiraBaseUrl}/search?jql=${jql}&fields=summary,description,status,priority,labels&maxResults=100`,
+        fetchUrl,
         {
           method: 'GET',
           headers: {
@@ -716,26 +722,36 @@ export async function registerRoutes(
       );
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error("JIRA API error:", response.status, errorText);
         return res.status(200).json({ relatedStories: [] });
       }
 
       const data = await response.json();
-      const jiraStories = data.issues.map((issue: any) => ({
+      console.log(`Found ${data.issues?.length || 0} JIRA issues`);
+      
+      const jiraStories = (data.issues || []).map((issue: any) => ({
         key: issue.key,
         summary: issue.fields.summary,
         description: extractTextFromADF(issue.fields.description),
         status: issue.fields.status?.name || "Unknown",
         priority: issue.fields.priority?.name || "Medium",
-        labels: issue.fields.labels || []
+        labels: issue.fields.labels || [],
+        issueType: issue.fields.issuetype?.name || "Unknown"
       }));
 
+      console.log("Mapped JIRA stories:", jiraStories.map((s: any) => ({ key: s.key, summary: s.summary, issueType: s.issueType })));
+
       if (jiraStories.length === 0) {
+        console.log("No JIRA stories found in project");
         return res.json({ relatedStories: [] });
       }
 
       // Use OpenAI to find semantically related stories
+      console.log("Finding related stories using AI semantic search...");
       const { findRelatedStories } = await import("./ai");
       const relatedStories = await findRelatedStories(featureDescription, jiraStories);
+      console.log(`AI found ${relatedStories.length} related stories`);
       
       res.json({ relatedStories });
     } catch (error) {

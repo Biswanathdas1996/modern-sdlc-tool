@@ -168,15 +168,19 @@ export default function BRDPage() {
     try {
       const featureDescription = `${brd.title}\n\n${brd.content.overview}\n\nObjectives:\n${brd.content.objectives.join("\n")}`;
       
+      console.log("Checking for related JIRA stories...");
       const response = await apiRequest("POST", "/api/jira/find-related", {
         featureDescription,
       });
       const data = await response.json();
+      console.log("Related stories response:", data);
       
       if (data.relatedStories && data.relatedStories.length > 0) {
+        console.log("Found related stories:", data.relatedStories.length);
         setRelatedStories(data.relatedStories);
         setRelatedStoriesDialogOpen(true);
       } else {
+        console.log("No related stories found, generating directly");
         // No related stories found, generate directly
         generateStoriesMutation.mutate(undefined);
       }
