@@ -9,6 +9,7 @@ import {
   Home,
   ChevronRight,
   Sparkles,
+  Bookmark,
 } from "lucide-react";
 import {
   Sidebar,
@@ -68,12 +69,20 @@ const workflowSteps: WorkflowStep[] = [
     step: 4,
   },
   {
+    id: "user-stories",
+    title: "User Stories",
+    description: "Generate stories for JIRA",
+    path: "/user-stories",
+    icon: Bookmark,
+    step: 5,
+  },
+  {
     id: "test-cases",
     title: "Test Cases",
     description: "Generate test scenarios",
     path: "/test-cases",
     icon: TestTube,
-    step: 5,
+    step: 6,
   },
   {
     id: "test-data",
@@ -81,7 +90,7 @@ const workflowSteps: WorkflowStep[] = [
     description: "Generate test datasets",
     path: "/test-data",
     icon: Database,
-    step: 6,
+    step: 7,
   },
 ];
 

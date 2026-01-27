@@ -13,6 +13,7 @@ import AnalyzePage from "@/pages/AnalyzePage";
 import DocumentationPage from "@/pages/DocumentationPage";
 import RequirementsPage from "@/pages/RequirementsPage";
 import BRDPage from "@/pages/BRDPage";
+import UserStoriesPage from "@/pages/UserStoriesPage";
 import TestCasesPage from "@/pages/TestCasesPage";
 import TestDataPage from "@/pages/TestDataPage";
 import type { Project } from "@shared/schema";
@@ -24,6 +25,7 @@ function Router() {
       <Route path="/documentation" component={DocumentationPage} />
       <Route path="/requirements" component={RequirementsPage} />
       <Route path="/brd" component={BRDPage} />
+      <Route path="/user-stories" component={UserStoriesPage} />
       <Route path="/test-cases" component={TestCasesPage} />
       <Route path="/test-data" component={TestDataPage} />
       <Route component={NotFound} />
