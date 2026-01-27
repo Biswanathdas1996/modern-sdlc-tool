@@ -618,16 +618,22 @@ ${docContent.techStack ? `## Technology Stack\n${JSON.stringify(docContent.techS
         content: `You are a senior QA engineer creating comprehensive test cases from a BRD. Generate test cases for each functional requirement.
 
 CRITICAL: Your test cases MUST be based on the repository documentation provided. Reference actual:
-- Components and their file paths from the documentation
-- API endpoints with their actual routes and methods
+- API endpoints with their actual URL routes (e.g., /api/users, /dashboard, /login) - NOT file paths
+- HTTP methods (GET, POST, PUT, DELETE) for API calls
 - Data models with their actual field names
 - Existing features that the new feature interacts with
 
 ${testingContext}
 
+IMPORTANT FOR TEST STEPS:
+- Always use URL routes/endpoints (e.g., "Navigate to /dashboard", "POST to /api/auth/login")
+- NEVER use file paths (e.g., do NOT write "client/src/pages/Dashboard.tsx")
+- Be specific about URLs: "/api/users/123" not "the users endpoint"
+- Include query parameters when relevant: "/api/products?category=electronics"
+
 Test cases should:
-1. Reference actual component names and file paths from the documentation
-2. Use actual API endpoint paths and HTTP methods from the documentation
+1. Reference actual URL routes and endpoints from the documentation
+2. Use actual API endpoint paths (URLs) and HTTP methods
 3. Include realistic test data based on documented data models
 4. Consider integration with existing documented features
 5. Include code snippets that match the actual codebase structure
@@ -645,14 +651,14 @@ Return a JSON object with this structure:
       "steps": [
         {
           "step": 1,
-          "action": "What to do",
+          "action": "Navigate to /route or Call POST /api/endpoint with payload",
           "expectedResult": "What should happen"
         }
       ],
       "expectedOutcome": "Overall expected result",
       "codeSnippet": "Optional code example for automated testing",
-      "relatedComponents": ["List of components from documentation this test covers"],
-      "relatedAPIs": ["List of API endpoints from documentation this test covers"]
+      "relatedComponents": ["List of UI components this test covers"],
+      "relatedAPIs": ["List of API routes (URLs) this test covers, e.g., GET /api/users"]
     }
   ]
 }`
