@@ -161,6 +161,29 @@ export const testDataSchema = z.object({
 
 export type TestData = z.infer<typeof testDataSchema>;
 
+// User Story - JIRA-style user stories generated from BRD
+export const userStorySchema = z.object({
+  id: z.string(),
+  brdId: z.string(),
+  storyKey: z.string(),
+  title: z.string(),
+  description: z.string(),
+  asA: z.string(),
+  iWant: z.string(),
+  soThat: z.string(),
+  acceptanceCriteria: z.array(z.string()),
+  priority: z.enum(["highest", "high", "medium", "low", "lowest"]),
+  storyPoints: z.number().nullable().optional(),
+  labels: z.array(z.string()),
+  epic: z.string().nullable().optional(),
+  relatedRequirementId: z.string().nullable().optional(),
+  technicalNotes: z.string().nullable().optional(),
+  dependencies: z.array(z.string()),
+  createdAt: z.string(),
+});
+
+export type UserStory = z.infer<typeof userStorySchema>;
+
 // Workflow State - tracks the current step in the workflow
 export const workflowStateSchema = z.object({
   currentStep: z.enum(["analyze", "document", "requirements", "brd", "test-cases", "test-data"]),
