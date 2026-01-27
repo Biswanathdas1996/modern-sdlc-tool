@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { FileText, ChevronRight, Search, Download, Layers, Code, Database, Settings, Package, ChevronDown, GitBranch, Loader2 } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { FileText, ChevronRight, Search, Download, Layers, Code, Database, Settings, Package, ChevronDown, GitBranch, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -47,6 +48,16 @@ export default function DocumentationPage() {
   const { data: bpmnDiagrams, isLoading: bpmnLoading } = useQuery<BPMNDiagram>({
     queryKey: ["/api/bpmn/current"],
     enabled: !!documentation,
+  });
+
+  const regenerateBpmnMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/bpmn/regenerate");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bpmn/current"] });
+    },
   });
 
   const isLoading = analysisLoading || docLoading;
@@ -325,12 +336,28 @@ export default function DocumentationPage() {
                 ) : bpmnDiagrams?.diagrams && bpmnDiagrams.diagrams.length > 0 ? (
                   <Card data-testid="card-bpmn-diagram">
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <Badge className="bg-primary/10 text-primary border-primary/30">
-                          BPMN
-                        </Badge>
-                        {bpmnDiagrams.diagrams[0].featureName}
-                      </CardTitle>
+                      <div className="flex items-center justify-between gap-2">
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <Badge className="bg-primary/10 text-primary border-primary/30">
+                            BPMN
+                          </Badge>
+                          {bpmnDiagrams.diagrams[0].featureName}
+                        </CardTitle>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => regenerateBpmnMutation.mutate()}
+                          disabled={regenerateBpmnMutation.isPending}
+                          data-testid="button-regenerate-bpmn"
+                        >
+                          {regenerateBpmnMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          ) : (
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                          )}
+                          Regenerate
+                        </Button>
+                      </div>
                       <CardDescription>{bpmnDiagrams.diagrams[0].description}</CardDescription>
                     </CardHeader>
                     <CardContent>

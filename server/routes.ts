@@ -189,6 +189,37 @@ export async function registerRoutes(
     }
   });
 
+  // Regenerate BPMN diagram using existing documentation
+  app.post("/api/bpmn/regenerate", async (req: Request, res: Response) => {
+    try {
+      const projects = await storage.getAllProjects();
+      if (projects.length === 0) {
+        return res.status(404).json({ error: "No projects found" });
+      }
+      const project = projects[0];
+      const doc = await storage.getDocumentation(project.id);
+      if (!doc) {
+        return res.status(404).json({ error: "No documentation found" });
+      }
+      const analysis = await storage.getAnalysis(project.id);
+      if (!analysis) {
+        return res.status(404).json({ error: "No analysis found" });
+      }
+
+      // Delete existing BPMN diagram if any
+      await storage.deleteBPMNDiagram(doc.id);
+
+      // Generate new BPMN diagram
+      const bpmnData = await generateBPMNDiagram(doc, analysis);
+      const newBpmn = await storage.createBPMNDiagram(bpmnData);
+      
+      res.json(newBpmn);
+    } catch (error) {
+      console.error("Error regenerating BPMN diagram:", error);
+      res.status(500).json({ error: "Failed to regenerate BPMN diagram" });
+    }
+  });
+
   // Feature Requirements
   app.post("/api/requirements", upload.fields([
     { name: "file", maxCount: 1 },

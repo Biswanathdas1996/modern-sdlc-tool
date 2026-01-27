@@ -62,6 +62,7 @@ export interface IStorage {
   // BPMN Diagrams
   getBPMNDiagram(documentationId: string): Promise<BPMNDiagram | undefined>;
   createBPMNDiagram(diagram: Omit<BPMNDiagram, "id" | "createdAt">): Promise<BPMNDiagram>;
+  deleteBPMNDiagram(documentationId: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -301,6 +302,15 @@ export class MemStorage implements IStorage {
     };
     this.bpmnDiagrams.set(id, newDiagram);
     return newDiagram;
+  }
+
+  async deleteBPMNDiagram(documentationId: string): Promise<void> {
+    const entries = Array.from(this.bpmnDiagrams.entries());
+    for (const [id, diagram] of entries) {
+      if (diagram.documentationId === documentationId) {
+        this.bpmnDiagrams.delete(id);
+      }
+    }
   }
 }
 
