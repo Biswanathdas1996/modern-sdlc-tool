@@ -6,7 +6,8 @@ import type {
   FeatureRequest, 
   BRD, 
   TestCase, 
-  TestData 
+  TestData,
+  UserStory
 } from "@shared/schema";
 
 export interface IStorage {
@@ -49,6 +50,11 @@ export interface IStorage {
   getAllTestData(): Promise<TestData[]>;
   createTestData(data: Omit<TestData, "id" | "createdAt">): Promise<TestData>;
   createTestDataBatch(data: Omit<TestData, "id" | "createdAt">[]): Promise<TestData[]>;
+  
+  // User Stories
+  getUserStories(brdId: string): Promise<UserStory[]>;
+  createUserStory(story: Omit<UserStory, "id" | "createdAt">): Promise<UserStory>;
+  createUserStories(stories: Omit<UserStory, "id" | "createdAt">[]): Promise<UserStory[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -59,6 +65,7 @@ export class MemStorage implements IStorage {
   private brds: Map<string, BRD> = new Map();
   private testCases: Map<string, TestCase> = new Map();
   private testData: Map<string, TestData> = new Map();
+  private userStories: Map<string, UserStory> = new Map();
   
   private currentProjectId: string | null = null;
   private currentFeatureRequestId: string | null = null;
@@ -239,6 +246,26 @@ export class MemStorage implements IStorage {
 
   async createTestDataBatch(data: Omit<TestData, "id" | "createdAt">[]): Promise<TestData[]> {
     return Promise.all(data.map((d) => this.createTestData(d)));
+  }
+
+  // User Stories
+  async getUserStories(brdId: string): Promise<UserStory[]> {
+    return Array.from(this.userStories.values()).filter((s) => s.brdId === brdId);
+  }
+
+  async createUserStory(story: Omit<UserStory, "id" | "createdAt">): Promise<UserStory> {
+    const id = randomUUID();
+    const newStory: UserStory = {
+      ...story,
+      id,
+      createdAt: new Date().toISOString(),
+    };
+    this.userStories.set(id, newStory);
+    return newStory;
+  }
+
+  async createUserStories(stories: Omit<UserStory, "id" | "createdAt">[]): Promise<UserStory[]> {
+    return Promise.all(stories.map((s) => this.createUserStory(s)));
   }
 }
 
