@@ -225,10 +225,22 @@ export async function registerRoutes(
   // Database Schema - Connect and fetch schema from external PostgreSQL
   app.post("/api/database-schema/connect", async (req: Request, res: Response) => {
     try {
-      const { connectionString } = req.body;
+      let { connectionString } = req.body;
       
       if (!connectionString || typeof connectionString !== "string") {
         return res.status(400).json({ error: "Connection string is required" });
+      }
+
+      // Clean up the connection string - handle pasted psql commands
+      connectionString = connectionString.trim();
+      // Remove "psql " prefix if present
+      if (connectionString.toLowerCase().startsWith("psql ")) {
+        connectionString = connectionString.substring(5).trim();
+      }
+      // Remove surrounding quotes (single or double)
+      if ((connectionString.startsWith("'") && connectionString.endsWith("'")) ||
+          (connectionString.startsWith('"') && connectionString.endsWith('"'))) {
+        connectionString = connectionString.slice(1, -1);
       }
 
       const projects = await storage.getAllProjects();
