@@ -665,7 +665,7 @@ export async function registerRoutes(
       }
 
       // Get database schema if available
-      const databaseSchema = project ? await storage.getDatabaseSchema(project.id) : null;
+      const databaseSchema = projects[0] ? await storage.getDatabaseSchema(projects[0].id) : null;
       
       const userStories = await generateUserStories(brd, documentation || null, databaseSchema, parentContext);
       if (!userStories || userStories.length === 0) {
