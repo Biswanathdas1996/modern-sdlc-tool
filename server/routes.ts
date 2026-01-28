@@ -489,7 +489,7 @@ export async function registerRoutes(
 
       try {
         // Get database schema if available
-        const databaseSchema = project ? await storage.getDatabaseSchema(project.id) : null;
+        const databaseSchema = projects[0] ? await storage.getDatabaseSchema(projects[0].id) : null;
         
         // Generate BRD using documentation as context
         const brd = await generateBRD(
