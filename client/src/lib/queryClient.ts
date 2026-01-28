@@ -1,4 +1,7 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { getFromCache, saveToCache, clearCache } from "./localStorageCache";
+
+export { clearCache } from "./localStorageCache";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -24,21 +27,59 @@ export async function apiRequest(
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
+
+const CACHEABLE_ENDPOINTS = [
+  "/api/projects",
+  "/api/documentation/current",
+  "/api/analysis/current",
+  "/api/brd/current",
+  "/api/bpmn/current",
+  "/api/database-schema/current",
+  "/api/requirements/current",
+  "/api/user-stories",
+  "/api/test-cases",
+  "/api/test-data",
+  "/api/copilot-prompts",
+];
+
+function isCacheableEndpoint(url: string): boolean {
+  return CACHEABLE_ENDPOINTS.some(endpoint => url.startsWith(endpoint));
+}
+
 export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
-      credentials: "include",
-    });
+    const url = queryKey.join("/") as string;
+    
+    try {
+      const res = await fetch(url, {
+        credentials: "include",
+      });
 
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
+      if (unauthorizedBehavior === "returnNull" && res.status === 401) {
+        return null;
+      }
+
+      await throwIfResNotOk(res);
+      const data = await res.json();
+      
+      if (isCacheableEndpoint(url)) {
+        saveToCache(url, data);
+      }
+      
+      return data;
+    } catch (error) {
+      if (isCacheableEndpoint(url)) {
+        const cached = getFromCache<T>(url);
+        if (cached !== null) {
+          console.log(`Using cached data for ${url}`);
+          return cached;
+        }
+      }
+      throw error;
     }
-
-    await throwIfResNotOk(res);
-    return await res.json();
   };
 
 export const queryClient = new QueryClient({
@@ -55,3 +96,12 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+export function hydrateFromLocalStorage(): void {
+  CACHEABLE_ENDPOINTS.forEach(endpoint => {
+    const cached = getFromCache(endpoint);
+    if (cached !== null) {
+      queryClient.setQueryData([endpoint], cached);
+    }
+  });
+}

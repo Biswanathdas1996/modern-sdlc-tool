@@ -1,6 +1,6 @@
 import { Switch, Route } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { queryClient } from "./lib/queryClient";
+import { queryClient, hydrateFromLocalStorage } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -17,6 +17,8 @@ import UserStoriesPage from "@/pages/UserStoriesPage";
 import TestCasesPage from "@/pages/TestCasesPage";
 import TestDataPage from "@/pages/TestDataPage";
 import type { Project } from "@shared/schema";
+
+hydrateFromLocalStorage();
 
 function Router() {
   return (
