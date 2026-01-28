@@ -13,7 +13,7 @@ import { DocumentPreview } from "@/components/DocumentPreview";
 import { CodeBlock } from "@/components/CodeBlock";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { EmptyState } from "@/components/EmptyState";
-import { BPMNViewer } from "@/components/BPMNViewer";
+import { MermaidDiagram } from "@/components/MermaidDiagram";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import type { Documentation, RepoAnalysis, BPMNDiagram } from "@shared/schema";
@@ -360,10 +360,13 @@ export default function DocumentationPage() {
                       </div>
                       <CardDescription>{bpmnDiagrams.diagrams[0].description}</CardDescription>
                     </CardHeader>
-                    <CardContent className="p-4">
-                      <BPMNViewer 
-                        mermaidCode={bpmnDiagrams.diagrams[0].mermaidCode} 
-                      />
+                    <CardContent>
+                      <div className="bg-muted/30 rounded-lg p-6 overflow-x-auto">
+                        <MermaidDiagram 
+                          chart={bpmnDiagrams.diagrams[0].mermaidCode} 
+                          className="min-h-[400px]"
+                        />
+                      </div>
                     </CardContent>
                   </Card>
                 ) : (
