@@ -15,9 +15,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { EmptyState } from "@/components/EmptyState";
+import { WorkflowHeader } from "@/components/WorkflowHeader";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { BRD, UserStory } from "@shared/schema";
+
+const workflowSteps = [
+  { id: "analyze", label: "Analyze", completed: true, active: false },
+  { id: "document", label: "Document", completed: true, active: false },
+  { id: "requirements", label: "Requirements", completed: true, active: false },
+  { id: "brd", label: "BRD", completed: true, active: false },
+  { id: "user-stories", label: "Stories", completed: false, active: true },
+  { id: "test-cases", label: "Tests", completed: false, active: false },
+  { id: "test-data", label: "Data", completed: false, active: false },
+];
 
 interface RelatedJiraStory {
   story: {
@@ -278,18 +289,15 @@ export default function UserStoriesPage() {
   }
 
   return (
-    <div className="container max-w-6xl mx-auto py-8 px-4 h-full overflow-auto">
-      <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <Bookmark className="h-6 w-6 text-primary" />
-            User Stories for JIRA
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            JIRA-style user stories generated from your BRD and repository documentation
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
+    <div className="flex flex-col h-full">
+      <WorkflowHeader
+        steps={workflowSteps}
+        title="User Stories for JIRA"
+        description="JIRA-style user stories generated from your BRD and repository documentation."
+      />
+      <div className="flex-1 overflow-auto p-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-center justify-end gap-2 mb-6 flex-wrap">
           {userStories && userStories.length > 0 && (
             <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
               <DialogTrigger asChild>
@@ -392,10 +400,9 @@ export default function UserStoriesPage() {
               </>
             )}
           </Button>
-        </div>
-      </div>
+          </div>
 
-      {generateStoriesMutation.isError && (
+          {generateStoriesMutation.isError && (
         <Card className="mb-6 border-destructive">
           <CardContent className="py-4">
             <div className="flex items-center gap-2 text-destructive">
@@ -869,6 +876,8 @@ export default function UserStoriesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+        </div>
+      </div>
     </div>
   );
 }

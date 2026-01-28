@@ -57,7 +57,9 @@ const workflowSteps = [
   { id: "document", label: "Document", completed: true, active: false },
   { id: "requirements", label: "Requirements", completed: true, active: false },
   { id: "brd", label: "BRD", completed: false, active: true },
+  { id: "user-stories", label: "Stories", completed: false, active: false },
   { id: "test-cases", label: "Tests", completed: false, active: false },
+  { id: "test-data", label: "Data", completed: false, active: false },
 ];
 
 export default function BRDPage() {

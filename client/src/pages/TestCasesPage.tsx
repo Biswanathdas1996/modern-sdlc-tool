@@ -33,7 +33,9 @@ const workflowSteps = [
   { id: "document", label: "Document", completed: true, active: false },
   { id: "requirements", label: "Requirements", completed: true, active: false },
   { id: "brd", label: "BRD", completed: true, active: false },
+  { id: "user-stories", label: "Stories", completed: true, active: false },
   { id: "test-cases", label: "Tests", completed: false, active: true },
+  { id: "test-data", label: "Data", completed: false, active: false },
 ];
 
 export default function TestCasesPage() {

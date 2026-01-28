@@ -24,7 +24,9 @@ const workflowSteps = [
   { id: "document", label: "Document", completed: false, active: true },
   { id: "requirements", label: "Requirements", completed: false, active: false },
   { id: "brd", label: "BRD", completed: false, active: false },
+  { id: "user-stories", label: "Stories", completed: false, active: false },
   { id: "test-cases", label: "Tests", completed: false, active: false },
+  { id: "test-data", label: "Data", completed: false, active: false },
 ];
 
 interface TocItem {
