@@ -211,6 +211,39 @@ export const workflowStateSchema = z.object({
 
 export type WorkflowState = z.infer<typeof workflowStateSchema>;
 
+// Database Schema - external database schema information
+export const databaseColumnSchema = z.object({
+  name: z.string(),
+  dataType: z.string(),
+  isNullable: z.boolean(),
+  defaultValue: z.string().nullable().optional(),
+  isPrimaryKey: z.boolean().optional(),
+  isForeignKey: z.boolean().optional(),
+  references: z.string().nullable().optional(),
+});
+
+export type DatabaseColumn = z.infer<typeof databaseColumnSchema>;
+
+export const databaseTableSchema = z.object({
+  name: z.string(),
+  columns: z.array(databaseColumnSchema),
+  rowCount: z.number().optional(),
+});
+
+export type DatabaseTable = z.infer<typeof databaseTableSchema>;
+
+export const databaseSchemaInfoSchema = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  connectionString: z.string(),
+  databaseName: z.string(),
+  tables: z.array(databaseTableSchema),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export type DatabaseSchemaInfo = z.infer<typeof databaseSchemaInfoSchema>;
+
 // User type for auth (keeping existing)
 export const users = {
   id: "string",

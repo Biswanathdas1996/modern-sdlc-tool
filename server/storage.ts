@@ -8,7 +8,8 @@ import type {
   TestCase, 
   TestData,
   UserStory,
-  BPMNDiagram
+  BPMNDiagram,
+  DatabaseSchemaInfo
 } from "@shared/schema";
 
 export interface IStorage {
@@ -63,6 +64,12 @@ export interface IStorage {
   getBPMNDiagram(documentationId: string): Promise<BPMNDiagram | undefined>;
   createBPMNDiagram(diagram: Omit<BPMNDiagram, "id" | "createdAt">): Promise<BPMNDiagram>;
   deleteBPMNDiagram(documentationId: string): Promise<void>;
+  
+  // Database Schema
+  getDatabaseSchema(projectId: string): Promise<DatabaseSchemaInfo | undefined>;
+  createDatabaseSchema(schema: Omit<DatabaseSchemaInfo, "id" | "createdAt" | "updatedAt">): Promise<DatabaseSchemaInfo>;
+  updateDatabaseSchema(projectId: string, schema: Partial<DatabaseSchemaInfo>): Promise<DatabaseSchemaInfo | undefined>;
+  deleteDatabaseSchema(projectId: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -75,6 +82,7 @@ export class MemStorage implements IStorage {
   private testData: Map<string, TestData> = new Map();
   private userStories: Map<string, UserStory> = new Map();
   private bpmnDiagrams: Map<string, BPMNDiagram> = new Map();
+  private databaseSchemas: Map<string, DatabaseSchemaInfo> = new Map();
   
   private currentProjectId: string | null = null;
   private currentFeatureRequestId: string | null = null;
@@ -309,6 +317,45 @@ export class MemStorage implements IStorage {
     for (const [id, diagram] of entries) {
       if (diagram.documentationId === documentationId) {
         this.bpmnDiagrams.delete(id);
+      }
+    }
+  }
+
+  // Database Schema
+  async getDatabaseSchema(projectId: string): Promise<DatabaseSchemaInfo | undefined> {
+    return Array.from(this.databaseSchemas.values()).find(s => s.projectId === projectId);
+  }
+
+  async createDatabaseSchema(schema: Omit<DatabaseSchemaInfo, "id" | "createdAt" | "updatedAt">): Promise<DatabaseSchemaInfo> {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    const newSchema: DatabaseSchemaInfo = {
+      ...schema,
+      id,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.databaseSchemas.set(id, newSchema);
+    return newSchema;
+  }
+
+  async updateDatabaseSchema(projectId: string, updates: Partial<DatabaseSchemaInfo>): Promise<DatabaseSchemaInfo | undefined> {
+    const existing = await this.getDatabaseSchema(projectId);
+    if (!existing) return undefined;
+    const updated: DatabaseSchemaInfo = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+    this.databaseSchemas.set(existing.id, updated);
+    return updated;
+  }
+
+  async deleteDatabaseSchema(projectId: string): Promise<void> {
+    const entries = Array.from(this.databaseSchemas.entries());
+    for (const [id, schema] of entries) {
+      if (schema.projectId === projectId) {
+        this.databaseSchemas.delete(id);
       }
     }
   }
