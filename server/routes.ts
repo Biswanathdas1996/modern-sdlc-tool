@@ -2,8 +2,10 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import { z } from "zod";
+import { Client } from "pg";
 import { storage } from "./storage";
 import { analyzeRepository, generateDocumentation, generateBPMNDiagram, generateBRD, generateTestCases, generateTestData, generateUserStories, generateCopilotPrompt, transcribeAudio } from "./ai";
+import type { DatabaseTable, DatabaseColumn } from "@shared/schema";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -217,6 +219,161 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error regenerating BPMN diagram:", error);
       res.status(500).json({ error: "Failed to regenerate BPMN diagram" });
+    }
+  });
+
+  // Database Schema - Connect and fetch schema from external PostgreSQL
+  app.post("/api/database-schema/connect", async (req: Request, res: Response) => {
+    try {
+      const { connectionString } = req.body;
+      
+      if (!connectionString || typeof connectionString !== "string") {
+        return res.status(400).json({ error: "Connection string is required" });
+      }
+
+      const projects = await storage.getAllProjects();
+      if (projects.length === 0) {
+        return res.status(400).json({ error: "Please analyze a repository first" });
+      }
+      const project = projects[0];
+
+      // Connect to external PostgreSQL
+      const client = new Client({ connectionString });
+      
+      try {
+        await client.connect();
+        
+        // Get database name
+        const dbNameResult = await client.query("SELECT current_database()");
+        const databaseName = dbNameResult.rows[0].current_database;
+
+        // Get all tables with their columns
+        const tablesQuery = `
+          SELECT 
+            t.table_name,
+            c.column_name,
+            c.data_type,
+            c.is_nullable,
+            c.column_default,
+            CASE WHEN pk.column_name IS NOT NULL THEN true ELSE false END as is_primary_key,
+            CASE WHEN fk.column_name IS NOT NULL THEN true ELSE false END as is_foreign_key,
+            fk.foreign_table_name || '.' || fk.foreign_column_name as references_column
+          FROM information_schema.tables t
+          JOIN information_schema.columns c ON t.table_name = c.table_name AND t.table_schema = c.table_schema
+          LEFT JOIN (
+            SELECT ku.table_name, ku.column_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage ku ON tc.constraint_name = ku.constraint_name
+            WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_schema = 'public'
+          ) pk ON c.table_name = pk.table_name AND c.column_name = pk.column_name
+          LEFT JOIN (
+            SELECT 
+              kcu.table_name,
+              kcu.column_name,
+              ccu.table_name AS foreign_table_name,
+              ccu.column_name AS foreign_column_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+            JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
+            WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = 'public'
+          ) fk ON c.table_name = fk.table_name AND c.column_name = fk.column_name
+          WHERE t.table_schema = 'public' AND t.table_type = 'BASE TABLE'
+          ORDER BY t.table_name, c.ordinal_position
+        `;
+
+        const result = await client.query(tablesQuery);
+        
+        // Group by table
+        const tablesMap = new Map<string, DatabaseColumn[]>();
+        for (const row of result.rows) {
+          if (!tablesMap.has(row.table_name)) {
+            tablesMap.set(row.table_name, []);
+          }
+          tablesMap.get(row.table_name)!.push({
+            name: row.column_name,
+            dataType: row.data_type,
+            isNullable: row.is_nullable === "YES",
+            defaultValue: row.column_default,
+            isPrimaryKey: row.is_primary_key,
+            isForeignKey: row.is_foreign_key,
+            references: row.references_column,
+          });
+        }
+
+        // Convert to array of tables
+        const tables: DatabaseTable[] = [];
+        for (const [tableName, columns] of tablesMap.entries()) {
+          // Get row count for each table
+          const countResult = await client.query(`SELECT COUNT(*) FROM "${tableName}"`);
+          tables.push({
+            name: tableName,
+            columns,
+            rowCount: parseInt(countResult.rows[0].count, 10),
+          });
+        }
+
+        await client.end();
+
+        // Delete existing schema if any
+        await storage.deleteDatabaseSchema(project.id);
+
+        // Store the schema (mask the password in stored connection string)
+        const maskedConnectionString = connectionString.replace(
+          /(:\/\/[^:]+:)[^@]+(@)/,
+          "$1****$2"
+        );
+
+        const schemaInfo = await storage.createDatabaseSchema({
+          projectId: project.id,
+          connectionString: maskedConnectionString,
+          databaseName,
+          tables,
+        });
+
+        res.json(schemaInfo);
+      } catch (dbError: any) {
+        await client.end().catch(() => {});
+        console.error("Database connection error:", dbError);
+        res.status(400).json({ 
+          error: "Failed to connect to database", 
+          details: dbError.message 
+        });
+      }
+    } catch (error) {
+      console.error("Error processing database schema:", error);
+      res.status(500).json({ error: "Failed to process database schema" });
+    }
+  });
+
+  // Get current database schema
+  app.get("/api/database-schema/current", async (req: Request, res: Response) => {
+    try {
+      const projects = await storage.getAllProjects();
+      if (projects.length === 0) {
+        return res.json(null);
+      }
+      const project = projects[0];
+      const schema = await storage.getDatabaseSchema(project.id);
+      res.json(schema || null);
+    } catch (error) {
+      console.error("Error fetching database schema:", error);
+      res.status(500).json({ error: "Failed to fetch database schema" });
+    }
+  });
+
+  // Delete database schema
+  app.delete("/api/database-schema/current", async (req: Request, res: Response) => {
+    try {
+      const projects = await storage.getAllProjects();
+      if (projects.length === 0) {
+        return res.status(404).json({ error: "No project found" });
+      }
+      const project = projects[0];
+      await storage.deleteDatabaseSchema(project.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting database schema:", error);
+      res.status(500).json({ error: "Failed to delete database schema" });
     }
   });
 
