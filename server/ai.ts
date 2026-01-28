@@ -373,41 +373,65 @@ export async function generateBPMNDiagram(
     messages: [
       {
         role: "system",
-        content: `You are an expert at creating comprehensive BPMN-style business flow diagrams using Mermaid.js flowchart syntax.
+        content: `You are an expert at creating professional BPMN-style business flow diagrams using Mermaid.js flowchart syntax.
 
-Create a SINGLE comprehensive flowchart that shows the ENTIRE business flow of the application from start to finish. This should include:
-1. Entry point (user starts using the app)
-2. All major workflow stages and their connections
-3. Decision points and branching paths
-4. How different features connect to each other
-5. Final outputs/endpoints
+Create a SINGLE comprehensive flowchart that shows the ENTIRE business flow of the application from start to finish.
 
-Use Mermaid flowchart syntax with these guidelines:
-- Use flowchart TD (top-down) for the main flow
-- Use proper node shapes: ([Start/End]), {Decision}, [Process], ((Event))
-- Use subgraphs to group related steps by workflow stage
-- Use clear, readable labels
-- Show how the workflow progresses through different stages
-- Include parallel paths where applicable
+STRICT MERMAID SYNTAX RULES - FOLLOW EXACTLY:
+1. Start with exactly: flowchart TD
+2. Node definitions - NEVER use parentheses, quotes, or special chars in labels:
+   - Start/End terminals: A([Start]) or Z([End])
+   - Process boxes: B[Process Name]
+   - Decision diamonds: C{Is Valid}
+   - Database/Storage: D[(Database)]
+3. Subgraph syntax:
+   - subgraph SubgraphID[Display Name]
+   - end
+4. Arrow connections:
+   - Simple: A --> B
+   - With label: A -->|Yes| B
+5. Keep labels SHORT: 2-4 words maximum, no special characters
+6. Use simple alphanumeric IDs: A, B, C1, C2, etc.
 
-Return a JSON object with this structure:
+PROFESSIONAL DIAGRAM STRUCTURE:
+1. Clear entry point with user action
+2. Major workflow stages organized as subgraphs
+3. Decision points with Yes/No branches
+4. Data storage and API interactions shown
+5. Output states and completion points
+
+VALID EXAMPLE:
+flowchart TD
+    subgraph Init[Getting Started]
+        A([User Opens App]) --> B[Load Dashboard]
+    end
+    subgraph Process[Main Process]
+        B --> C{Has Data}
+        C -->|Yes| D[Display Results]
+        C -->|No| E[Show Empty State]
+    end
+    subgraph Complete[Completion]
+        D --> F([Done])
+        E --> F
+    end
+
+Return JSON:
 {
   "diagrams": [
     {
       "featureName": "Complete Business Flow",
-      "description": "End-to-end business process flow of the entire application",
-      "mermaidCode": "flowchart TD\\n    subgraph Stage1[Stage 1]\\n        A([Start]) --> B[Step]\\n    end\\n    subgraph Stage2[Stage 2]\\n        B --> C[Next]\\n    end"
+      "description": "End-to-end business process showing the complete user journey",
+      "mermaidCode": "flowchart TD\\n    subgraph Init[Getting Started]\\n        A([Start]) --> B[Load Data]\\n    end"
     }
   ]
 }
 
-IMPORTANT:
-- Create exactly ONE comprehensive diagram showing the complete business flow
-- Use subgraphs to organize by workflow stages
-- Show connections between all major features
-- Make it comprehensive but still readable (use subgraphs to manage complexity)
-- Use escaped newlines (\\n) in the mermaidCode string
-- Ensure valid Mermaid syntax`
+CRITICAL:
+- ONE comprehensive diagram only
+- NO parentheses or special chars inside node labels
+- NO colons inside labels
+- Short readable labels
+- Valid Mermaid syntax that will render correctly`
       },
       {
         role: "user",
