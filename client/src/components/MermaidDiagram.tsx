@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import mermaid from "mermaid";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut, RotateCcw, Download, Maximize2 } from "lucide-react";
@@ -9,40 +9,57 @@ interface MermaidDiagramProps {
   className?: string;
 }
 
-mermaid.initialize({
-  startOnLoad: false,
-  theme: "base",
-  securityLevel: "strict",
-  themeVariables: {
-    primaryColor: "#0366D6",
-    primaryTextColor: "#ffffff",
-    primaryBorderColor: "#0256b9",
-    secondaryColor: "#f6f8fa",
-    secondaryTextColor: "#24292f",
-    secondaryBorderColor: "#d0d7de",
-    tertiaryColor: "#ddf4ff",
-    tertiaryTextColor: "#0969da",
-    tertiaryBorderColor: "#54aeff",
-    lineColor: "#57606a",
-    textColor: "#24292f",
-    mainBkg: "#ffffff",
-    nodeBorder: "#d0d7de",
-    clusterBkg: "#f6f8fa",
-    clusterBorder: "#d0d7de",
-    titleColor: "#24292f",
-    edgeLabelBackground: "#ffffff",
-    nodeTextColor: "#24292f",
-  },
-  flowchart: {
-    useMaxWidth: false,
-    htmlLabels: true,
-    curve: "basis",
-    padding: 20,
-    nodeSpacing: 50,
-    rankSpacing: 80,
-    diagramPadding: 20,
-  },
-});
+const lightThemeVariables = {
+  primaryColor: "#0366D6",
+  primaryTextColor: "#ffffff",
+  primaryBorderColor: "#0256b9",
+  secondaryColor: "#f6f8fa",
+  secondaryTextColor: "#24292f",
+  secondaryBorderColor: "#d0d7de",
+  tertiaryColor: "#ddf4ff",
+  tertiaryTextColor: "#0969da",
+  tertiaryBorderColor: "#54aeff",
+  lineColor: "#57606a",
+  textColor: "#24292f",
+  mainBkg: "#ffffff",
+  nodeBorder: "#d0d7de",
+  clusterBkg: "#f6f8fa",
+  clusterBorder: "#d0d7de",
+  titleColor: "#24292f",
+  edgeLabelBackground: "#ffffff",
+  nodeTextColor: "#24292f",
+};
+
+const darkThemeVariables = {
+  primaryColor: "#58a6ff",
+  primaryTextColor: "#0d1117",
+  primaryBorderColor: "#388bfd",
+  secondaryColor: "#21262d",
+  secondaryTextColor: "#c9d1d9",
+  secondaryBorderColor: "#30363d",
+  tertiaryColor: "#161b22",
+  tertiaryTextColor: "#58a6ff",
+  tertiaryBorderColor: "#388bfd",
+  lineColor: "#8b949e",
+  textColor: "#c9d1d9",
+  mainBkg: "#0d1117",
+  nodeBorder: "#30363d",
+  clusterBkg: "#161b22",
+  clusterBorder: "#30363d",
+  titleColor: "#c9d1d9",
+  edgeLabelBackground: "#0d1117",
+  nodeTextColor: "#c9d1d9",
+};
+
+const flowchartConfig = {
+  useMaxWidth: false,
+  htmlLabels: true,
+  curve: "basis" as const,
+  padding: 20,
+  nodeSpacing: 50,
+  rankSpacing: 80,
+  diagramPadding: 20,
+};
 
 export function MermaidDiagram({ chart, className = "" }: MermaidDiagramProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -51,29 +68,67 @@ export function MermaidDiagram({ chart, className = "" }: MermaidDiagramProps) {
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isDark, setIsDark] = useState(false);
+
+  const detectTheme = useCallback(() => {
+    return document.documentElement.classList.contains("dark");
+  }, []);
+
+  const renderDiagram = useCallback(async (darkMode: boolean) => {
+    if (!chart) return;
+
+    const themeVars = darkMode ? darkThemeVariables : lightThemeVariables;
+
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: "base",
+      securityLevel: "strict",
+      themeVariables: themeVars,
+      flowchart: flowchartConfig,
+    });
+
+    try {
+      const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
+      const { svg: renderedSvg } = await mermaid.render(id, chart);
+
+      const styledSvg = renderedSvg
+        .replace(/<svg /, '<svg style="max-width: none; height: auto;" ')
+        .replace(/class="node default/g, 'class="node default professional-node');
+
+      setSvg(styledSvg);
+      setError(null);
+    } catch (err) {
+      console.error("Mermaid rendering error:", err);
+      setError("Failed to render diagram. The diagram syntax may need regeneration.");
+    }
+  }, [chart]);
 
   useEffect(() => {
-    const renderDiagram = async () => {
-      if (!containerRef.current || !chart) return;
+    const currentDark = detectTheme();
+    setIsDark(currentDark);
+    renderDiagram(currentDark);
+  }, [chart, detectTheme, renderDiagram]);
 
-      try {
-        const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
-        const { svg: renderedSvg } = await mermaid.render(id, chart);
-        
-        const styledSvg = renderedSvg
-          .replace(/<svg /, '<svg style="max-width: none; height: auto;" ')
-          .replace(/class="node default/g, 'class="node default professional-node');
-        
-        setSvg(styledSvg);
-        setError(null);
-      } catch (err) {
-        console.error("Mermaid rendering error:", err);
-        setError("Failed to render diagram. The diagram syntax may need regeneration.");
-      }
-    };
+  useEffect(() => {
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === "class") {
+          const newDark = detectTheme();
+          if (newDark !== isDark) {
+            setIsDark(newDark);
+            renderDiagram(newDark);
+          }
+        }
+      });
+    });
 
-    renderDiagram();
-  }, [chart]);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
+  }, [isDark, detectTheme, renderDiagram]);
 
   const handleZoomIn = () => {
     setZoom((prev) => Math.min(prev + 0.25, 3));
@@ -89,7 +144,7 @@ export function MermaidDiagram({ chart, className = "" }: MermaidDiagramProps) {
 
   const handleDownload = () => {
     if (!svg) return;
-    
+
     const blob = new Blob([svg], { type: "image/svg+xml" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -103,7 +158,7 @@ export function MermaidDiagram({ chart, className = "" }: MermaidDiagramProps) {
 
   const handleFullscreen = () => {
     if (!svgContainerRef.current) return;
-    
+
     if (!isFullscreen) {
       if (svgContainerRef.current.requestFullscreen) {
         svgContainerRef.current.requestFullscreen();
@@ -120,7 +175,7 @@ export function MermaidDiagram({ chart, className = "" }: MermaidDiagramProps) {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
     };
-    
+
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
@@ -153,7 +208,7 @@ export function MermaidDiagram({ chart, className = "" }: MermaidDiagramProps) {
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-1">
           <Button
             variant="outline"
@@ -209,7 +264,8 @@ export function MermaidDiagram({ chart, className = "" }: MermaidDiagramProps) {
       <div
         ref={svgContainerRef}
         className={cn(
-          "relative rounded-lg border bg-white dark:bg-slate-900 overflow-auto",
+          "relative rounded-lg border overflow-auto",
+          "bg-white dark:bg-slate-900",
           "shadow-sm",
           isFullscreen && "fixed inset-0 z-50 rounded-none"
         )}
@@ -227,7 +283,7 @@ export function MermaidDiagram({ chart, className = "" }: MermaidDiagramProps) {
         />
       </div>
 
-      <div className="flex items-center justify-center gap-6 text-xs text-muted-foreground">
+      <div className="flex items-center justify-center gap-6 text-xs text-muted-foreground flex-wrap">
         <div className="flex items-center gap-2">
           <div className="h-3 w-3 rounded-sm bg-primary" />
           <span>Primary Process</span>
