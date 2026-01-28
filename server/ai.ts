@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import type { RepoAnalysis, FeatureRequest, BRD, TestCase, TestData, Documentation, Project, UserStory, BPMNDiagram } from "@shared/schema";
+import type { RepoAnalysis, FeatureRequest, BRD, TestCase, TestData, Documentation, Project, UserStory, BPMNDiagram, DatabaseSchemaInfo } from "@shared/schema";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -484,10 +484,35 @@ export async function generateBRD(
   featureRequest: FeatureRequest,
   analysis: RepoAnalysis | null,
   documentation: Documentation | null,
+  databaseSchema: DatabaseSchemaInfo | null,
   onChunk?: (chunk: string) => void
 ): Promise<Omit<BRD, "id" | "createdAt" | "updatedAt">> {
   // Build comprehensive context from documentation (primary) and analysis (fallback)
   let documentationContext = "";
+  
+  // Build database schema context if available
+  let databaseSchemaContext = "";
+  if (databaseSchema) {
+    const tableDescriptions = databaseSchema.tables.map(table => {
+      const columns = table.columns.map(col => {
+        let desc = `    - ${col.name}: ${col.dataType}`;
+        if (col.isPrimaryKey) desc += " (PK)";
+        if (col.isForeignKey) desc += ` (FK -> ${col.references || "?"})`;
+        if (!col.isNullable) desc += " NOT NULL";
+        return desc;
+      }).join("\n");
+      return `  ${table.name} (${table.rowCount?.toLocaleString() || 0} rows):\n${columns}`;
+    }).join("\n\n");
+    
+    databaseSchemaContext = `
+=== CONNECTED DATABASE SCHEMA ===
+Database: ${databaseSchema.databaseName}
+Tables: ${databaseSchema.tables.length}
+
+${tableDescriptions}
+=== END DATABASE SCHEMA ===
+`;
+  }
   
   if (documentation) {
     // Parse the content if it's a JSON string, otherwise use as-is
@@ -546,12 +571,13 @@ Repository Context (from analysis):
         role: "system",
         content: `You are a senior business analyst creating a Business Requirements Document (BRD). 
 
-IMPORTANT: You are generating this BRD based on the TECHNICAL DOCUMENTATION that was generated from analyzing the repository. 
+IMPORTANT: You are generating this BRD based on the TECHNICAL DOCUMENTATION that was generated from analyzing the repository${databaseSchema ? " AND the connected DATABASE SCHEMA" : ""}. 
 Your BRD must:
 1. Reference the existing components, APIs, and features from the documentation
 2. Align technical considerations with the documented architecture and tech stack
 3. Consider existing data models and dependencies
 4. Build upon the documented features rather than reinventing them
+${databaseSchema ? "5. Reference the database tables and their relationships when specifying data requirements\n6. Ensure data model changes are aligned with the existing database schema" : ""}
 
 Return a JSON object with this structure:
 {
@@ -602,13 +628,14 @@ Return a JSON object with this structure:
       },
       {
         role: "user",
-        content: `Create a BRD for this feature request. Make sure to thoroughly review the technical documentation and reference it in your requirements.
+        content: `Create a BRD for this feature request. Make sure to thoroughly review the technical documentation${databaseSchema ? " and database schema" : ""} and reference it in your requirements.
 
 Feature Request:
 Title: ${featureRequest.title}
 Description: ${featureRequest.description}
 
-${documentationContext}`
+${documentationContext}
+${databaseSchemaContext}`
       }
     ],
     response_format: { type: "json_object" },
@@ -908,6 +935,7 @@ IMPORTANT: Generate test data that uses actual field names and data structures f
 export async function generateUserStories(
   brd: BRD,
   documentation: Documentation | null,
+  databaseSchema: DatabaseSchemaInfo | null,
   parentContext?: string | null
 ): Promise<Omit<UserStory, "id" | "createdAt">[]> {
   // Build documentation context
@@ -941,6 +969,30 @@ ${docContent.features && docContent.features.length > 0 ? `## Existing Features\
 `;
   }
 
+  // Build database schema context if available
+  let databaseSchemaContext = "";
+  if (databaseSchema) {
+    const tableDescriptions = databaseSchema.tables.map(table => {
+      const columns = table.columns.map(col => {
+        let desc = `    - ${col.name}: ${col.dataType}`;
+        if (col.isPrimaryKey) desc += " (PK)";
+        if (col.isForeignKey) desc += ` (FK -> ${col.references || "?"})`;
+        if (!col.isNullable) desc += " NOT NULL";
+        return desc;
+      }).join("\n");
+      return `  ${table.name} (${table.rowCount?.toLocaleString() || 0} rows):\n${columns}`;
+    }).join("\n\n");
+    
+    databaseSchemaContext = `
+=== DATABASE SCHEMA ===
+Database: ${databaseSchema.databaseName}
+Tables: ${databaseSchema.tables.length}
+
+${tableDescriptions}
+=== END DATABASE SCHEMA ===
+`;
+  }
+
   // Get project prefix from BRD title (first 3-4 chars uppercase)
   const projectPrefix = brd.title.split(/\s+/)[0]?.substring(0, 4).toUpperCase() || "PROJ";
 
@@ -958,6 +1010,7 @@ Create well-structured user stories that:
 4. Include relevant labels based on the feature area
 5. Reference the documentation to ensure stories align with existing system architecture
 6. Group related stories under appropriate epics
+${databaseSchema ? "7. Reference specific database tables and columns when the story involves data changes\n8. Include database-related acceptance criteria (e.g., data validation, constraints)" : ""}
 
 Use the following story key format: ${projectPrefix}-XXX (e.g., ${projectPrefix}-001, ${projectPrefix}-002)
 
@@ -985,10 +1038,10 @@ Return a JSON object with this structure:
       },
       {
         role: "user",
-        content: `Generate JIRA-style user stories for this BRD based on the repository documentation:
+        content: `Generate JIRA-style user stories for this BRD based on the repository documentation${databaseSchema ? " and database schema" : ""}:
 
 ${documentationContext}
-
+${databaseSchemaContext}
 ${parentContext ? `=== PARENT STORY CONTEXT ===
 These user stories will be created as subtasks of an existing JIRA story. Use this context to ensure the subtasks are aligned with and complement the parent story:
 
@@ -1068,7 +1121,8 @@ IMPORTANT:
 export async function generateCopilotPrompt(
   userStories: UserStory[],
   documentation: Documentation | null,
-  analysis: RepoAnalysis | null
+  analysis: RepoAnalysis | null,
+  databaseSchema: DatabaseSchemaInfo | null
 ): Promise<string> {
   // Build folder structure from analysis features and architecture
   const folderStructure = analysis
@@ -1098,6 +1152,27 @@ ${documentation.content}
 ${documentation.sections.map((s: any) => `### ${s.title}\n${s.content}`).join("\n\n")}
 ` : "";
 
+  // Format database schema context
+  let dbSchemaContext = "";
+  if (databaseSchema) {
+    const tableDescriptions = databaseSchema.tables.map(table => {
+      const columns = table.columns.map(col => {
+        let desc = `  - ${col.name}: ${col.dataType}`;
+        if (col.isPrimaryKey) desc += " (PRIMARY KEY)";
+        if (col.isForeignKey) desc += ` (FOREIGN KEY -> ${col.references || "?"})`;
+        if (!col.isNullable) desc += " NOT NULL";
+        return desc;
+      }).join("\n");
+      return `### ${table.name} (${table.rowCount?.toLocaleString() || 0} rows)\n${columns}`;
+    }).join("\n\n");
+    
+    dbSchemaContext = `
+## Database Schema (${databaseSchema.databaseName})
+
+${tableDescriptions}
+`;
+  }
+
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [
@@ -1114,7 +1189,8 @@ The prompt should:
 4. Include code patterns to follow based on existing code
 5. List step-by-step implementation instructions
 6. Include testing requirements
-7. Be formatted for easy copy-paste into VS Code Copilot chat`
+7. Be formatted for easy copy-paste into VS Code Copilot chat
+${databaseSchema ? "8. Include database schema details for any data-related implementation" : ""}`
       },
       {
         role: "user",
@@ -1136,7 +1212,7 @@ Tools: ${analysis.techStack.tools.join(", ")}
 \`\`\`
 ${folderStructure}
 \`\`\`
-
+${dbSchemaContext}
 Generate a comprehensive Copilot prompt that:
 1. Starts with a clear objective
 2. Lists the user stories to implement

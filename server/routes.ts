@@ -476,11 +476,15 @@ export async function registerRoutes(
       }, 15000);
 
       try {
+        // Get database schema if available
+        const databaseSchema = project ? await storage.getDatabaseSchema(project.id) : null;
+        
         // Generate BRD using documentation as context
         const brd = await generateBRD(
           featureRequest,
           analysis || null,
           documentation || null,
+          databaseSchema,
           (chunk) => {
             if (isClientConnected) {
               res.write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
@@ -648,7 +652,10 @@ export async function registerRoutes(
         }
       }
 
-      const userStories = await generateUserStories(brd, documentation || null, parentContext);
+      // Get database schema if available
+      const databaseSchema = project ? await storage.getDatabaseSchema(project.id) : null;
+      
+      const userStories = await generateUserStories(brd, documentation || null, databaseSchema, parentContext);
       if (!userStories || userStories.length === 0) {
         return res.status(500).json({ error: "Failed to generate user stories - no stories returned" });
       }
@@ -713,8 +720,9 @@ export async function registerRoutes(
       const projects = await storage.getAllProjects();
       const documentation = projects.length > 0 ? await storage.getDocumentation(projects[0].id) : null;
       const analysis = projects.length > 0 ? await storage.getAnalysis(projects[0].id) : null;
+      const databaseSchema = projects.length > 0 ? await storage.getDatabaseSchema(projects[0].id) : null;
 
-      const prompt = await generateCopilotPrompt(userStories, documentation || null, analysis || null);
+      const prompt = await generateCopilotPrompt(userStories, documentation || null, analysis || null, databaseSchema);
       res.json({ prompt });
     } catch (error) {
       console.error("Error generating Copilot prompt:", error);

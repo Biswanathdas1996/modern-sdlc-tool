@@ -120,6 +120,16 @@ The project includes pre-built integrations in `server/replit_integrations/` and
 - `POST /api/jira/find-related` - Semantic search for related JIRA stories
 - `GET /api/bpmn/current` - Get BPMN user journey diagrams for current documentation
 - `POST /api/jira/sync-subtask` - Create a single story as a JIRA subtask
+- `POST /api/database-schema/connect` - Connect to external PostgreSQL and fetch schema
+- `GET /api/database-schema/current` - Get current database schema for project
+- `DELETE /api/database-schema/current` - Remove database schema from project
+
+### External Database Schema Integration
+- **Connect to External PostgreSQL**: Users can paste a PostgreSQL connection string to fetch table schema
+- **Schema Storage**: Tables, columns, data types, primary keys, foreign keys, and row counts are stored
+- **Password Masking**: Connection strings are masked before storage for security
+- **AI Context Integration**: Database schema is included in AI prompts for BRD, User Stories, and Copilot Prompts
+- **Visual Display**: Schema is displayed in collapsible table view on Documentation page
 
 ### JIRA Integration Features
 - **Smart Story Detection**: Before generating user stories, the app fetches existing JIRA stories and uses AI semantic search to find related ones
