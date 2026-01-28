@@ -302,7 +302,8 @@ export async function registerRoutes(
 
         // Convert to array of tables
         const tables: DatabaseTable[] = [];
-        for (const [tableName, columns] of tablesMap.entries()) {
+        const tableEntries = Array.from(tablesMap.entries());
+        for (const [tableName, columns] of tableEntries) {
           // Get row count for each table
           const countResult = await client.query(`SELECT COUNT(*) FROM "${tableName}"`);
           tables.push({

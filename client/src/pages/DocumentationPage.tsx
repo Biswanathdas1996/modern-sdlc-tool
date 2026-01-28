@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { FileText, ChevronRight, Search, Download, Layers, Code, Database, Settings, Package, ChevronDown, GitBranch, Loader2, RefreshCw } from "lucide-react";
+import { FileText, ChevronRight, Search, Download, Layers, Code, Database, Settings, Package, ChevronDown, GitBranch, Loader2, RefreshCw, Table2, Key, Link2, Trash2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -16,7 +16,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { MermaidDiagram } from "@/components/MermaidDiagram";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import type { Documentation, RepoAnalysis, BPMNDiagram } from "@shared/schema";
+import type { Documentation, RepoAnalysis, BPMNDiagram, DatabaseSchemaInfo } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
 
 const workflowSteps = [
   { id: "analyze", label: "Analyze", completed: true, active: false },
@@ -36,6 +37,8 @@ interface TocItem {
 export default function DocumentationPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeSection, setActiveSection] = useState("overview");
+  const [connectionString, setConnectionString] = useState("");
+  const { toast } = useToast();
 
   const { data: analysis, isLoading: analysisLoading } = useQuery<RepoAnalysis>({
     queryKey: ["/api/analysis/current"],
@@ -60,6 +63,48 @@ export default function DocumentationPage() {
     },
   });
 
+  const { data: databaseSchema, isLoading: dbSchemaLoading } = useQuery<DatabaseSchemaInfo | null>({
+    queryKey: ["/api/database-schema/current"],
+    enabled: !!documentation,
+  });
+
+  const connectDatabaseMutation = useMutation({
+    mutationFn: async (connString: string) => {
+      const response = await apiRequest("POST", "/api/database-schema/connect", {
+        connectionString: connString,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/database-schema/current"] });
+      setConnectionString("");
+      toast({
+        title: "Database Connected",
+        description: "Database schema has been retrieved successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Connection Failed",
+        description: error.message || "Failed to connect to database",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteDatabaseSchemaMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("DELETE", "/api/database-schema/current");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/database-schema/current"] });
+      toast({
+        title: "Schema Removed",
+        description: "Database schema has been removed from this project.",
+      });
+    },
+  });
+
   const isLoading = analysisLoading || docLoading;
 
   const tocItems: TocItem[] = [
@@ -78,6 +123,7 @@ export default function DocumentationPage() {
     },
     { id: "features", title: "Features", level: 0 },
     { id: "user-journeys", title: "Business Flow", level: 0 },
+    { id: "database-schema", title: "Database Schema", level: 0 },
     { id: "code-patterns", title: "Code Patterns", level: 0 },
     { id: "testing", title: "Testing", level: 0 },
   ];
@@ -375,6 +421,152 @@ export default function DocumentationPage() {
                       <p className="text-muted-foreground text-center py-4">
                         No business flow diagram available yet. It will be generated automatically after analyzing a repository.
                       </p>
+                    </CardContent>
+                  </Card>
+                )}
+              </section>
+
+              {/* Database Schema Section */}
+              <section id="database-schema" className="space-y-4 animate-fade-in">
+                <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                  <Table2 className="h-6 w-6 text-warning" />
+                  Database Schema
+                </h2>
+                <p className="text-muted-foreground">
+                  Connect to your PostgreSQL database to include schema information in generated BRDs, user stories, and prompts.
+                </p>
+
+                {!databaseSchema ? (
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-foreground">
+                            PostgreSQL Connection String
+                          </label>
+                          <div className="flex gap-2">
+                            <Input
+                              type="password"
+                              placeholder="postgresql://user:password@host:port/database?sslmode=require"
+                              value={connectionString}
+                              onChange={(e) => setConnectionString(e.target.value)}
+                              className="flex-1 font-mono text-sm"
+                              data-testid="input-connection-string"
+                            />
+                            <Button
+                              onClick={() => connectDatabaseMutation.mutate(connectionString)}
+                              disabled={!connectionString || connectDatabaseMutation.isPending}
+                              data-testid="button-connect-database"
+                            >
+                              {connectDatabaseMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              ) : (
+                                <Database className="h-4 w-4 mr-2" />
+                              )}
+                              Connect
+                            </Button>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Paste your PostgreSQL connection string. The password will be masked after connection.
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card data-testid="card-database-schema">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <CheckCircle2 className="h-5 w-5 text-success" />
+                          {databaseSchema.databaseName}
+                        </CardTitle>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => deleteDatabaseSchemaMutation.mutate()}
+                          disabled={deleteDatabaseSchemaMutation.isPending}
+                          data-testid="button-remove-schema"
+                        >
+                          {deleteDatabaseSchemaMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          ) : (
+                            <Trash2 className="h-4 w-4 mr-2" />
+                          )}
+                          Remove
+                        </Button>
+                      </div>
+                      <CardDescription>
+                        {databaseSchema.tables.length} tables connected
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {databaseSchema.tables.map((table) => (
+                          <Collapsible key={table.name} defaultOpen={false}>
+                            <CollapsibleTrigger className="flex items-center justify-between w-full p-3 bg-muted/50 rounded-lg hover-elevate">
+                              <div className="flex items-center gap-2">
+                                <Table2 className="h-4 w-4 text-primary" />
+                                <span className="font-mono font-medium">{table.name}</span>
+                                <Badge variant="secondary" className="text-xs">
+                                  {table.columns.length} columns
+                                </Badge>
+                                {table.rowCount !== undefined && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {table.rowCount.toLocaleString()} rows
+                                  </Badge>
+                                )}
+                              </div>
+                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="pt-2">
+                              <div className="border rounded-lg overflow-hidden">
+                                <table className="w-full text-sm">
+                                  <thead className="bg-muted/50">
+                                    <tr>
+                                      <th className="text-left p-2 font-medium">Column</th>
+                                      <th className="text-left p-2 font-medium">Type</th>
+                                      <th className="text-left p-2 font-medium">Nullable</th>
+                                      <th className="text-left p-2 font-medium">Keys</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {table.columns.map((col) => (
+                                      <tr key={col.name} className="border-t">
+                                        <td className="p-2 font-mono text-xs">{col.name}</td>
+                                        <td className="p-2">
+                                          <Badge variant="secondary" className="font-mono text-xs">
+                                            {col.dataType}
+                                          </Badge>
+                                        </td>
+                                        <td className="p-2 text-muted-foreground">
+                                          {col.isNullable ? "Yes" : "No"}
+                                        </td>
+                                        <td className="p-2">
+                                          <div className="flex gap-1">
+                                            {col.isPrimaryKey && (
+                                              <Badge className="bg-primary/10 text-primary border-primary/30 text-xs">
+                                                <Key className="h-3 w-3 mr-1" />
+                                                PK
+                                              </Badge>
+                                            )}
+                                            {col.isForeignKey && (
+                                              <Badge className="bg-accent/10 text-accent-foreground border-accent/30 text-xs">
+                                                <Link2 className="h-3 w-3 mr-1" />
+                                                FK
+                                              </Badge>
+                                            )}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </CollapsibleContent>
+                          </Collapsible>
+                        ))}
+                      </div>
                     </CardContent>
                   </Card>
                 )}
