@@ -5,6 +5,7 @@ import {
   FileCheck,
   Download,
   ChevronRight,
+  ChevronDown,
   Target,
   CheckCircle2,
   AlertTriangle,
@@ -21,6 +22,7 @@ import {
   Loader2,
   GitBranch,
   Plus,
+  BookOpen,
 } from "lucide-react";
 import { SiJira } from "react-icons/si";
 import { Button } from "@/components/ui/button";
@@ -37,7 +39,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import type { BRD, UserStory } from "@shared/schema";
+import type { BRD, UserStory, KnowledgeSource } from "@shared/schema";
 
 interface RelatedJiraStory {
   story: {
@@ -65,6 +67,7 @@ const workflowSteps = [
 export default function BRDPage() {
   const [streamingContent, setStreamingContent] = useState<string>("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingKnowledgeSources, setStreamingKnowledgeSources] = useState<KnowledgeSource[]>([]);
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const contentRef = useRef<HTMLDivElement>(null);
@@ -95,6 +98,7 @@ export default function BRDPage() {
     mutationFn: async () => {
       setIsStreaming(true);
       setStreamingContent("");
+      setStreamingKnowledgeSources([]);
 
       const response = await fetch("/api/brd/generate", {
         method: "POST",
@@ -120,6 +124,9 @@ export default function BRDPage() {
           if (line.startsWith("data: ")) {
             try {
               const data = JSON.parse(line.slice(6));
+              if (data.knowledgeSources) {
+                setStreamingKnowledgeSources(data.knowledgeSources);
+              }
               if (data.content) {
                 content += data.content;
                 setStreamingContent(content);
@@ -424,8 +431,62 @@ export default function BRDPage() {
             </CardHeader>
           </Card>
 
-          {/* Source Documentation Banner */}
-          {mockBRD.sourceDocumentation && (
+          {/* Knowledge Base Sources Banner */}
+          {(mockBRD.knowledgeSources && mockBRD.knowledgeSources.length > 0) || (isStreaming && streamingKnowledgeSources.length > 0) ? (
+            <Card className="border-primary/30 bg-primary/5">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10">
+                    <BookOpen className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <CardTitle className="text-base">Knowledge Base Sources</CardTitle>
+                    <CardDescription>
+                      {(isStreaming ? streamingKnowledgeSources : mockBRD.knowledgeSources)?.length || 0} chunks extracted and used to generate this BRD
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate("/knowledge-base")}
+                    data-testid="button-view-knowledge-base"
+                  >
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    View Knowledge Base
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <Accordion type="single" collapsible className="w-full">
+                  <AccordionItem value="sources" className="border-none">
+                    <AccordionTrigger className="hover:no-underline py-2 text-sm text-muted-foreground">
+                      <span className="flex items-center gap-2">
+                        <ChevronDown className="h-4 w-4" />
+                        View extracted chunks
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-3 mt-2">
+                        {(isStreaming ? streamingKnowledgeSources : mockBRD.knowledgeSources)?.map((source, index) => (
+                          <div key={index} className="p-3 rounded-md bg-background border">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge variant="outline" className="text-xs font-mono">
+                                Chunk {index + 1}
+                              </Badge>
+                              <span className="text-sm font-medium text-foreground">{source.filename}</span>
+                            </div>
+                            <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                              {source.chunkPreview}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </CardContent>
+            </Card>
+          ) : mockBRD.sourceDocumentation ? (
             <Card className="border-primary/30 bg-primary/5">
               <CardContent className="py-4">
                 <div className="flex items-center gap-3">
@@ -450,7 +511,7 @@ export default function BRDPage() {
                 </div>
               </CardContent>
             </Card>
-          )}
+          ) : null}
 
           {/* Existing System Context */}
           {mockBRD.content.existingSystemContext && (

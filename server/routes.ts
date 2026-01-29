@@ -513,6 +513,7 @@ export async function registerRoutes(
         
         // Search knowledge base for relevant context
         let knowledgeContext: string | null = null;
+        let knowledgeSources: Array<{ filename: string; chunkPreview: string }> = [];
         try {
           const searchQuery = `${featureRequest.title} ${featureRequest.description}`;
           const kbResults = await searchKnowledgeBase(projectId, searchQuery, 5);
@@ -520,6 +521,17 @@ export async function registerRoutes(
             knowledgeContext = kbResults.map((r, i) => 
               `[Source: ${r.filename}]\n${r.content}`
             ).join("\n\n---\n\n");
+            
+            // Store knowledge sources for display
+            knowledgeSources = kbResults.map(r => ({
+              filename: r.filename,
+              chunkPreview: r.content.substring(0, 200) + (r.content.length > 200 ? "..." : ""),
+            }));
+            
+            // Send sources info to frontend
+            if (isClientConnected) {
+              res.write(`data: ${JSON.stringify({ knowledgeSources })}\n\n`);
+            }
           }
         } catch (kbError) {
           console.error("Knowledge base search error:", kbError);
@@ -539,6 +551,9 @@ export async function registerRoutes(
           }
         );
 
+        // Add knowledge sources to BRD
+        brd.knowledgeSources = knowledgeSources.length > 0 ? knowledgeSources : null;
+        
         await storage.createBRD(brd);
 
         if (isClientConnected) {

@@ -94,6 +94,13 @@ export const insertFeatureRequestSchema = z.object({
 export type InsertFeatureRequest = z.infer<typeof insertFeatureRequestSchema>;
 
 // BRD - Business Requirement Document
+export const knowledgeSourceSchema = z.object({
+  filename: z.string(),
+  chunkPreview: z.string(),
+});
+
+export type KnowledgeSource = z.infer<typeof knowledgeSourceSchema>;
+
 export const brdSchema = z.object({
   id: z.string(),
   projectId: z.string(),
@@ -102,6 +109,7 @@ export const brdSchema = z.object({
   version: z.string(),
   status: z.enum(["draft", "review", "approved"]),
   sourceDocumentation: z.string().nullable().optional(),
+  knowledgeSources: z.array(knowledgeSourceSchema).nullable().optional(),
   content: z.object({
     overview: z.string(),
     objectives: z.array(z.string()),
