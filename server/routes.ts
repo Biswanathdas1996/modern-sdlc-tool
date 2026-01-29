@@ -1,6 +1,5 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
-import { createRequire } from "module";
 import multer from "multer";
 import { z } from "zod";
 import { Client } from "pg";
@@ -10,9 +9,25 @@ import { analyzeRepository, generateDocumentation, generateBPMNDiagram, generate
 import { ingestDocument, searchKnowledgeBase, deleteDocumentChunks, getKnowledgeStats } from "./mongodb";
 import type { DatabaseTable, DatabaseColumn } from "@shared/schema";
 
-// Create require for CommonJS modules
-const require = createRequire(import.meta.url);
-const pdfParse = require("pdf-parse");
+// PDF parsing using pdfjs-dist
+import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
+
+async function extractPdfText(buffer: Buffer): Promise<string> {
+  const data = new Uint8Array(buffer);
+  const pdf = await getDocument({ data }).promise;
+  let text = "";
+  
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const pageText = content.items
+      .map((item: any) => item.str)
+      .join(" ");
+    text += pageText + "\n";
+  }
+  
+  return text;
+}
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -1225,9 +1240,8 @@ export async function registerRoutes(
           const jsonContent = JSON.parse(file.buffer.toString("utf-8"));
           content = JSON.stringify(jsonContent, null, 2);
         } else if (file.mimetype === "application/pdf") {
-          // Parse PDF using pdf-parse
-          const pdfData = await pdfParse(file.buffer);
-          content = pdfData.text;
+          // Parse PDF using pdfjs-dist
+          content = await extractPdfText(file.buffer);
         } else if (file.mimetype === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
           // Parse Word document using mammoth
           const result = await mammoth.extractRawText({ buffer: file.buffer });
