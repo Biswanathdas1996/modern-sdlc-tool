@@ -29,10 +29,25 @@ export default function KnowledgeBasePage() {
 
   const { data: documents, isLoading } = useQuery<KnowledgeDocument[]>({
     queryKey: ["/api/knowledge-base"],
+    refetchInterval: (query) => {
+      // Poll every 2 seconds while any document is processing
+      const docs = query.state.data;
+      if (docs && docs.some(d => d.status === "processing")) {
+        return 2000;
+      }
+      return false;
+    },
   });
 
   const { data: stats } = useQuery<{ documentCount: number; chunkCount: number }>({
     queryKey: ["/api/knowledge-base/stats"],
+    refetchInterval: (query) => {
+      // Also refresh stats when documents are processing
+      if (documents?.some(d => d.status === "processing")) {
+        return 2000;
+      }
+      return false;
+    },
   });
 
   const uploadMutation = useMutation({
@@ -320,9 +335,9 @@ export default function KnowledgeBasePage() {
                 <div>
                   <h3 className="font-medium mb-1">How it works</h3>
                   <p className="text-sm text-muted-foreground">
-                    Documents are split into chunks and indexed using AI embeddings. 
+                    Documents are split into chunks and stored in MongoDB Atlas. 
                     When you generate BRDs or user stories, the system automatically 
-                    searches for relevant information from your knowledge base to 
+                    searches for relevant information using keyword matching to 
                     provide better context for AI generation.
                   </p>
                 </div>
