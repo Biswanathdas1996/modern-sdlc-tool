@@ -9,7 +9,8 @@ import type {
   TestData,
   UserStory,
   BPMNDiagram,
-  DatabaseSchemaInfo
+  DatabaseSchemaInfo,
+  KnowledgeDocument
 } from "@shared/schema";
 
 export interface IStorage {
@@ -70,6 +71,13 @@ export interface IStorage {
   createDatabaseSchema(schema: Omit<DatabaseSchemaInfo, "id" | "createdAt" | "updatedAt">): Promise<DatabaseSchemaInfo>;
   updateDatabaseSchema(projectId: string, schema: Partial<DatabaseSchemaInfo>): Promise<DatabaseSchemaInfo | undefined>;
   deleteDatabaseSchema(projectId: string): Promise<void>;
+  
+  // Knowledge Base
+  getKnowledgeDocuments(projectId: string): Promise<KnowledgeDocument[]>;
+  getKnowledgeDocument(id: string): Promise<KnowledgeDocument | undefined>;
+  createKnowledgeDocument(doc: Omit<KnowledgeDocument, "id" | "createdAt" | "chunkCount" | "status" | "errorMessage">): Promise<KnowledgeDocument>;
+  updateKnowledgeDocument(id: string, updates: Partial<KnowledgeDocument>): Promise<KnowledgeDocument | undefined>;
+  deleteKnowledgeDocument(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -83,6 +91,7 @@ export class MemStorage implements IStorage {
   private userStories: Map<string, UserStory> = new Map();
   private bpmnDiagrams: Map<string, BPMNDiagram> = new Map();
   private databaseSchemas: Map<string, DatabaseSchemaInfo> = new Map();
+  private knowledgeDocuments: Map<string, KnowledgeDocument> = new Map();
   
   private currentProjectId: string | null = null;
   private currentFeatureRequestId: string | null = null;
@@ -358,6 +367,43 @@ export class MemStorage implements IStorage {
         this.databaseSchemas.delete(id);
       }
     }
+  }
+  
+  // Knowledge Base
+  async getKnowledgeDocuments(projectId: string): Promise<KnowledgeDocument[]> {
+    return Array.from(this.knowledgeDocuments.values())
+      .filter(doc => doc.projectId === projectId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async getKnowledgeDocument(id: string): Promise<KnowledgeDocument | undefined> {
+    return this.knowledgeDocuments.get(id);
+  }
+
+  async createKnowledgeDocument(doc: Omit<KnowledgeDocument, "id" | "createdAt" | "chunkCount" | "status" | "errorMessage">): Promise<KnowledgeDocument> {
+    const id = randomUUID();
+    const newDoc: KnowledgeDocument = {
+      ...doc,
+      id,
+      chunkCount: 0,
+      status: "processing",
+      errorMessage: null,
+      createdAt: new Date().toISOString(),
+    };
+    this.knowledgeDocuments.set(id, newDoc);
+    return newDoc;
+  }
+
+  async updateKnowledgeDocument(id: string, updates: Partial<KnowledgeDocument>): Promise<KnowledgeDocument | undefined> {
+    const existing = this.knowledgeDocuments.get(id);
+    if (!existing) return undefined;
+    const updated: KnowledgeDocument = { ...existing, ...updates };
+    this.knowledgeDocuments.set(id, updated);
+    return updated;
+  }
+
+  async deleteKnowledgeDocument(id: string): Promise<boolean> {
+    return this.knowledgeDocuments.delete(id);
   }
 }
 
