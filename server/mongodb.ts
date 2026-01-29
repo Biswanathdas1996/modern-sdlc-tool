@@ -75,12 +75,10 @@ async function ensureVectorIndex(): Promise<void> {
   }
 }
 
-export async function generateEmbedding(text: string): Promise<number[]> {
-  const response = await openai.embeddings.create({
-    model: "text-embedding-3-small",
-    input: text,
-  });
-  return response.data[0].embedding;
+export async function generateEmbedding(text: string): Promise<number[] | null> {
+  // Replit AI Integrations doesn't support embeddings endpoint
+  // Return null to use text-based search fallback
+  return null;
 }
 
 function chunkText(text: string, chunkSize: number = 1000, overlap: number = 200): string[] {
@@ -126,18 +124,18 @@ export async function ingestDocument(
     const chunk = chunks[i];
     
     try {
-      const embedding = await generateEmbedding(chunk);
-      
-      const chunkDoc: KnowledgeChunk & { embedding: number[] } = {
+      // Store chunk without embedding - using text-based search
+      const chunkDoc = {
         documentId,
         projectId,
         content: chunk,
         chunkIndex: i,
-        embedding,
         metadata: {
           filename,
           section: `Chunk ${i + 1} of ${chunks.length}`,
         },
+        // Store lowercase content for text search
+        contentLower: chunk.toLowerCase(),
       };
 
       await collection.insertOne(chunkDoc);
@@ -159,61 +157,56 @@ export async function searchKnowledgeBase(
   const database = await connectMongoDB();
   const collection = database.collection(CHUNKS_COLLECTION);
 
-  try {
-    const queryEmbedding = await generateEmbedding(query);
-
-    const pipeline = [
-      {
-        $vectorSearch: {
-          index: "vector_index",
-          path: "embedding",
-          queryVector: queryEmbedding,
-          numCandidates: limit * 10,
-          limit: limit,
-          filter: { projectId: projectId }
-        }
-      },
-      {
-        $project: {
-          content: 1,
-          "metadata.filename": 1,
-          score: { $meta: "vectorSearchScore" }
-        }
-      }
-    ];
-
-    const results = await collection.aggregate(pipeline).toArray();
-    
-    return results.map(doc => ({
-      content: doc.content,
-      filename: doc.metadata?.filename || "Unknown",
-      score: doc.score || 0
-    }));
-  } catch (error: any) {
-    console.error("Vector search error:", error.message);
-    
-    console.log("Falling back to text-based search...");
-    const keywords = query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
-    
-    if (keywords.length === 0) {
-      return [];
-    }
-
-    const regexPattern = keywords.map(k => `(?=.*${k})`).join("");
-    
+  // Use text-based search (embeddings not available via Replit AI Integrations)
+  const keywords = query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+  
+  if (keywords.length === 0) {
+    // Return recent chunks if no keywords
     const results = await collection
-      .find({
-        projectId,
-        content: { $regex: regexPattern, $options: "i" }
-      })
+      .find({ projectId })
       .limit(limit)
       .toArray();
-
+    
     return results.map(doc => ({
       content: doc.content,
       filename: doc.metadata?.filename || "Unknown",
       score: 0.5
     }));
+  }
+
+  try {
+    // Build regex pattern for keyword matching
+    const regexPatterns = keywords.map(kw => new RegExp(kw, "i"));
+    
+    const results = await collection
+      .find({
+        projectId,
+        $or: regexPatterns.map(pattern => ({ content: pattern }))
+      })
+      .limit(limit * 2)
+      .toArray();
+
+    // Score results by keyword match count
+    const scoredResults = results.map(doc => {
+      const contentLower = doc.content.toLowerCase();
+      let matchCount = 0;
+      for (const kw of keywords) {
+        if (contentLower.includes(kw)) matchCount++;
+      }
+      return {
+        content: doc.content,
+        filename: doc.metadata?.filename || "Unknown",
+        score: matchCount / keywords.length
+      };
+    });
+
+    // Sort by score and limit
+    return scoredResults
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+  } catch (error: any) {
+    console.error("Text search error:", error.message);
+    return [];
   }
 }
 
