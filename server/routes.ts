@@ -1175,10 +1175,8 @@ export async function registerRoutes(
   app.get("/api/knowledge-base", async (req: Request, res: Response) => {
     try {
       const projects = await storage.getAllProjects();
-      if (projects.length === 0) {
-        return res.json([]);
-      }
-      const documents = await storage.getKnowledgeDocuments(projects[0].id);
+      const projectId = projects.length > 0 ? projects[0].id : "global";
+      const documents = await storage.getKnowledgeDocuments(projectId);
       res.json(documents);
     } catch (error) {
       console.error("Error fetching knowledge documents:", error);
@@ -1190,10 +1188,8 @@ export async function registerRoutes(
   app.get("/api/knowledge-base/stats", async (req: Request, res: Response) => {
     try {
       const projects = await storage.getAllProjects();
-      if (projects.length === 0) {
-        return res.json({ documentCount: 0, chunkCount: 0 });
-      }
-      const stats = await getKnowledgeStats(projects[0].id);
+      const projectId = projects.length > 0 ? projects[0].id : "global";
+      const stats = await getKnowledgeStats(projectId);
       res.json(stats);
     } catch (error) {
       console.error("Error fetching knowledge stats:", error);
@@ -1210,10 +1206,8 @@ export async function registerRoutes(
       }
 
       const projects = await storage.getAllProjects();
-      if (projects.length === 0) {
-        return res.status(400).json({ error: "Please analyze a repository first" });
-      }
-      const project = projects[0];
+      // Use "global" project ID if no projects exist - knowledge base works globally
+      const projectId = projects.length > 0 ? projects[0].id : "global";
 
       // Supported file types
       const supportedTypes = [
@@ -1244,7 +1238,7 @@ export async function registerRoutes(
 
       // Create document record
       const doc = await storage.createKnowledgeDocument({
-        projectId: project.id,
+        projectId: projectId,
         filename: `${Date.now()}-${file.originalname}`,
         originalName: file.originalname,
         contentType: file.mimetype,
@@ -1252,7 +1246,7 @@ export async function registerRoutes(
       });
 
       // Ingest document asynchronously
-      ingestDocument(doc.id, project.id, file.originalname, content)
+      ingestDocument(doc.id, projectId, file.originalname, content)
         .then(async (chunkCount) => {
           await storage.updateKnowledgeDocument(doc.id, {
             chunkCount,
