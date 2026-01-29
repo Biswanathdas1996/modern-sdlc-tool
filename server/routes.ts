@@ -3,6 +3,8 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import { z } from "zod";
 import { Client } from "pg";
+import * as pdfParse from "pdf-parse";
+import * as mammoth from "mammoth";
 import { storage } from "./storage";
 import { analyzeRepository, generateDocumentation, generateBPMNDiagram, generateBRD, generateTestCases, generateTestData, generateUserStories, generateCopilotPrompt, transcribeAudio } from "./ai";
 import { ingestDocument, searchKnowledgeBase, deleteDocumentChunks, getKnowledgeStats } from "./mongodb";
@@ -1209,27 +1211,30 @@ export async function registerRoutes(
       // Use "global" project ID if no projects exist - knowledge base works globally
       const projectId = projects.length > 0 ? projects[0].id : "global";
 
-      // Supported file types
-      const supportedTypes = [
-        "text/plain",
-        "text/markdown",
-        "application/pdf",
-        "application/json",
-        "text/csv",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-      ];
-
-      // For now, we'll handle text-based files
+      // Extract content based on file type
       let content = "";
       
-      if (file.mimetype === "text/plain" || file.mimetype === "text/markdown" || file.mimetype === "text/csv") {
-        content = file.buffer.toString("utf-8");
-      } else if (file.mimetype === "application/json") {
-        const jsonContent = JSON.parse(file.buffer.toString("utf-8"));
-        content = JSON.stringify(jsonContent, null, 2);
-      } else {
-        // For other file types, try to extract text
-        content = file.buffer.toString("utf-8");
+      try {
+        if (file.mimetype === "text/plain" || file.mimetype === "text/markdown" || file.mimetype === "text/csv") {
+          content = file.buffer.toString("utf-8");
+        } else if (file.mimetype === "application/json") {
+          const jsonContent = JSON.parse(file.buffer.toString("utf-8"));
+          content = JSON.stringify(jsonContent, null, 2);
+        } else if (file.mimetype === "application/pdf") {
+          // Parse PDF using pdf-parse
+          const pdfData = await (pdfParse as any).default(file.buffer);
+          content = pdfData.text;
+        } else if (file.mimetype === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+          // Parse Word document using mammoth
+          const result = await mammoth.extractRawText({ buffer: file.buffer });
+          content = result.value;
+        } else {
+          // For other file types, try to extract text
+          content = file.buffer.toString("utf-8");
+        }
+      } catch (parseError) {
+        console.error("Error parsing file:", parseError);
+        return res.status(400).json({ error: "Could not parse file content" });
       }
 
       if (!content || content.trim().length === 0) {

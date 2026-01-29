@@ -208,7 +208,7 @@ export default function KnowledgeBasePage() {
                 type="file"
                 className="hidden"
                 onChange={handleFileSelect}
-                accept=".txt,.md,.json,.csv"
+                accept=".txt,.md,.json,.csv,.pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 data-testid="input-file-upload"
               />
               {isUploading ? (
@@ -223,7 +223,7 @@ export default function KnowledgeBasePage() {
                     Drop files here or click to upload
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Supports TXT, MD, JSON, CSV files
+                    Supports PDF, Word, TXT, MD, JSON, CSV files
                   </p>
                 </>
               )}
