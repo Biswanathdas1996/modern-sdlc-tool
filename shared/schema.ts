@@ -244,6 +244,47 @@ export const databaseSchemaInfoSchema = z.object({
 
 export type DatabaseSchemaInfo = z.infer<typeof databaseSchemaInfoSchema>;
 
+// Knowledge Base Document - for RAG system
+export const knowledgeDocumentSchema = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  filename: z.string(),
+  originalName: z.string(),
+  contentType: z.string(),
+  size: z.number(),
+  chunkCount: z.number(),
+  status: z.enum(["processing", "ready", "error"]),
+  errorMessage: z.string().nullable().optional(),
+  createdAt: z.string(),
+});
+
+export type KnowledgeDocument = z.infer<typeof knowledgeDocumentSchema>;
+
+export const insertKnowledgeDocumentSchema = knowledgeDocumentSchema.omit({ 
+  id: true, 
+  createdAt: true,
+  chunkCount: true,
+  status: true,
+  errorMessage: true 
+});
+export type InsertKnowledgeDocument = z.infer<typeof insertKnowledgeDocumentSchema>;
+
+// Knowledge Chunk - for vector storage in MongoDB
+export const knowledgeChunkSchema = z.object({
+  documentId: z.string(),
+  projectId: z.string(),
+  content: z.string(),
+  chunkIndex: z.number(),
+  embedding: z.array(z.number()).optional(),
+  metadata: z.object({
+    filename: z.string(),
+    pageNumber: z.number().optional(),
+    section: z.string().optional(),
+  }),
+});
+
+export type KnowledgeChunk = z.infer<typeof knowledgeChunkSchema>;
+
 // User type for auth (keeping existing)
 export const users = {
   id: "string",

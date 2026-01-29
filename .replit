@@ -46,3 +46,4 @@ integrations = ["javascript_openai_ai_integrations:2.0.0"]
 [userenv.shared]
 JIRA_INSTANCE_URL = "daspapun21.atlassian.net"
 JIRA_PROJECT_KEY = "KAN"
+MONGODB_URI = "mongodb+srv://Papun1996:m4aVPHHbNMyQv24S@bd.9ungu.mongodb.net/?appName=bd"
