@@ -1,7 +1,6 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
-  Upload, 
   FileText, 
   Trash2, 
   Loader2, 
@@ -242,7 +241,7 @@ export default function KnowledgeBasePage() {
                 </div>
               ) : !filteredDocuments?.length ? (
                 <EmptyState
-                  icon={FileText}
+                  icon="document"
                   title="No documents yet"
                   description="Upload documents to build your knowledge base for enhanced AI generation."
                 />

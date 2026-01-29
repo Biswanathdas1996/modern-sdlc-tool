@@ -143,6 +143,22 @@ The project includes pre-built integrations in `server/replit_integrations/` and
 - **Complete Business Flow**: Single diagram shows the entire end-to-end business process with all workflow stages
 - **Visual Documentation**: Diagram appears in the "Business Flow" section of the Documentation page
 
+### Knowledge Base (RAG System)
+- **MongoDB Atlas Integration**: Uses MongoDB Atlas with vector search for semantic document retrieval
+- **Document Upload**: Drag-and-drop support for TXT, MD, JSON, CSV files in Knowledge Base page
+- **Text Chunking**: Documents split into 1000-character chunks with 200-character overlap for optimal retrieval
+- **Vector Embeddings**: Uses OpenAI text-embedding-3-small model (1536 dimensions) for semantic search
+- **Automatic RAG Integration**: Knowledge base is automatically searched during BRD and user story generation
+- **Fallback Search**: If vector search fails, falls back to text-based search for reliability
+- **Status Tracking**: Documents show processing/ready/error status with chunk counts
+
+### Knowledge Base APIs
+- `POST /api/knowledge-base/upload` - Upload document with automatic chunking and embedding
+- `GET /api/knowledge-base` - List all uploaded documents
+- `GET /api/knowledge-base/stats` - Get document and chunk counts
+- `DELETE /api/knowledge-base/:id` - Remove document from knowledge base
+- `POST /api/knowledge-base/search` - Semantic search across knowledge base
+
 ## Development Guidelines
 
 ### Running the Application
