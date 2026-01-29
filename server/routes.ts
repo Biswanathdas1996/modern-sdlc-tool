@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Client } from "pg";
 import { storage } from "./storage";
 import { analyzeRepository, generateDocumentation, generateBPMNDiagram, generateBRD, generateTestCases, generateTestData, generateUserStories, generateCopilotPrompt, transcribeAudio } from "./ai";
+import { ingestDocument, searchKnowledgeBase, deleteDocumentChunks, getKnowledgeStats } from "./mongodb";
 import type { DatabaseTable, DatabaseColumn } from "@shared/schema";
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -1136,6 +1137,156 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error creating JIRA subtask:", error);
       res.status(500).json({ error: "Failed to create JIRA subtask" });
+    }
+  });
+
+  // Knowledge Base Routes
+  
+  // Get all knowledge documents for current project
+  app.get("/api/knowledge-base", async (req: Request, res: Response) => {
+    try {
+      const projects = await storage.getAllProjects();
+      if (projects.length === 0) {
+        return res.json([]);
+      }
+      const documents = await storage.getKnowledgeDocuments(projects[0].id);
+      res.json(documents);
+    } catch (error) {
+      console.error("Error fetching knowledge documents:", error);
+      res.status(500).json({ error: "Failed to fetch knowledge documents" });
+    }
+  });
+
+  // Get knowledge base stats
+  app.get("/api/knowledge-base/stats", async (req: Request, res: Response) => {
+    try {
+      const projects = await storage.getAllProjects();
+      if (projects.length === 0) {
+        return res.json({ documentCount: 0, chunkCount: 0 });
+      }
+      const stats = await getKnowledgeStats(projects[0].id);
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching knowledge stats:", error);
+      res.status(500).json({ error: "Failed to fetch knowledge stats" });
+    }
+  });
+
+  // Upload and ingest a document
+  app.post("/api/knowledge-base/upload", upload.single("file"), async (req: Request, res: Response) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: "No file provided" });
+      }
+
+      const projects = await storage.getAllProjects();
+      if (projects.length === 0) {
+        return res.status(400).json({ error: "Please analyze a repository first" });
+      }
+      const project = projects[0];
+
+      // Supported file types
+      const supportedTypes = [
+        "text/plain",
+        "text/markdown",
+        "application/pdf",
+        "application/json",
+        "text/csv",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ];
+
+      // For now, we'll handle text-based files
+      let content = "";
+      
+      if (file.mimetype === "text/plain" || file.mimetype === "text/markdown" || file.mimetype === "text/csv") {
+        content = file.buffer.toString("utf-8");
+      } else if (file.mimetype === "application/json") {
+        const jsonContent = JSON.parse(file.buffer.toString("utf-8"));
+        content = JSON.stringify(jsonContent, null, 2);
+      } else {
+        // For other file types, try to extract text
+        content = file.buffer.toString("utf-8");
+      }
+
+      if (!content || content.trim().length === 0) {
+        return res.status(400).json({ error: "Could not extract content from file" });
+      }
+
+      // Create document record
+      const doc = await storage.createKnowledgeDocument({
+        projectId: project.id,
+        filename: `${Date.now()}-${file.originalname}`,
+        originalName: file.originalname,
+        contentType: file.mimetype,
+        size: file.size,
+      });
+
+      // Ingest document asynchronously
+      ingestDocument(doc.id, project.id, file.originalname, content)
+        .then(async (chunkCount) => {
+          await storage.updateKnowledgeDocument(doc.id, {
+            chunkCount,
+            status: "ready",
+          });
+          console.log(`Document ${file.originalname} ingested successfully with ${chunkCount} chunks`);
+        })
+        .catch(async (error) => {
+          console.error("Document ingestion error:", error);
+          await storage.updateKnowledgeDocument(doc.id, {
+            status: "error",
+            errorMessage: String(error),
+          });
+        });
+
+      res.status(201).json(doc);
+    } catch (error) {
+      console.error("Error uploading document:", error);
+      res.status(500).json({ error: "Failed to upload document" });
+    }
+  });
+
+  // Search knowledge base
+  app.post("/api/knowledge-base/search", async (req: Request, res: Response) => {
+    try {
+      const { query, limit = 5 } = req.body;
+      
+      if (!query) {
+        return res.status(400).json({ error: "Query is required" });
+      }
+
+      const projects = await storage.getAllProjects();
+      if (projects.length === 0) {
+        return res.json({ results: [] });
+      }
+
+      const results = await searchKnowledgeBase(projects[0].id, query, limit);
+      res.json({ results });
+    } catch (error) {
+      console.error("Error searching knowledge base:", error);
+      res.status(500).json({ error: "Failed to search knowledge base" });
+    }
+  });
+
+  // Delete a knowledge document
+  app.delete("/api/knowledge-base/:id", async (req: Request, res: Response) => {
+    try {
+      const id = req.params.id;
+      
+      // Delete chunks from MongoDB
+      await deleteDocumentChunks(id);
+      
+      // Delete document record
+      const deleted = await storage.deleteKnowledgeDocument(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      res.status(500).json({ error: "Failed to delete document" });
     }
   });
 
