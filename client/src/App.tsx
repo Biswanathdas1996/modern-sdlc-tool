@@ -16,6 +16,7 @@ import BRDPage from "@/pages/BRDPage";
 import UserStoriesPage from "@/pages/UserStoriesPage";
 import TestCasesPage from "@/pages/TestCasesPage";
 import TestDataPage from "@/pages/TestDataPage";
+import KnowledgeBasePage from "@/pages/KnowledgeBasePage";
 import type { Project } from "@shared/schema";
 
 hydrateFromLocalStorage();
@@ -30,6 +31,7 @@ function Router() {
       <Route path="/user-stories" component={UserStoriesPage} />
       <Route path="/test-cases" component={TestCasesPage} />
       <Route path="/test-data" component={TestDataPage} />
+      <Route path="/knowledge-base" component={KnowledgeBasePage} />
       <Route component={NotFound} />
     </Switch>
   );

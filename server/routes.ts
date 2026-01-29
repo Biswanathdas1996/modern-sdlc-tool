@@ -492,12 +492,27 @@ export async function registerRoutes(
         // Get database schema if available
         const databaseSchema = projects[0] ? await storage.getDatabaseSchema(projects[0].id) : null;
         
+        // Search knowledge base for relevant context
+        let knowledgeContext: string | null = null;
+        try {
+          const searchQuery = `${featureRequest.title} ${featureRequest.description}`;
+          const kbResults = await searchKnowledgeBase(projects[0].id, searchQuery, 5);
+          if (kbResults.length > 0) {
+            knowledgeContext = kbResults.map((r, i) => 
+              `[Source: ${r.filename}]\n${r.content}`
+            ).join("\n\n---\n\n");
+          }
+        } catch (kbError) {
+          console.error("Knowledge base search error:", kbError);
+        }
+        
         // Generate BRD using documentation as context
         const brd = await generateBRD(
           featureRequest,
           analysis || null,
           documentation || null,
           databaseSchema,
+          knowledgeContext,
           (chunk) => {
             if (isClientConnected) {
               res.write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
@@ -668,7 +683,21 @@ export async function registerRoutes(
       // Get database schema if available
       const databaseSchema = projects[0] ? await storage.getDatabaseSchema(projects[0].id) : null;
       
-      const userStories = await generateUserStories(brd, documentation || null, databaseSchema, parentContext);
+      // Search knowledge base for relevant context
+      let knowledgeContext: string | null = null;
+      try {
+        const searchQuery = `${brd.title} ${brd.content.overview}`;
+        const kbResults = await searchKnowledgeBase(projects[0].id, searchQuery, 5);
+        if (kbResults.length > 0) {
+          knowledgeContext = kbResults.map((r) => 
+            `[Source: ${r.filename}]\n${r.content}`
+          ).join("\n\n---\n\n");
+        }
+      } catch (kbError) {
+        console.error("Knowledge base search error:", kbError);
+      }
+      
+      const userStories = await generateUserStories(brd, documentation || null, databaseSchema, parentContext, knowledgeContext);
       if (!userStories || userStories.length === 0) {
         return res.status(500).json({ error: "Failed to generate user stories - no stories returned" });
       }
@@ -1271,7 +1300,7 @@ export async function registerRoutes(
   // Delete a knowledge document
   app.delete("/api/knowledge-base/:id", async (req: Request, res: Response) => {
     try {
-      const id = req.params.id;
+      const id = req.params.id as string;
       
       // Delete chunks from MongoDB
       await deleteDocumentChunks(id);

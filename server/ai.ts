@@ -485,10 +485,25 @@ export async function generateBRD(
   analysis: RepoAnalysis | null,
   documentation: Documentation | null,
   databaseSchema: DatabaseSchemaInfo | null,
+  knowledgeContext: string | null,
   onChunk?: (chunk: string) => void
 ): Promise<Omit<BRD, "id" | "createdAt" | "updatedAt">> {
   // Build comprehensive context from documentation (primary) and analysis (fallback)
   let documentationContext = "";
+  
+  // Build knowledge base context if available
+  let knowledgeBaseContext = "";
+  if (knowledgeContext) {
+    knowledgeBaseContext = `
+=== KNOWLEDGE BASE (Relevant Documents) ===
+The following information was retrieved from uploaded documents in the knowledge base.
+Use this context to inform your BRD generation with domain-specific knowledge.
+
+${knowledgeContext}
+
+=== END KNOWLEDGE BASE ===
+`;
+  }
   
   // Build database schema context if available
   let databaseSchemaContext = "";
@@ -628,14 +643,15 @@ Return a JSON object with this structure:
       },
       {
         role: "user",
-        content: `Create a BRD for this feature request. Make sure to thoroughly review the technical documentation${databaseSchema ? " and database schema" : ""} and reference it in your requirements.
+        content: `Create a BRD for this feature request. Make sure to thoroughly review the technical documentation${databaseSchema ? ", database schema" : ""}${knowledgeContext ? ", and knowledge base documents" : ""} and reference them in your requirements.
 
 Feature Request:
 Title: ${featureRequest.title}
 Description: ${featureRequest.description}
 
 ${documentationContext}
-${databaseSchemaContext}`
+${databaseSchemaContext}
+${knowledgeBaseContext}`
       }
     ],
     response_format: { type: "json_object" },
@@ -936,8 +952,19 @@ export async function generateUserStories(
   brd: BRD,
   documentation: Documentation | null,
   databaseSchema: DatabaseSchemaInfo | null,
-  parentContext?: string | null
+  parentContext?: string | null,
+  knowledgeContext?: string | null
 ): Promise<Omit<UserStory, "id" | "createdAt">[]> {
+  // Build knowledge base context if available
+  let knowledgeBaseContext = "";
+  if (knowledgeContext) {
+    knowledgeBaseContext = `
+=== KNOWLEDGE BASE (Relevant Documents) ===
+${knowledgeContext}
+=== END KNOWLEDGE BASE ===
+`;
+  }
+
   // Build documentation context
   let documentationContext = "";
   if (documentation) {
@@ -1038,10 +1065,11 @@ Return a JSON object with this structure:
       },
       {
         role: "user",
-        content: `Generate JIRA-style user stories for this BRD based on the repository documentation${databaseSchema ? " and database schema" : ""}:
+        content: `Generate JIRA-style user stories for this BRD based on the repository documentation${databaseSchema ? ", database schema" : ""}${knowledgeContext ? ", and knowledge base documents" : ""}:
 
 ${documentationContext}
 ${databaseSchemaContext}
+${knowledgeBaseContext}
 ${parentContext ? `=== PARENT STORY CONTEXT ===
 These user stories will be created as subtasks of an existing JIRA story. Use this context to ensure the subtasks are aligned with and complement the parent story:
 

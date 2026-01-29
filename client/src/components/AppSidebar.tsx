@@ -10,6 +10,8 @@ import {
   ChevronRight,
   Sparkles,
   Bookmark,
+  Library,
+  Upload,
 } from "lucide-react";
 import {
   Sidebar,
@@ -203,6 +205,45 @@ export function AppSidebar({ currentProject, completedSteps = [] }: AppSidebarPr
                   </SidebarMenuItem>
                 );
               })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
+            Knowledge Base
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  className={cn(
+                    "group",
+                    location === "/knowledge-base" && "bg-sidebar-accent text-sidebar-accent-foreground"
+                  )}
+                >
+                  <Link href="/knowledge-base" data-testid="link-knowledge-base">
+                    <div className="flex items-center gap-3 w-full">
+                      <div className={cn(
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
+                        location === "/knowledge-base" 
+                          ? "bg-primary border-primary text-primary-foreground"
+                          : "bg-muted border-border text-muted-foreground"
+                      )}>
+                        <Library className="h-4 w-4" />
+                      </div>
+                      <div className="flex flex-col flex-1 min-w-0">
+                        <span className="text-sm font-medium truncate">Documents</span>
+                        <span className="text-xs text-muted-foreground truncate">Upload & manage docs</span>
+                      </div>
+                      {location === "/knowledge-base" && (
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </div>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
