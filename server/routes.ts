@@ -537,7 +537,13 @@ export async function registerRoutes(
           console.error("Knowledge base search error:", kbError);
         }
         
-        // Generate BRD using documentation as context
+        // Log context sources being used for BRD generation
+        console.log(`Generating BRD with context: Documentation=${!!documentation}, Analysis=${!!analysis}, DB Schema=${!!databaseSchema}, Knowledge Base=${!!knowledgeContext} (${knowledgeSources.length} chunks)`);
+        if (knowledgeSources.length > 0) {
+          console.log(`Knowledge base sources: ${knowledgeSources.map(s => s.filename).join(", ")}`);
+        }
+        
+        // Generate BRD using ALL context sources: documentation, database schema, and knowledge base
         const brd = await generateBRD(
           featureRequest,
           analysis || null,
@@ -681,7 +687,9 @@ export async function registerRoutes(
       }
 
       const projects = await storage.getAllProjects();
-      const documentation = projects.length > 0 ? await storage.getDocumentation(projects[0].id) : null;
+      // Use "global" as projectId if no projects exist (knowledge base only mode)
+      const projectId = projects.length > 0 ? projects[0].id : "global";
+      const documentation = projects.length > 0 ? await storage.getDocumentation(projectId) : null;
 
       // If there's a parent JIRA key, fetch its content for context
       let parentContext: string | null = null;
@@ -715,21 +723,32 @@ export async function registerRoutes(
       }
 
       // Get database schema if available
-      const databaseSchema = projects[0] ? await storage.getDatabaseSchema(projects[0].id) : null;
+      const databaseSchema = projects.length > 0 ? await storage.getDatabaseSchema(projectId) : null;
       
       // Search knowledge base for relevant context
       let knowledgeContext: string | null = null;
+      let knowledgeSources: Array<{ filename: string; chunkPreview: string }> = [];
       try {
         const searchQuery = `${brd.title} ${brd.content.overview}`;
-        const kbResults = await searchKnowledgeBase(projects[0].id, searchQuery, 5);
+        const kbResults = await searchKnowledgeBase(projectId, searchQuery, 5);
         if (kbResults.length > 0) {
           knowledgeContext = kbResults.map((r) => 
             `[Source: ${r.filename}]\n${r.content}`
           ).join("\n\n---\n\n");
+          
+          // Track which sources were used
+          knowledgeSources = kbResults.map(r => ({
+            filename: r.filename,
+            chunkPreview: r.content.substring(0, 200) + (r.content.length > 200 ? "..." : ""),
+          }));
+          console.log(`User story generation using ${kbResults.length} knowledge base chunks from: ${kbResults.map(r => r.filename).join(", ")}`);
         }
       } catch (kbError) {
         console.error("Knowledge base search error:", kbError);
       }
+      
+      // Log context sources being used
+      console.log(`Generating user stories with context: Documentation=${!!documentation}, DB Schema=${!!databaseSchema}, Knowledge Base=${!!knowledgeContext} (${knowledgeSources.length} chunks)`);
       
       const userStories = await generateUserStories(brd, documentation || null, databaseSchema, parentContext, knowledgeContext);
       if (!userStories || userStories.length === 0) {
