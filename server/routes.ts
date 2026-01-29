@@ -427,9 +427,8 @@ export async function registerRoutes(
       const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
 
       const projects = await storage.getAllProjects();
-      if (projects.length === 0) {
-        return res.status(400).json({ error: "Please analyze a repository first" });
-      }
+      // Use "global" as projectId if no projects exist (knowledge base only mode)
+      const projectId = projects.length > 0 ? projects[0].id : "global";
 
       let finalDescription = description || "";
 
@@ -445,7 +444,7 @@ export async function registerRoutes(
       }
 
       const featureRequest = await storage.createFeatureRequest({
-        projectId: projects[0].id,
+        projectId: projectId,
         title,
         description: finalDescription,
         inputType,
@@ -482,12 +481,11 @@ export async function registerRoutes(
       }
 
       const projects = await storage.getAllProjects();
-      if (projects.length === 0) {
-        return res.status(400).json({ error: "No project found" });
-      }
+      // Use "global" as projectId if no projects exist (knowledge base only mode)
+      const projectId = projects.length > 0 ? projects[0].id : "global";
 
-      const analysis = await storage.getAnalysis(projects[0].id);
-      const documentation = await storage.getDocumentation(projects[0].id);
+      const analysis = projects.length > 0 ? await storage.getAnalysis(projectId) : null;
+      const documentation = projects.length > 0 ? await storage.getDocumentation(projectId) : null;
 
       // Set up SSE with proper headers
       res.setHeader("Content-Type", "text/event-stream");
@@ -511,13 +509,13 @@ export async function registerRoutes(
 
       try {
         // Get database schema if available
-        const databaseSchema = projects[0] ? await storage.getDatabaseSchema(projects[0].id) : null;
+        const databaseSchema = projects.length > 0 ? await storage.getDatabaseSchema(projectId) : null;
         
         // Search knowledge base for relevant context
         let knowledgeContext: string | null = null;
         try {
           const searchQuery = `${featureRequest.title} ${featureRequest.description}`;
-          const kbResults = await searchKnowledgeBase(projects[0].id, searchQuery, 5);
+          const kbResults = await searchKnowledgeBase(projectId, searchQuery, 5);
           if (kbResults.length > 0) {
             knowledgeContext = kbResults.map((r, i) => 
               `[Source: ${r.filename}]\n${r.content}`
