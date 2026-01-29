@@ -1,14 +1,18 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
+import { createRequire } from "module";
 import multer from "multer";
 import { z } from "zod";
 import { Client } from "pg";
-import * as pdfParse from "pdf-parse";
 import * as mammoth from "mammoth";
 import { storage } from "./storage";
 import { analyzeRepository, generateDocumentation, generateBPMNDiagram, generateBRD, generateTestCases, generateTestData, generateUserStories, generateCopilotPrompt, transcribeAudio } from "./ai";
 import { ingestDocument, searchKnowledgeBase, deleteDocumentChunks, getKnowledgeStats } from "./mongodb";
 import type { DatabaseTable, DatabaseColumn } from "@shared/schema";
+
+// Create require for CommonJS modules
+const require = createRequire(import.meta.url);
+const pdfParse = require("pdf-parse");
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -1222,7 +1226,7 @@ export async function registerRoutes(
           content = JSON.stringify(jsonContent, null, 2);
         } else if (file.mimetype === "application/pdf") {
           // Parse PDF using pdf-parse
-          const pdfData = await (pdfParse as any).default(file.buffer);
+          const pdfData = await pdfParse(file.buffer);
           content = pdfData.text;
         } else if (file.mimetype === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
           // Parse Word document using mammoth
