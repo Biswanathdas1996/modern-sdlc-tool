@@ -38,10 +38,19 @@ const workflowSteps = [
   { id: "test-data", label: "Data", completed: false, active: false },
 ];
 
+const categoryInfo = {
+  happy_path: { label: "Happy Path", description: "Standard successful scenarios", color: "bg-success/10 text-success border-success/30" },
+  edge_case: { label: "Edge Cases", description: "Boundary conditions and unusual scenarios", color: "bg-warning/10 text-warning border-warning/30" },
+  negative: { label: "Negative Scenarios", description: "Error handling and invalid inputs", color: "bg-destructive/10 text-destructive border-destructive/30" },
+  e2e: { label: "End-to-End", description: "Complete user journey tests", color: "bg-primary/10 text-primary border-primary/30" },
+};
+
 export default function TestCasesPage() {
   const [expandedTests, setExpandedTests] = useState<Set<string>>(new Set());
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(["happy_path", "edge_case", "negative", "e2e"]));
   const [filterType, setFilterType] = useState<string>("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
+  const [filterCategory, setFilterCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
@@ -202,9 +211,30 @@ export default function TestCasesPage() {
   const filteredTests = mockTestCases.filter((test) => {
     if (filterType !== "all" && test.type !== filterType) return false;
     if (filterPriority !== "all" && test.priority !== filterPriority) return false;
+    if (filterCategory !== "all" && (test as any).category !== filterCategory) return false;
     if (searchQuery && !test.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
+
+  // Group tests by category
+  const testsByCategory = {
+    happy_path: filteredTests.filter((t) => (t as any).category === "happy_path"),
+    edge_case: filteredTests.filter((t) => (t as any).category === "edge_case"),
+    negative: filteredTests.filter((t) => (t as any).category === "negative"),
+    e2e: filteredTests.filter((t) => (t as any).category === "e2e" || !(t as any).category),
+  };
+
+  const toggleCategory = (category: string) => {
+    setExpandedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+      return next;
+    });
+  };
 
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -279,16 +309,19 @@ export default function TestCasesPage() {
           {/* Stats & Actions */}
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-4 flex-wrap">
-              <div className="flex items-center gap-2 text-sm">
+              <div className="flex items-center gap-2 text-sm flex-wrap">
                 <Badge variant="outline">{mockTestCases.length} Total</Badge>
-                <Badge variant="outline" className={getTypeColor("e2e")}>
-                  {mockTestCases.filter((t) => t.type === "e2e").length} E2E
+                <Badge variant="outline" className={categoryInfo.happy_path.color}>
+                  {testsByCategory.happy_path.length} Happy Path
                 </Badge>
-                <Badge variant="outline" className={getTypeColor("integration")}>
-                  {mockTestCases.filter((t) => t.type === "integration").length} Integration
+                <Badge variant="outline" className={categoryInfo.edge_case.color}>
+                  {testsByCategory.edge_case.length} Edge Cases
                 </Badge>
-                <Badge variant="outline" className={getTypeColor("acceptance")}>
-                  {mockTestCases.filter((t) => t.type === "acceptance").length} Acceptance
+                <Badge variant="outline" className={categoryInfo.negative.color}>
+                  {testsByCategory.negative.length} Negative
+                </Badge>
+                <Badge variant="outline" className={categoryInfo.e2e.color}>
+                  {testsByCategory.e2e.length} E2E
                 </Badge>
               </div>
             </div>
@@ -337,6 +370,18 @@ export default function TestCasesPage() {
                     <SelectItem value="acceptance">Acceptance</SelectItem>
                   </SelectContent>
                 </Select>
+                <Select value={filterCategory} onValueChange={setFilterCategory}>
+                  <SelectTrigger className="w-[150px]" data-testid="select-filter-category">
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    <SelectItem value="happy_path">Happy Path</SelectItem>
+                    <SelectItem value="edge_case">Edge Cases</SelectItem>
+                    <SelectItem value="negative">Negative</SelectItem>
+                    <SelectItem value="e2e">End-to-End</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Select value={filterPriority} onValueChange={setFilterPriority}>
                   <SelectTrigger className="w-[150px]" data-testid="select-filter-priority">
                     <SelectValue placeholder="Priority" />
@@ -353,8 +398,8 @@ export default function TestCasesPage() {
             </CardContent>
           </Card>
 
-          {/* Test Cases List */}
-          <div className="space-y-4">
+          {/* Test Cases List - Grouped by Category */}
+          <div className="space-y-6">
             {filteredTests.length === 0 ? (
               <EmptyState
                 icon="test"
@@ -362,106 +407,138 @@ export default function TestCasesPage() {
                 description="Try adjusting your filters or generate new test cases."
               />
             ) : (
-              filteredTests.map((test) => (
-                <Collapsible
-                  key={test.id}
-                  open={expandedTests.has(test.id)}
-                  onOpenChange={() => toggleExpand(test.id)}
-                >
-                  <Card>
+              (Object.entries(testsByCategory) as [keyof typeof categoryInfo, TestCase[]][]).map(([category, tests]) => {
+                if (tests.length === 0) return null;
+                const info = categoryInfo[category];
+                return (
+                  <Collapsible
+                    key={category}
+                    open={expandedCategories.has(category)}
+                    onOpenChange={() => toggleCategory(category)}
+                  >
                     <CollapsibleTrigger asChild>
-                      <CardHeader className="cursor-pointer hover-elevate rounded-t-lg">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex items-start gap-3">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted mt-1">
-                              <TestTube className="h-4 w-4 text-muted-foreground" />
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <Badge variant="outline" className="font-mono text-xs">
-                                  {test.id}
-                                </Badge>
-                                <Badge variant="outline" className="font-mono text-xs">
-                                  {test.requirementId}
-                                </Badge>
-                              </div>
-                              <CardTitle className="text-base mt-1">{test.title}</CardTitle>
-                              <CardDescription className="mt-1">{test.description}</CardDescription>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <Badge variant="outline" className={cn("text-xs", getTypeColor(test.type))}>
-                              {test.type}
-                            </Badge>
-                            <Badge variant="outline" className={cn("text-xs", getPriorityColor(test.priority))}>
-                              {test.priority}
-                            </Badge>
-                            {expandedTests.has(test.id) ? (
-                              <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                            ) : (
-                              <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                            )}
-                          </div>
+                      <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg cursor-pointer hover-elevate">
+                        <div className="flex items-center gap-3">
+                          <Badge className={cn("text-sm", info.color)}>
+                            {info.label}
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">{info.description}</span>
                         </div>
-                      </CardHeader>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline">{tests.length} tests</Badge>
+                          {expandedCategories.has(category) ? (
+                            <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                          )}
+                        </div>
+                      </div>
                     </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <CardContent className="pt-0 space-y-6">
-                        {/* Preconditions */}
-                        <div>
-                          <h4 className="text-sm font-medium text-foreground mb-2">Preconditions</h4>
-                          <ul className="space-y-1">
-                            {test.preconditions.map((condition, index) => (
-                              <li key={index} className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
-                                {condition}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-
-                        {/* Test Steps */}
-                        <div>
-                          <h4 className="text-sm font-medium text-foreground mb-3">Test Steps</h4>
-                          <div className="space-y-3">
-                            {test.steps.map((step) => (
-                              <div key={step.step} className="flex gap-3 p-3 rounded-md bg-muted/50">
-                                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">
-                                  {step.step}
+                    <CollapsibleContent className="mt-3 space-y-3">
+                      {tests.map((test) => (
+                        <Collapsible
+                          key={test.id}
+                          open={expandedTests.has(test.id)}
+                          onOpenChange={() => toggleExpand(test.id)}
+                        >
+                          <Card>
+                            <CollapsibleTrigger asChild>
+                              <CardHeader className="cursor-pointer hover-elevate rounded-t-lg">
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="flex items-start gap-3">
+                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted mt-1">
+                                      <TestTube className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <Badge variant="outline" className="font-mono text-xs">
+                                          {test.id}
+                                        </Badge>
+                                        <Badge variant="outline" className="font-mono text-xs">
+                                          {test.requirementId}
+                                        </Badge>
+                                      </div>
+                                      <CardTitle className="text-base mt-1">{test.title}</CardTitle>
+                                      <CardDescription className="mt-1">{test.description}</CardDescription>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <Badge variant="outline" className={cn("text-xs", getTypeColor(test.type))}>
+                                      {test.type}
+                                    </Badge>
+                                    <Badge variant="outline" className={cn("text-xs", getPriorityColor(test.priority))}>
+                                      {test.priority}
+                                    </Badge>
+                                    {expandedTests.has(test.id) ? (
+                                      <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                                    ) : (
+                                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="flex-1 space-y-1">
-                                  <p className="text-sm font-medium text-foreground">{step.action}</p>
-                                  <p className="text-sm text-success">{step.expectedResult}</p>
+                              </CardHeader>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent>
+                              <CardContent className="pt-0 space-y-6">
+                                {/* Preconditions */}
+                                <div>
+                                  <h4 className="text-sm font-medium text-foreground mb-2">Preconditions</h4>
+                                  <ul className="space-y-1">
+                                    {test.preconditions.map((condition, index) => (
+                                      <li key={index} className="flex items-center gap-2 text-sm text-muted-foreground">
+                                        <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+                                        {condition}
+                                      </li>
+                                    ))}
+                                  </ul>
                                 </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
 
-                        {/* Expected Outcome */}
-                        <div>
-                          <h4 className="text-sm font-medium text-foreground mb-2">Expected Outcome</h4>
-                          <p className="text-sm text-muted-foreground p-3 rounded-md bg-success/5 border border-success/20">
-                            {test.expectedOutcome}
-                          </p>
-                        </div>
+                                {/* Test Steps */}
+                                <div>
+                                  <h4 className="text-sm font-medium text-foreground mb-3">Test Steps</h4>
+                                  <div className="space-y-3">
+                                    {test.steps.map((step) => (
+                                      <div key={step.step} className="flex gap-3 p-3 rounded-md bg-muted/50">
+                                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">
+                                          {step.step}
+                                        </div>
+                                        <div className="flex-1 space-y-1">
+                                          <p className="text-sm font-medium text-foreground">{step.action}</p>
+                                          <p className="text-sm text-success">{step.expectedResult}</p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
 
-                        {/* Code Snippet */}
-                        {test.codeSnippet && (
-                          <div>
-                            <h4 className="text-sm font-medium text-foreground mb-2">Code Snippet</h4>
-                            <CodeBlock
-                              code={test.codeSnippet}
-                              language="typescript"
-                              filename={`${test.id.toLowerCase()}.test.ts`}
-                            />
-                          </div>
-                        )}
-                      </CardContent>
+                                {/* Expected Outcome */}
+                                <div>
+                                  <h4 className="text-sm font-medium text-foreground mb-2">Expected Outcome</h4>
+                                  <p className="text-sm text-muted-foreground p-3 rounded-md bg-success/5 border border-success/20">
+                                    {test.expectedOutcome}
+                                  </p>
+                                </div>
+
+                                {/* Code Snippet */}
+                                {test.codeSnippet && (
+                                  <div>
+                                    <h4 className="text-sm font-medium text-foreground mb-2">Code Snippet</h4>
+                                    <CodeBlock
+                                      code={test.codeSnippet}
+                                      language="typescript"
+                                      filename={`${test.id.toLowerCase()}.test.ts`}
+                                    />
+                                  </div>
+                                )}
+                              </CardContent>
+                            </CollapsibleContent>
+                          </Card>
+                        </Collapsible>
+                      ))}
                     </CollapsibleContent>
-                  </Card>
-                </Collapsible>
-              ))
+                  </Collapsible>
+                );
+              })
             )}
           </div>
 

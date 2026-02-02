@@ -173,6 +173,7 @@ export const testCaseSchema = z.object({
   requirementId: z.string(),
   title: z.string(),
   description: z.string(),
+  category: z.enum(["happy_path", "edge_case", "negative", "e2e"]),
   type: z.enum(["unit", "integration", "e2e", "acceptance"]),
   priority: z.enum(["critical", "high", "medium", "low"]),
   preconditions: z.array(z.string()),

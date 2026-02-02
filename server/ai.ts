@@ -762,7 +762,7 @@ ${docContent.techStack ? `## Technology Stack\n${JSON.stringify(docContent.techS
     messages: [
       {
         role: "system",
-        content: `You are a senior QA engineer creating comprehensive test cases from a BRD. Generate test cases for each functional requirement.
+        content: `You are a senior QA engineer creating comprehensive test cases from a BRD. Generate test cases for each functional requirement organized into 4 CATEGORIES.
 
 CRITICAL: Your test cases MUST be based on the repository documentation provided. Reference actual:
 - API endpoints with their actual URL routes (e.g., /api/users, /dashboard, /login) - NOT file paths
@@ -778,12 +778,33 @@ IMPORTANT FOR TEST STEPS:
 - Be specific about URLs: "/api/users/123" not "the users endpoint"
 - Include query parameters when relevant: "/api/products?category=electronics"
 
-Test cases should:
-1. Reference actual URL routes and endpoints from the documentation
-2. Use actual API endpoint paths (URLs) and HTTP methods
-3. Include realistic test data based on documented data models
-4. Consider integration with existing documented features
-5. Include code snippets that match the actual codebase structure
+TEST CASE CATEGORIES (Generate test cases for EACH category):
+
+1. **happy_path** - Standard successful scenarios where everything works as expected
+   - Normal user flows with valid data
+   - Expected successful outcomes
+   - Primary use cases
+
+2. **edge_case** - Boundary conditions and unusual but valid scenarios
+   - Maximum/minimum values
+   - Empty or null inputs (when valid)
+   - Special characters, unicode, long strings
+   - Concurrent operations
+   - Timeout scenarios
+
+3. **negative** - Error handling and invalid input scenarios
+   - Invalid data formats
+   - Missing required fields
+   - Unauthorized access attempts
+   - Invalid credentials
+   - Rate limiting
+   - Resource not found scenarios
+
+4. **e2e** - Complete user journey tests spanning multiple features
+   - Full workflow from start to finish
+   - Cross-feature interactions
+   - Real-world usage scenarios
+   - Performance under realistic conditions
 
 Return a JSON object with this structure:
 {
@@ -792,6 +813,7 @@ Return a JSON object with this structure:
       "requirementId": "FR-001",
       "title": "Test case title",
       "description": "What this test validates",
+      "category": "happy_path|edge_case|negative|e2e",
       "type": "unit|integration|e2e|acceptance",
       "priority": "critical|high|medium|low",
       "preconditions": ["List of preconditions"],
@@ -808,7 +830,9 @@ Return a JSON object with this structure:
       "relatedAPIs": ["List of API routes (URLs) this test covers, e.g., GET /api/users"]
     }
   ]
-}`
+}
+
+IMPORTANT: Generate at least 2-3 test cases for EACH category (happy_path, edge_case, negative, e2e) per requirement.`
       },
       {
         role: "user",
@@ -832,11 +856,13 @@ Existing System Context (from BRD):
 - Data Models Affected: ${brd.content.existingSystemContext.dataModelsAffected?.join(", ") || "None specified"}
 ` : ""}
 
-IMPORTANT: Create test cases that reference the actual components, APIs, and data models from the documentation above. Do not use generic or placeholder names.`
+IMPORTANT: 
+1. Create test cases that reference the actual components, APIs, and data models from the documentation above. Do not use generic or placeholder names.
+2. Generate test cases for ALL 4 CATEGORIES: happy_path, edge_case, negative, and e2e.`
       }
     ],
     response_format: { type: "json_object" },
-    max_completion_tokens: 4096,
+    max_completion_tokens: 8192,
   });
 
   const content = response.choices[0]?.message?.content || '{"testCases":[]}';
@@ -847,6 +873,7 @@ IMPORTANT: Create test cases that reference the actual components, APIs, and dat
     requirementId: tc.requirementId || `FR-${String(index + 1).padStart(3, "0")}`,
     title: tc.title,
     description: tc.description,
+    category: tc.category || "happy_path",
     type: tc.type || "e2e",
     priority: tc.priority || "medium",
     preconditions: tc.preconditions || [],
