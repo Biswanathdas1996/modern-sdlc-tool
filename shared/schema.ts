@@ -50,6 +50,23 @@ export const documentationSchema = z.object({
     title: z.string(),
     content: z.string(),
   })),
+  databaseSchema: z.object({
+    databaseName: z.string(),
+    connectionString: z.string(),
+    tables: z.array(z.object({
+      name: z.string(),
+      columns: z.array(z.object({
+        name: z.string(),
+        dataType: z.string(),
+        isNullable: z.boolean(),
+        defaultValue: z.string().nullable().optional(),
+        isPrimaryKey: z.boolean().optional(),
+        isForeignKey: z.boolean().optional(),
+        references: z.string().nullable().optional(),
+      })),
+      rowCount: z.number().optional(),
+    })),
+  }).optional().nullable(),
   createdAt: z.string(),
 });
 

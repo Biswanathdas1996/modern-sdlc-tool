@@ -28,6 +28,7 @@ export interface IStorage {
   // Documentation
   getDocumentation(projectId: string): Promise<Documentation | undefined>;
   createDocumentation(doc: Omit<Documentation, "id" | "createdAt">): Promise<Documentation>;
+  updateDocumentation(projectId: string, updates: Partial<Documentation>): Promise<Documentation | undefined>;
   
   // Feature Requests
   getFeatureRequest(id: string): Promise<FeatureRequest | undefined>;
@@ -162,6 +163,18 @@ export class MemStorage implements IStorage {
     };
     this.documentation.set(id, newDoc);
     return newDoc;
+  }
+
+  async updateDocumentation(projectId: string, updates: Partial<Documentation>): Promise<Documentation | undefined> {
+    const existing = await this.getDocumentation(projectId);
+    if (!existing) return undefined;
+    
+    const updated: Documentation = {
+      ...existing,
+      ...updates,
+    };
+    this.documentation.set(existing.id, updated);
+    return updated;
   }
 
   // Feature Requests

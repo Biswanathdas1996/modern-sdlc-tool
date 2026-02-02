@@ -365,6 +365,19 @@ export async function registerRoutes(
           tables,
         });
 
+        // Also update the documentation with the database schema
+        const documentation = await storage.getDocumentation(project.id);
+        if (documentation) {
+          await storage.updateDocumentation(project.id, {
+            databaseSchema: {
+              databaseName,
+              connectionString: maskedConnectionString,
+              tables,
+            },
+          });
+          console.log(`Database schema saved to documentation for project ${project.id}`);
+        }
+
         res.json(schemaInfo);
       } catch (dbError: any) {
         await client.end().catch(() => {});
@@ -405,6 +418,16 @@ export async function registerRoutes(
       }
       const project = projects[0];
       await storage.deleteDatabaseSchema(project.id);
+      
+      // Also clear the database schema from documentation
+      const documentation = await storage.getDocumentation(project.id);
+      if (documentation) {
+        await storage.updateDocumentation(project.id, {
+          databaseSchema: null,
+        });
+        console.log(`Database schema removed from documentation for project ${project.id}`);
+      }
+      
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting database schema:", error);
@@ -548,7 +571,7 @@ export async function registerRoutes(
           featureRequest,
           analysis || null,
           documentation || null,
-          databaseSchema,
+          databaseSchema || null,
           knowledgeContext,
           (chunk) => {
             if (isClientConnected) {
@@ -750,7 +773,7 @@ export async function registerRoutes(
       // Log context sources being used
       console.log(`Generating user stories with context: Documentation=${!!documentation}, DB Schema=${!!databaseSchema}, Knowledge Base=${!!knowledgeContext} (${knowledgeSources.length} chunks)`);
       
-      const userStories = await generateUserStories(brd, documentation || null, databaseSchema, parentContext, knowledgeContext);
+      const userStories = await generateUserStories(brd, documentation || null, databaseSchema || null, parentContext, knowledgeContext);
       if (!userStories || userStories.length === 0) {
         return res.status(500).json({ error: "Failed to generate user stories - no stories returned" });
       }
@@ -817,7 +840,7 @@ export async function registerRoutes(
       const analysis = projects.length > 0 ? await storage.getAnalysis(projects[0].id) : null;
       const databaseSchema = projects.length > 0 ? await storage.getDatabaseSchema(projects[0].id) : null;
 
-      const prompt = await generateCopilotPrompt(userStories, documentation || null, analysis || null, databaseSchema);
+      const prompt = await generateCopilotPrompt(userStories, documentation || null, analysis || null, databaseSchema || null);
       res.json({ prompt });
     } catch (error) {
       console.error("Error generating Copilot prompt:", error);
