@@ -157,11 +157,29 @@ export async function searchKnowledgeBase(
   const database = await connectMongoDB();
   const collection = database.collection(CHUNKS_COLLECTION);
 
+  console.log(`[KB Search] Searching for projectId: ${projectId}, query: "${query.substring(0, 100)}..."`);
+
+  // First, check how many chunks exist for this project
+  const totalChunks = await collection.countDocuments({ projectId });
+  console.log(`[KB Search] Total chunks in project ${projectId}: ${totalChunks}`);
+  
+  // If no chunks for this projectId, try "global" as fallback
+  if (totalChunks === 0 && projectId !== "global") {
+    const globalChunks = await collection.countDocuments({ projectId: "global" });
+    console.log(`[KB Search] No chunks for projectId ${projectId}, checking global: ${globalChunks} chunks`);
+    if (globalChunks > 0) {
+      // Recursively search with global projectId
+      return searchKnowledgeBase("global", query, limit);
+    }
+  }
+
   // Use text-based search (embeddings not available via Replit AI Integrations)
-  const keywords = query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+  const keywords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+  console.log(`[KB Search] Keywords extracted: ${keywords.slice(0, 10).join(", ")}${keywords.length > 10 ? "..." : ""}`);
   
   if (keywords.length === 0) {
     // Return recent chunks if no keywords
+    console.log(`[KB Search] No keywords, returning recent chunks`);
     const results = await collection
       .find({ projectId })
       .limit(limit)
@@ -186,6 +204,8 @@ export async function searchKnowledgeBase(
       .limit(limit * 2)
       .toArray();
 
+    console.log(`[KB Search] Found ${results.length} matching chunks`);
+
     // Score results by keyword match count
     const scoredResults = results.map(doc => {
       const contentLower = doc.content.toLowerCase();
@@ -201,11 +221,14 @@ export async function searchKnowledgeBase(
     });
 
     // Sort by score and limit
-    return scoredResults
+    const finalResults = scoredResults
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
+    
+    console.log(`[KB Search] Returning ${finalResults.length} results from files: ${finalResults.map(r => r.filename).join(", ")}`);
+    return finalResults;
   } catch (error: any) {
-    console.error("Text search error:", error.message);
+    console.error("[KB Search] Text search error:", error.message);
     return [];
   }
 }
