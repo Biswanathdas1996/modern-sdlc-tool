@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { Link } from "wouter";
 import { FileText, ChevronRight, Search, Download, Layers, Code, Database, Settings, Package, ChevronDown, GitBranch, Loader2, RefreshCw, Table2, Key, Link2, Trash2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -190,6 +191,22 @@ export default function DocumentationPage() {
       {isLoading ? (
         <div className="flex-1 flex items-center justify-center">
           <LoadingSpinner size="lg" text="Loading documentation..." />
+        </div>
+      ) : !documentation ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center space-y-4 max-w-md">
+            <FileText className="h-16 w-16 mx-auto text-muted-foreground/50" />
+            <h2 className="text-xl font-semibold text-foreground">No Documentation Yet</h2>
+            <p className="text-muted-foreground">
+              Start by analyzing a GitHub repository to generate technical documentation.
+              Once analyzed, you can also connect your database schema here.
+            </p>
+            <Button asChild>
+              <Link to="/">
+                Analyze Repository
+              </Link>
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="flex-1 flex overflow-hidden">
