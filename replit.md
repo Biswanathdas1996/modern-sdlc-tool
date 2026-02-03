@@ -2,12 +2,12 @@
 
 ## Overview
 
-DocuGen AI is an AI-powered documentation and business requirements document (BRD) generator. The application analyzes GitHub repositories and automatically generates comprehensive technical documentation, BRDs, test cases, and test data using OpenAI's language models.
+DocuGen AI is an AI-powered documentation and business requirements document (BRD) generator. The application analyzes GitHub repositories and automatically generates comprehensive technical documentation, BRDs, test cases, and test data using PWC GenAI (Gemini 2.0 Flash model).
 
 The workflow guides users through a multi-step process:
 1. **Analyze Repository** - Connect and analyze a GitHub repository
 2. **Documentation** - View AI-generated technical documentation
-3. **Requirements** - Input feature requirements via text, file upload, or voice
+3. **Requirements** - Input feature requirements via text or file upload (voice input disabled)
 4. **BRD Generation** - Generate business requirements documents
 5. **Test Cases** - Generate test cases from BRDs
 6. **Test Data** - Generate test data for test cases
@@ -30,7 +30,7 @@ Preferred communication style: Simple, everyday language.
 - **Runtime**: Node.js with Express.js
 - **Language**: TypeScript with ES modules
 - **API Design**: RESTful JSON APIs under `/api/*` routes
-- **AI Integration**: OpenAI API via Replit AI Integrations (custom base URL)
+- **AI Integration**: PWC GenAI (Gemini 2.0 Flash) for all text generation
 - **File Handling**: Multer for multipart form data (audio/file uploads)
 
 ### Data Storage
@@ -46,25 +46,24 @@ Preferred communication style: Simple, everyday language.
 - **Page-based Routing**: Each workflow step has a dedicated page component
 
 ### AI Features
-- Repository analysis via GitHub API + OpenAI
-- BRD generation with streaming responses
+- Repository analysis via GitHub API + PWC GenAI
+- BRD generation (non-streaming due to PWC GenAI limitation)
 - Test case and test data generation
-- Audio transcription for voice input (Whisper API)
-- Image generation capabilities (gpt-image-1)
+- User story and Copilot prompt generation
+- BPMN business flow diagram generation
 
-### Replit Integrations
-The project includes pre-built integrations in `server/replit_integrations/` and `client/replit_integrations/`:
-- **Audio**: Voice recording, playback, and speech-to-text
-- **Chat**: Conversation storage and streaming responses
-- **Image**: Image generation endpoints
-- **Batch**: Rate-limited batch processing utilities
+### Disabled Features (PWC GenAI Only Supports Text)
+The following features are disabled because PWC GenAI only supports text generation:
+- **Audio**: Voice input/transcription (Whisper API not available)
+- **Image**: Image generation (gpt-image-1 not available)
+- **Embeddings**: Vector search (using text-based search fallback for Knowledge Base)
 
 ## External Dependencies
 
 ### AI Services
-- **OpenAI API**: Primary AI provider accessed through Replit AI Integrations
-  - Environment: `AI_INTEGRATIONS_OPENAI_API_KEY`, `AI_INTEGRATIONS_OPENAI_BASE_URL`
-  - Models used: GPT for text, Whisper for audio transcription, gpt-image-1 for images
+- **PWC GenAI**: Primary AI provider for all text generation
+  - Environment: `PWC_GENAI_ENDPOINT_URL`, `PWC_GENAI_API_KEY`, `PWC_GENAI_BEARER_TOKEN`
+  - Model: vertex_ai.gemini-2.0-flash (text generation only)
 
 ### Database
 - **PostgreSQL**: Primary database (Drizzle ORM)
@@ -77,7 +76,7 @@ The project includes pre-built integrations in `server/replit_integrations/` and
 
 ### Key NPM Packages
 - **Frontend**: React, TanStack Query, Radix UI, Tailwind CSS, Wouter, date-fns
-- **Backend**: Express, Drizzle ORM, OpenAI SDK, Multer, Zod
+- **Backend**: Express, Drizzle ORM, Multer, Zod (PWC GenAI via fetch)
 - **Build**: Vite, esbuild, TypeScript
 
 ## Recent Changes (January 2026)

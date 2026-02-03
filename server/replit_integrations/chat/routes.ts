@@ -1,11 +1,40 @@
 import type { Express, Request, Response } from "express";
-import OpenAI from "openai";
 import { chatStorage } from "./storage";
 
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
+// PWC GenAI configuration
+const GENAI_ENDPOINT = process.env.PWC_GENAI_ENDPOINT_URL!;
+const API_KEY = process.env.PWC_GENAI_API_KEY!;
+const BEARER_TOKEN = process.env.PWC_GENAI_BEARER_TOKEN!;
+
+async function callPwcGenAI(prompt: string): Promise<string> {
+  if (!API_KEY || !BEARER_TOKEN || !GENAI_ENDPOINT) {
+    throw new Error("PWC GenAI credentials not configured");
+  }
+
+  const response = await fetch(GENAI_ENDPOINT, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "API-Key": API_KEY,
+      Authorization: `Bearer ${BEARER_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "vertex_ai.gemini-2.0-flash",
+      prompt,
+      temperature: 0.7,
+      top_p: 1,
+      stream: false,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`PWC GenAI API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.content || data.response || data.text || JSON.stringify(data);
+}
 
 export function registerChatRoutes(app: Express): void {
   // Get all conversations
@@ -22,7 +51,7 @@ export function registerChatRoutes(app: Express): void {
   // Get single conversation with messages
   app.get("/api/conversations/:id", async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as string);
       const conversation = await chatStorage.getConversation(id);
       if (!conversation) {
         return res.status(404).json({ error: "Conversation not found" });
@@ -50,7 +79,7 @@ export function registerChatRoutes(app: Express): void {
   // Delete conversation
   app.delete("/api/conversations/:id", async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(req.params.id as string);
       await chatStorage.deleteConversation(id);
       res.status(204).send();
     } catch (error) {
@@ -59,10 +88,10 @@ export function registerChatRoutes(app: Express): void {
     }
   });
 
-  // Send message and get AI response (streaming)
+  // Send message and get AI response (non-streaming with PWC GenAI)
   app.post("/api/conversations/:id/messages", async (req: Request, res: Response) => {
     try {
-      const conversationId = parseInt(req.params.id);
+      const conversationId = parseInt(req.params.id as string);
       const { content } = req.body;
 
       // Save user message
@@ -70,33 +99,21 @@ export function registerChatRoutes(app: Express): void {
 
       // Get conversation history for context
       const messages = await chatStorage.getMessagesByConversation(conversationId);
-      const chatMessages = messages.map((m) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
-      }));
+      const chatHistory = messages.map((m) => `${m.role}: ${m.content}`).join("\n");
 
-      // Set up SSE
+      // Set up SSE for compatibility
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
-      // Stream response from OpenAI
-      const stream = await openai.chat.completions.create({
-        model: "gpt-5.1",
-        messages: chatMessages,
-        stream: true,
-        max_completion_tokens: 2048,
-      });
+      // Build prompt with conversation history
+      const prompt = `You are a helpful assistant. Here is the conversation history:\n\n${chatHistory}\n\nRespond to the latest user message.`;
 
-      let fullResponse = "";
+      // Call PWC GenAI (non-streaming)
+      const fullResponse = await callPwcGenAI(prompt);
 
-      for await (const chunk of stream) {
-        const content = chunk.choices[0]?.delta?.content || "";
-        if (content) {
-          fullResponse += content;
-          res.write(`data: ${JSON.stringify({ content })}\n\n`);
-        }
-      }
+      // Send full response as a single chunk
+      res.write(`data: ${JSON.stringify({ content: fullResponse })}\n\n`);
 
       // Save assistant message
       await chatStorage.createMessage(conversationId, "assistant", fullResponse);

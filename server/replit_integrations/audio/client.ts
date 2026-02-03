@@ -1,4 +1,3 @@
-import OpenAI, { toFile } from "openai";
 import { Buffer } from "node:buffer";
 import { spawn } from "child_process";
 import { writeFile, unlink, readFile } from "fs/promises";
@@ -6,10 +5,10 @@ import { randomUUID } from "crypto";
 import { tmpdir } from "os";
 import { join } from "path";
 
-export const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
+/**
+ * Audio features require specialized speech-to-text and text-to-speech services.
+ * PWC GenAI only supports text generation and does not support audio processing.
+ */
 
 export type AudioFormat = "wav" | "mp3" | "webm" | "mp4" | "ogg" | "unknown";
 
@@ -105,10 +104,13 @@ export async function ensureCompatibleFormat(
   return { buffer: wavBuffer, format: "wav" };
 }
 
+const AUDIO_NOT_SUPPORTED_ERROR = 
+  "Audio processing is not supported. PWC GenAI only supports text generation. " +
+  "Please use an external speech-to-text or text-to-speech service if needed.";
+
 /**
  * Voice Chat: User speaks, LLM responds with audio (audio-in, audio-out).
- * Uses gpt-audio model via Replit AI Integrations.
- * Note: Browser records WebM/opus - convert to WAV using ffmpeg before calling this.
+ * @deprecated PWC GenAI does not support audio processing
  */
 export async function voiceChat(
   audioBuffer: Buffer,
@@ -116,159 +118,62 @@ export async function voiceChat(
   inputFormat: "wav" | "mp3" = "wav",
   outputFormat: "wav" | "mp3" = "mp3"
 ): Promise<{ transcript: string; audioResponse: Buffer }> {
-  const audioBase64 = audioBuffer.toString("base64");
-  const response = await openai.chat.completions.create({
-    model: "gpt-audio",
-    modalities: ["text", "audio"],
-    audio: { voice, format: outputFormat },
-    messages: [{
-      role: "user",
-      content: [
-        { type: "input_audio", input_audio: { data: audioBase64, format: inputFormat } },
-      ],
-    }],
-  });
-  const message = response.choices[0]?.message as any;
-  const transcript = message?.audio?.transcript || message?.content || "";
-  const audioData = message?.audio?.data ?? "";
-  return {
-    transcript,
-    audioResponse: Buffer.from(audioData, "base64"),
-  };
+  throw new Error(AUDIO_NOT_SUPPORTED_ERROR);
 }
 
 /**
  * Streaming Voice Chat: For real-time audio responses.
- * Note: Streaming only supports pcm16 output format.
- *
- * @example
- * // Converting browser WebM to WAV before calling:
- * const webmBuffer = Buffer.from(req.body.audio, "base64");
- * const wavBuffer = await convertWebmToWav(webmBuffer);
- * for await (const chunk of voiceChatStream(wavBuffer)) { ... }
+ * @deprecated PWC GenAI does not support audio processing
  */
 export async function voiceChatStream(
   audioBuffer: Buffer,
   voice: "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer" = "alloy",
   inputFormat: "wav" | "mp3" = "wav"
 ): Promise<AsyncIterable<{ type: "transcript" | "audio"; data: string }>> {
-  const audioBase64 = audioBuffer.toString("base64");
-  const stream = await openai.chat.completions.create({
-    model: "gpt-audio",
-    modalities: ["text", "audio"],
-    audio: { voice, format: "pcm16" },
-    messages: [{
-      role: "user",
-      content: [
-        { type: "input_audio", input_audio: { data: audioBase64, format: inputFormat } },
-      ],
-    }],
-    stream: true,
-  });
-
-  return (async function* () {
-    for await (const chunk of stream) {
-      const delta = chunk.choices?.[0]?.delta as any;
-      if (!delta) continue;
-      if (delta?.audio?.transcript) {
-        yield { type: "transcript", data: delta.audio.transcript };
-      }
-      if (delta?.audio?.data) {
-        yield { type: "audio", data: delta.audio.data };
-      }
-    }
-  })();
+  throw new Error(AUDIO_NOT_SUPPORTED_ERROR);
 }
 
 /**
  * Text-to-Speech: Converts text to speech verbatim.
- * Uses gpt-audio model via Replit AI Integrations.
+ * @deprecated PWC GenAI does not support audio processing
  */
 export async function textToSpeech(
   text: string,
   voice: "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer" = "alloy",
   format: "wav" | "mp3" | "flac" | "opus" | "pcm16" = "wav"
 ): Promise<Buffer> {
-  const response = await openai.chat.completions.create({
-    model: "gpt-audio",
-    modalities: ["text", "audio"],
-    audio: { voice, format },
-    messages: [
-      { role: "system", content: "You are an assistant that performs text-to-speech." },
-      { role: "user", content: `Repeat the following text verbatim: ${text}` },
-    ],
-  });
-  const audioData = (response.choices[0]?.message as any)?.audio?.data ?? "";
-  return Buffer.from(audioData, "base64");
+  throw new Error(AUDIO_NOT_SUPPORTED_ERROR);
 }
 
 /**
  * Streaming Text-to-Speech: Converts text to speech with real-time streaming.
- * Uses gpt-audio model via Replit AI Integrations.
- * Note: Streaming only supports pcm16 output format.
+ * @deprecated PWC GenAI does not support audio processing
  */
 export async function textToSpeechStream(
   text: string,
   voice: "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer" = "alloy"
 ): Promise<AsyncIterable<string>> {
-  const stream = await openai.chat.completions.create({
-    model: "gpt-audio",
-    modalities: ["text", "audio"],
-    audio: { voice, format: "pcm16" },
-    messages: [
-      { role: "system", content: "You are an assistant that performs text-to-speech." },
-      { role: "user", content: `Repeat the following text verbatim: ${text}` },
-    ],
-    stream: true,
-  });
-
-  return (async function* () {
-    for await (const chunk of stream) {
-      const delta = chunk.choices?.[0]?.delta as any;
-      if (!delta) continue;
-      if (delta?.audio?.data) {
-        yield delta.audio.data;
-      }
-    }
-  })();
+  throw new Error(AUDIO_NOT_SUPPORTED_ERROR);
 }
 
 /**
  * Speech-to-Text: Transcribes audio using dedicated transcription model.
- * Uses gpt-4o-mini-transcribe for accurate transcription.
+ * @deprecated PWC GenAI does not support audio processing
  */
 export async function speechToText(
   audioBuffer: Buffer,
   format: "wav" | "mp3" | "webm" = "wav"
 ): Promise<string> {
-  const file = await toFile(audioBuffer, `audio.${format}`);
-  const response = await openai.audio.transcriptions.create({
-    file,
-    model: "gpt-4o-mini-transcribe",
-  });
-  return response.text;
+  throw new Error(AUDIO_NOT_SUPPORTED_ERROR);
 }
 
 /**
  * Streaming Speech-to-Text: Transcribes audio with real-time streaming.
- * Uses gpt-4o-mini-transcribe for accurate transcription.
+ * @deprecated PWC GenAI does not support audio processing
  */
 export async function speechToTextStream(
   audioBuffer: Buffer,
   format: "wav" | "mp3" | "webm" = "wav"
 ): Promise<AsyncIterable<string>> {
-  const file = await toFile(audioBuffer, `audio.${format}`);
-  const stream = await openai.audio.transcriptions.create({
-    file,
-    model: "gpt-4o-mini-transcribe",
-    stream: true,
-  });
-
-  return (async function* () {
-    for await (const event of stream) {
-      if (event.type === "transcript.text.delta") {
-        yield event.delta;
-      }
-    }
-  })();
+  throw new Error(AUDIO_NOT_SUPPORTED_ERROR);
 }

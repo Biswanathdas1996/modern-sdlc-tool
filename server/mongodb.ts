@@ -1,11 +1,5 @@
 import { MongoClient, Db, Collection } from "mongodb";
-import OpenAI from "openai";
 import type { KnowledgeChunk, KnowledgeDocument } from "@shared/schema";
-
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
 
 let client: MongoClient | null = null;
 let db: Db | null = null;
