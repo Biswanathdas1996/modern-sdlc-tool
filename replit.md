@@ -27,11 +27,21 @@ Preferred communication style: Simple, everyday language.
 - **Build Tool**: Vite with custom plugins for Replit integration
 
 ### Backend Architecture
+**Python/FastAPI Backend (Primary - Converted from Node.js)**
+- **Runtime**: Python 3.11 with FastAPI
+- **Language**: Python with async/await support
+- **API Design**: RESTful JSON APIs under `/api/*` routes (same endpoints as Node.js version)
+- **AI Integration**: PWC GenAI (Gemini 2.0 Flash) via httpx async client
+- **File Handling**: python-multipart for file uploads, PyPDF2 and python-docx for parsing
+- **SSE Streaming**: sse-starlette for BRD generation streaming
+- **Database**: psycopg2 for PostgreSQL schema introspection
+- **MongoDB**: pymongo for knowledge base operations
+- **Location**: `server_py/` directory
+
+**Legacy Node.js Backend (Original)**
 - **Runtime**: Node.js with Express.js
 - **Language**: TypeScript with ES modules
-- **API Design**: RESTful JSON APIs under `/api/*` routes
-- **AI Integration**: PWC GenAI (Gemini 2.0 Flash) for all text generation
-- **File Handling**: Multer for multipart form data (audio/file uploads)
+- **Location**: `server/` directory
 
 ### Data Storage
 - **ORM**: Drizzle ORM with PostgreSQL dialect
@@ -76,8 +86,16 @@ The following features are disabled because PWC GenAI only supports text generat
 
 ### Key NPM Packages
 - **Frontend**: React, TanStack Query, Radix UI, Tailwind CSS, Wouter, date-fns
-- **Backend**: Express, Drizzle ORM, Multer, Zod (PWC GenAI via fetch)
 - **Build**: Vite, esbuild, TypeScript
+
+### Python Packages (Backend)
+- **Web Framework**: FastAPI, uvicorn, starlette
+- **HTTP Client**: httpx (async)
+- **Validation**: pydantic
+- **File Parsing**: PyPDF2, python-docx
+- **SSE**: sse-starlette
+- **Database**: psycopg2-binary, pymongo
+- **Utilities**: python-dotenv, aiofiles, python-multipart
 
 ## Recent Changes (January 2026)
 
@@ -176,6 +194,23 @@ The following features are disabled because PWC GenAI only supports text generat
 ## Development Guidelines
 
 ### Running the Application
+
+**Python Backend (Recommended)**
+```bash
+./run-python-backend.sh
+```
+This starts the Python FastAPI backend on port 5000 with Vite dev server on port 5173 for hot-reload.
+
+Alternatively, run components separately:
+```bash
+# Terminal 1: Start Vite dev server
+npx vite --port 5173
+
+# Terminal 2: Start Python backend
+cd server_py && python main.py
+```
+
+**Legacy Node.js Backend**
 ```bash
 npm run dev
 ```
