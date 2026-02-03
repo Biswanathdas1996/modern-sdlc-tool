@@ -1,19 +1,32 @@
 """Tools for JIRA agent operations."""
-from .search_tickets import create_search_tickets_tool
-from .ticket_details import create_ticket_details_tool
-from .list_tickets import create_list_tickets_tool
-from .callbacks import VerboseConsoleHandler
-from .helpers import format_tickets_for_agent, parse_tickets_from_observation
+from .helpers import format_tickets_for_agent
 from .search import search_jira_tickets
-from .ticket_details_logic import get_ticket_details
+from .jira_operations import create_jira_issue, update_jira_issue, get_ticket_details
+from .ticket_tools import (
+    TicketToolsContext,
+    search_tickets_tool,
+    get_details_tool,
+    create_ticket_tool,
+    update_ticket_tool,
+    bulk_update_tool,
+    get_last_results_tool,
+    make_async_sync
+)
+from .tool_factory import create_jira_tools
 
 __all__ = [
-    "create_search_tickets_tool",
-    "create_ticket_details_tool",
-    "create_list_tickets_tool",
-    "VerboseConsoleHandler",
     "format_tickets_for_agent",
-    "parse_tickets_from_observation",
     "search_jira_tickets",
-    "get_ticket_details"
+    "create_jira_issue",
+    "update_jira_issue",
+    "get_ticket_details",
+    "TicketToolsContext",
+    "search_tickets_tool",
+    "get_details_tool",
+    "create_ticket_tool",
+    "update_ticket_tool",
+    "bulk_update_tool",
+    "get_last_results_tool",
+    "make_async_sync",
+    "create_jira_tools"
 ]

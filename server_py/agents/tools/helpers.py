@@ -1,6 +1,5 @@
 """Helper functions for JIRA agent operations."""
 from typing import List, Dict, Any
-import re
 
 
 def format_tickets_for_agent(tickets: List[Dict[str, Any]]) -> str:
@@ -21,23 +20,3 @@ def format_tickets_for_agent(tickets: List[Dict[str, Any]]) -> str:
             f"Description: {ticket['description'][:200]}{'...' if len(ticket['description']) > 200 else ''}\n"
         )
     return '\n'.join(formatted)
-
-
-def parse_tickets_from_observation(observation: str) -> List[Dict[str, Any]]:
-    """Parse ticket information from tool observation.
-    
-    Args:
-        observation: Tool observation string
-        
-    Returns:
-        List of ticket dictionaries with keys
-    """
-    tickets = []
-    # Simple regex to find ticket keys
-    ticket_pattern = r'\[([A-Z]+-\d+)\]'
-    matches = re.findall(ticket_pattern, observation)
-    
-    for key in matches:
-        tickets.append({"key": key})
-    
-    return tickets
