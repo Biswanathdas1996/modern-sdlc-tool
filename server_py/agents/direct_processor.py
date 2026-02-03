@@ -223,11 +223,15 @@ async def _process_create_ticket(
     context: Optional[TicketToolsContext] = None
 ) -> Dict[str, Any]:
     """Process create ticket request with validation and contextual awareness."""
-    # Enrich with knowledge base and Jira context if starting fresh
+    # Enrich with knowledge base and Jira context
+    # Search KB when we have a summary but no description yet
     enriched_context = {}
-    if context and len(conversation_ctx.messages) <= 2:  # Early in conversation
-        log_info("🔍 Enriching with KB and Jira context for ticket creation", "direct_processor")
-        enriched_context = await _enrich_with_context(user_prompt, jira_service, ai_service, context)
+    summary = conversation_ctx.collected_data.get('summary') or user_prompt
+    has_description = bool(conversation_ctx.collected_data.get('description'))
+    
+    if context and not has_description:
+        log_info(f"🔍 Searching KB for: {summary}", "direct_processor")
+        enriched_context = await _enrich_with_context(summary, jira_service, ai_service, context)
     
     # Build context from conversation history
     conversation_history = "\n".join([
@@ -306,38 +310,17 @@ Return ONLY JSON. If nothing found, return {{}}."""
         if enriched_context.get('knowledge_context'):
             context_hints['kb_suggestions'] = True
     
-    is_complete, missing_fields = validate_create_ticket_data(user_prompt, conversation_ctx.collected_data, context_hints)
-    
-    if not is_complete:
-        conversation_ctx.set_missing_fields(missing_fields)
-        message = generate_info_request_message(missing_fields)
-        
-        return {
-            "success": False,
-            "state": conversation_ctx.state.value,
-            "session_id": conversation_ctx.session_id,
-            "prompt": user_prompt,
-            "intent": "create",
-            "response": message,
-            "missing_fields": [f.to_dict() for f in missing_fields],
-            "collected_data": conversation_ctx.collected_data,
-            "tickets": []
-        }
-    
-    # All info collected - enhance description with knowledge base content if available
-    if enriched_context.get('knowledge_context') and conversation_ctx.collected_data.get('summary'):
-        log_info("📝 Generating detailed description from knowledge base", "direct_processor")
+    # If we have KB content and a summary, auto-generate description from KB
+    if enriched_context.get('knowledge_context') and conversation_ctx.collected_data.get('summary') and not has_description:
+        log_info("📝 Auto-generating detailed description from knowledge base", "direct_processor")
         try:
             kb_content = enriched_context.get('knowledge_context', '')
-            current_desc = conversation_ctx.collected_data.get('description', '')
-            summary = conversation_ctx.collected_data.get('summary', '')
+            summary_text = conversation_ctx.collected_data.get('summary', '')
             issue_type = conversation_ctx.collected_data.get('issue_type', 'Story')
             
             enhance_prompt = f"""You are a Business Analyst creating a JIRA {issue_type}.
 
-**Ticket Summary:** {summary}
-
-**User's Initial Description:** {current_desc if current_desc else 'Not provided'}
+**Ticket Summary:** {summary_text}
 
 **Relevant Knowledge Base Content:**
 {kb_content}
@@ -365,9 +348,33 @@ Return ONLY the enhanced description text, formatted with markdown."""
             
             if enhanced_description and len(enhanced_description) > 50:
                 conversation_ctx.collected_data['description'] = enhanced_description.strip()
-                log_info("✅ Enhanced description with KB content", "direct_processor")
+                log_info("✅ Generated detailed description from KB content", "direct_processor")
         except Exception as e:
-            log_error(f"Failed to enhance description: {e}", "direct_processor")
+            log_error(f"Failed to generate description from KB: {e}", "direct_processor")
+    
+    is_complete, missing_fields = validate_create_ticket_data(user_prompt, conversation_ctx.collected_data, context_hints)
+    
+    if not is_complete:
+        # Filter out description from missing fields if we have KB content (will be auto-generated)
+        if enriched_context.get('knowledge_context'):
+            missing_fields = [f for f in missing_fields if f.field != 'description']
+            is_complete = len(missing_fields) == 0
+        
+        if not is_complete:
+            conversation_ctx.set_missing_fields(missing_fields)
+            message = generate_info_request_message(missing_fields)
+            
+            return {
+                "success": False,
+                "state": conversation_ctx.state.value,
+                "session_id": conversation_ctx.session_id,
+                "prompt": user_prompt,
+                "intent": "create",
+                "response": message,
+                "missing_fields": [f.to_dict() for f in missing_fields],
+                "collected_data": conversation_ctx.collected_data,
+                "tickets": []
+            }
     
     # All info collected, create the ticket
     conversation_ctx.state = ConversationState.PROCESSING
