@@ -6,7 +6,7 @@ import { Client } from "pg";
 import * as mammoth from "mammoth";
 import { storage } from "./storage";
 import { analyzeRepository, generateDocumentation, generateBPMNDiagram, generateBRD, generateTestCases, generateTestData, generateUserStories, generateCopilotPrompt, transcribeAudio } from "./ai";
-import { ingestDocument, searchKnowledgeBase, deleteDocumentChunks, getKnowledgeStats } from "./mongodb";
+import { ingestDocument, searchKnowledgeBase, deleteDocumentChunks, getKnowledgeStats, createKnowledgeDocumentInMongo, getKnowledgeDocumentsFromMongo, updateKnowledgeDocumentInMongo, deleteKnowledgeDocumentFromMongo } from "./mongodb";
 import type { DatabaseTable, DatabaseColumn } from "@shared/schema";
 
 // PDF parsing using pdfjs-dist
@@ -534,12 +534,12 @@ export async function registerRoutes(
         // Get database schema if available
         const databaseSchema = projects.length > 0 ? await storage.getDatabaseSchema(projectId) : null;
         
-        // Search knowledge base for relevant context
+        // Search knowledge base for relevant context (always global)
         let knowledgeContext: string | null = null;
         let knowledgeSources: Array<{ filename: string; chunkPreview: string }> = [];
         try {
           const searchQuery = `${featureRequest.title} ${featureRequest.description}`;
-          const kbResults = await searchKnowledgeBase(projectId, searchQuery, 5);
+          const kbResults = await searchKnowledgeBase("global", searchQuery, 5);
           if (kbResults.length > 0) {
             knowledgeContext = kbResults.map((r, i) => 
               `[Source: ${r.filename}]\n${r.content}`
@@ -748,12 +748,12 @@ export async function registerRoutes(
       // Get database schema if available
       const databaseSchema = projects.length > 0 ? await storage.getDatabaseSchema(projectId) : null;
       
-      // Search knowledge base for relevant context
+      // Search knowledge base for relevant context (always global)
       let knowledgeContext: string | null = null;
       let knowledgeSources: Array<{ filename: string; chunkPreview: string }> = [];
       try {
         const searchQuery = `${brd.title} ${brd.content.overview}`;
-        const kbResults = await searchKnowledgeBase(projectId, searchQuery, 5);
+        const kbResults = await searchKnowledgeBase("global", searchQuery, 5);
         if (kbResults.length > 0) {
           knowledgeContext = kbResults.map((r) => 
             `[Source: ${r.filename}]\n${r.content}`
@@ -1250,9 +1250,8 @@ export async function registerRoutes(
   // Get all knowledge documents for current project
   app.get("/api/knowledge-base", async (req: Request, res: Response) => {
     try {
-      const projects = await storage.getAllProjects();
-      const projectId = projects.length > 0 ? projects[0].id : "global";
-      const documents = await storage.getKnowledgeDocuments(projectId);
+      // Get documents from MongoDB (persisted globally)
+      const documents = await getKnowledgeDocumentsFromMongo();
       res.json(documents);
     } catch (error) {
       console.error("Error fetching knowledge documents:", error);
@@ -1263,9 +1262,8 @@ export async function registerRoutes(
   // Get knowledge base stats
   app.get("/api/knowledge-base/stats", async (req: Request, res: Response) => {
     try {
-      const projects = await storage.getAllProjects();
-      const projectId = projects.length > 0 ? projects[0].id : "global";
-      const stats = await getKnowledgeStats(projectId);
+      // Always use "global" - knowledge base is project-agnostic
+      const stats = await getKnowledgeStats("global");
       res.json(stats);
     } catch (error) {
       console.error("Error fetching knowledge stats:", error);
@@ -1281,9 +1279,8 @@ export async function registerRoutes(
         return res.status(400).json({ error: "No file provided" });
       }
 
-      const projects = await storage.getAllProjects();
-      // Use "global" project ID if no projects exist - knowledge base works globally
-      const projectId = projects.length > 0 ? projects[0].id : "global";
+      // Always use "global" - knowledge base is project-agnostic
+      const projectId = "global";
 
       // Extract content based on file type
       let content = "";
@@ -1314,8 +1311,8 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Could not extract content from file" });
       }
 
-      // Create document record
-      const doc = await storage.createKnowledgeDocument({
+      // Create document record in MongoDB (persisted)
+      const doc = await createKnowledgeDocumentInMongo({
         projectId: projectId,
         filename: `${Date.now()}-${file.originalname}`,
         originalName: file.originalname,
@@ -1326,7 +1323,7 @@ export async function registerRoutes(
       // Ingest document asynchronously
       ingestDocument(doc.id, projectId, file.originalname, content)
         .then(async (chunkCount) => {
-          await storage.updateKnowledgeDocument(doc.id, {
+          await updateKnowledgeDocumentInMongo(doc.id, {
             chunkCount,
             status: "ready",
           });
@@ -1334,7 +1331,7 @@ export async function registerRoutes(
         })
         .catch(async (error) => {
           console.error("Document ingestion error:", error);
-          await storage.updateKnowledgeDocument(doc.id, {
+          await updateKnowledgeDocumentInMongo(doc.id, {
             status: "error",
             errorMessage: String(error),
           });
@@ -1356,12 +1353,8 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Query is required" });
       }
 
-      const projects = await storage.getAllProjects();
-      if (projects.length === 0) {
-        return res.json({ results: [] });
-      }
-
-      const results = await searchKnowledgeBase(projects[0].id, query, limit);
+      // Always use "global" - knowledge base is project-agnostic
+      const results = await searchKnowledgeBase("global", query, limit);
       res.json({ results });
     } catch (error) {
       console.error("Error searching knowledge base:", error);
@@ -1377,8 +1370,8 @@ export async function registerRoutes(
       // Delete chunks from MongoDB
       await deleteDocumentChunks(id);
       
-      // Delete document record
-      const deleted = await storage.deleteKnowledgeDocument(id);
+      // Delete document record from MongoDB
+      const deleted = await deleteKnowledgeDocumentFromMongo(id);
       
       if (!deleted) {
         return res.status(404).json({ error: "Document not found" });

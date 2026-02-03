@@ -157,21 +157,11 @@ export async function searchKnowledgeBase(
   const database = await connectMongoDB();
   const collection = database.collection(CHUNKS_COLLECTION);
 
-  console.log(`[KB Search] Searching for projectId: ${projectId}, query: "${query.substring(0, 100)}..."`);
+  console.log(`[KB Search] Searching globally, query: "${query.substring(0, 100)}..."`);
 
-  // First, check how many chunks exist for this project
-  const totalChunks = await collection.countDocuments({ projectId });
-  console.log(`[KB Search] Total chunks in project ${projectId}: ${totalChunks}`);
-  
-  // If no chunks for this projectId, try "global" as fallback
-  if (totalChunks === 0 && projectId !== "global") {
-    const globalChunks = await collection.countDocuments({ projectId: "global" });
-    console.log(`[KB Search] No chunks for projectId ${projectId}, checking global: ${globalChunks} chunks`);
-    if (globalChunks > 0) {
-      // Recursively search with global projectId
-      return searchKnowledgeBase("global", query, limit);
-    }
-  }
+  // Count total chunks in the knowledge base (all projectIds)
+  const totalChunks = await collection.countDocuments({});
+  console.log(`[KB Search] Total chunks in knowledge base: ${totalChunks}`);
 
   // Use text-based search (embeddings not available via Replit AI Integrations)
   const keywords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
@@ -181,7 +171,7 @@ export async function searchKnowledgeBase(
     // Return recent chunks if no keywords
     console.log(`[KB Search] No keywords, returning recent chunks`);
     const results = await collection
-      .find({ projectId })
+      .find({})
       .limit(limit)
       .toArray();
     
@@ -193,12 +183,11 @@ export async function searchKnowledgeBase(
   }
 
   try {
-    // Build regex pattern for keyword matching
+    // Build regex pattern for keyword matching - search ALL chunks globally
     const regexPatterns = keywords.map(kw => new RegExp(kw, "i"));
     
     const results = await collection
       .find({
-        projectId,
         $or: regexPatterns.map(pattern => ({ content: pattern }))
       })
       .limit(limit * 2)
@@ -249,8 +238,8 @@ export async function getKnowledgeStats(projectId: string): Promise<{ documentCo
   const database = await connectMongoDB();
   const collection = database.collection(CHUNKS_COLLECTION);
   
+  // Count all chunks globally (knowledge base is project-agnostic)
   const pipeline = [
-    { $match: { projectId } },
     {
       $group: {
         _id: "$documentId",
@@ -276,4 +265,80 @@ export async function getKnowledgeStats(projectId: string): Promise<{ documentCo
     documentCount: result[0].documentCount,
     chunkCount: result[0].chunkCount
   };
+}
+
+// Knowledge Document CRUD operations (persisted in MongoDB)
+export async function createKnowledgeDocumentInMongo(
+  doc: Omit<KnowledgeDocument, "id" | "createdAt" | "chunkCount" | "status" | "errorMessage">
+): Promise<KnowledgeDocument> {
+  const database = await connectMongoDB();
+  const collection = database.collection(DOCUMENTS_COLLECTION);
+  
+  const newDoc: KnowledgeDocument = {
+    ...doc,
+    id: `doc_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+    chunkCount: 0,
+    status: "processing",
+    errorMessage: null,
+    createdAt: new Date().toISOString(),
+  };
+  
+  await collection.insertOne(newDoc);
+  return newDoc;
+}
+
+export async function getKnowledgeDocumentsFromMongo(): Promise<KnowledgeDocument[]> {
+  const database = await connectMongoDB();
+  const collection = database.collection(DOCUMENTS_COLLECTION);
+  
+  const docs = await collection.find({}).sort({ createdAt: -1 }).toArray();
+  return docs.map(doc => ({
+    id: doc.id,
+    projectId: doc.projectId,
+    filename: doc.filename,
+    originalName: doc.originalName,
+    contentType: doc.contentType,
+    size: doc.size,
+    chunkCount: doc.chunkCount || 0,
+    status: doc.status || "ready",
+    errorMessage: doc.errorMessage || null,
+    createdAt: doc.createdAt,
+  }));
+}
+
+export async function updateKnowledgeDocumentInMongo(
+  id: string,
+  updates: Partial<KnowledgeDocument>
+): Promise<KnowledgeDocument | undefined> {
+  const database = await connectMongoDB();
+  const collection = database.collection(DOCUMENTS_COLLECTION);
+  
+  const result = await collection.findOneAndUpdate(
+    { id },
+    { $set: updates },
+    { returnDocument: "after" }
+  );
+  
+  if (!result) return undefined;
+  
+  return {
+    id: result.id,
+    projectId: result.projectId,
+    filename: result.filename,
+    originalName: result.originalName,
+    contentType: result.contentType,
+    size: result.size,
+    chunkCount: result.chunkCount || 0,
+    status: result.status || "ready",
+    errorMessage: result.errorMessage || null,
+    createdAt: result.createdAt,
+  };
+}
+
+export async function deleteKnowledgeDocumentFromMongo(id: string): Promise<boolean> {
+  const database = await connectMongoDB();
+  const collection = database.collection(DOCUMENTS_COLLECTION);
+  
+  const result = await collection.deleteOne({ id });
+  return result.deletedCount > 0;
 }
