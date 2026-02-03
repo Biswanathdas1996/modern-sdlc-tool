@@ -332,44 +332,53 @@
     @apply bg-muted font-medium;
   }
 
-  /* Chat message prose styling */
+  /* Modern chat message prose styling */
   .prose-chat {
-    @apply leading-relaxed;
+    @apply leading-relaxed text-foreground;
   }
 
   .prose-chat h1 {
-    @apply text-base font-bold mb-2 mt-3;
+    @apply text-base font-bold mb-3 mt-4 pb-2 border-b border-border/50;
   }
 
   .prose-chat h2 {
-    @apply text-sm font-semibold mb-2 mt-2;
+    @apply text-sm font-semibold mb-2 mt-4 text-foreground;
   }
 
   .prose-chat h3 {
-    @apply text-sm font-medium mb-1 mt-2;
+    @apply text-sm font-medium mb-2 mt-3 text-foreground/90;
   }
 
   .prose-chat strong {
-    @apply font-semibold;
+    @apply font-semibold text-foreground;
   }
 
   .prose-chat em {
-    @apply italic;
+    @apply italic text-muted-foreground;
   }
 
   .prose-chat ul {
-    @apply pl-4 my-2;
+    @apply pl-0 my-3 space-y-2;
   }
 
   .prose-chat li {
-    @apply mb-1 list-disc;
+    @apply flex items-start gap-2 text-foreground/90;
+  }
+
+  .prose-chat li::before {
+    content: "";
+    @apply w-1.5 h-1.5 rounded-full bg-primary/60 mt-2 shrink-0;
   }
 
   .prose-chat code {
-    @apply font-mono text-xs bg-muted/50 px-1 py-0.5 rounded;
+    @apply font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded;
+  }
+
+  .prose-chat br {
+    @apply block h-1;
   }
 
   .prose-chat br + br {
-    @apply block h-2;
+    @apply block h-3;
   }
 }

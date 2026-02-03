@@ -219,10 +219,10 @@ export default function AgentChatPage() {
                       >
                         <div
                           className={cn(
-                            "rounded-lg px-4 py-3",
+                            "rounded-xl",
                             message.role === "user"
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-card border shadow-sm"
+                              ? "bg-primary text-primary-foreground px-4 py-2.5"
+                              : "bg-gradient-to-br from-card to-muted/30 border border-border/50 px-5 py-4 shadow-sm"
                           )}
                         >
                           {message.role === "user" ? (
