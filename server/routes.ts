@@ -951,12 +951,23 @@ export async function registerRoutes(
           // Determine if this is a subtask or a regular story
           const isSubtask = !!story.parentJiraKey;
           
+          // Map requestType to JIRA issue type
+          const getJiraIssueType = (requestType: string | undefined, isSubtask: boolean): string => {
+            if (isSubtask) return "Subtask";
+            switch (requestType) {
+              case "bug": return "Bug";
+              case "change_request": return "Task";
+              case "feature":
+              default: return "Story";
+            }
+          };
+          
           const issueData: any = {
             fields: {
               project: { key: jiraProjectKey },
               summary: story.title,
               description: description,
-              issuetype: { name: isSubtask ? "Subtask" : "Story" },
+              issuetype: { name: getJiraIssueType(brd.requestType, isSubtask) },
               labels: story.labels || []
             }
           };

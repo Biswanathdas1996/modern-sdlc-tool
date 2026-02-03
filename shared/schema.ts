@@ -127,6 +127,7 @@ export const brdSchema = z.object({
   id: z.string(),
   projectId: z.string(),
   featureRequestId: z.string(),
+  requestType: requestTypeEnum.default("feature"),
   title: z.string(),
   version: z.string(),
   status: z.enum(["draft", "review", "approved"]),

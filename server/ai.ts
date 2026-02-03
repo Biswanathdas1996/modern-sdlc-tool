@@ -694,6 +694,7 @@ ${knowledgeBaseContext}`
   return {
     projectId: featureRequest.projectId,
     featureRequestId: featureRequest.id,
+    requestType: featureRequest.requestType || "feature",
     title: brdData.title || featureRequest.title,
     version: brdData.version || "1.0",
     status: "draft",
