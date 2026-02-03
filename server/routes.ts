@@ -1274,6 +1274,314 @@ export async function registerRoutes(
     }
   });
 
+  // Confluence Routes
+
+  // Publish BRD to Confluence
+  app.post("/api/confluence/publish", async (req: Request, res: Response) => {
+    try {
+      const { brdId } = req.body;
+
+      const jiraEmail = process.env.JIRA_EMAIL;
+      const jiraToken = process.env.JIRA_API_TOKEN;
+      const confluenceInstanceUrl = process.env.JIRA_INSTANCE_URL || "daspapun21.atlassian.net";
+      const confluenceSpaceKey = process.env.CONFLUENCE_SPACE_KEY || "~5caf6d452c573b4b24d0f933";
+
+      if (!jiraEmail || !jiraToken) {
+        return res.status(400).json({ 
+          error: "Confluence credentials not configured. Please add JIRA_EMAIL and JIRA_API_TOKEN secrets." 
+        });
+      }
+
+      const brd = brdId ? await storage.getBRD(brdId) : await storage.getCurrentBRD();
+      if (!brd) {
+        return res.status(400).json({ error: "No BRD found. Please generate a BRD first." });
+      }
+
+      const auth = Buffer.from(`${jiraEmail}:${jiraToken}`).toString('base64');
+      const confluenceBaseUrl = `https://${confluenceInstanceUrl}/wiki/api/v2`;
+
+      // Helper to create bullet list node (omit if empty)
+      const createBulletList = (items: string[]) => {
+        if (!items || items.length === 0) {
+          return { type: "paragraph", content: [{ type: "text", text: "None specified" }] };
+        }
+        return {
+          type: "bulletList",
+          content: items.map((item: string) => ({
+            type: "listItem",
+            content: [{
+              type: "paragraph",
+              content: [{ type: "text", text: item || "N/A" }]
+            }]
+          }))
+        };
+      };
+
+      // Convert BRD content to Confluence storage format (ADF)
+      const buildConfluenceContent = (brd: any) => {
+        const content = brd.content;
+        
+        // Build Atlassian Document Format (ADF) content
+        const adfContent: any = {
+          type: "doc",
+          version: 1,
+          content: [
+            // Title
+            {
+              type: "heading",
+              attrs: { level: 1 },
+              content: [{ type: "text", text: brd.title }]
+            },
+            // Overview
+            {
+              type: "heading",
+              attrs: { level: 2 },
+              content: [{ type: "text", text: "Overview" }]
+            },
+            {
+              type: "paragraph",
+              content: [{ type: "text", text: content.overview || "No overview provided" }]
+            },
+            // Objectives
+            {
+              type: "heading",
+              attrs: { level: 2 },
+              content: [{ type: "text", text: "Objectives" }]
+            },
+            createBulletList(content.objectives),
+            // Scope - In Scope
+            {
+              type: "heading",
+              attrs: { level: 2 },
+              content: [{ type: "text", text: "Scope" }]
+            },
+            {
+              type: "heading",
+              attrs: { level: 3 },
+              content: [{ type: "text", text: "In Scope" }]
+            },
+            createBulletList(content.scope?.inScope),
+            // Out of Scope
+            {
+              type: "heading",
+              attrs: { level: 3 },
+              content: [{ type: "text", text: "Out of Scope" }]
+            },
+            createBulletList(content.scope?.outOfScope),
+            // Functional Requirements
+            {
+              type: "heading",
+              attrs: { level: 2 },
+              content: [{ type: "text", text: "Functional Requirements" }]
+            },
+            ...(content.functionalRequirements || []).flatMap((req: any) => [
+              {
+                type: "heading",
+                attrs: { level: 3 },
+                content: [{ type: "text", text: `${req.id}: ${req.title}` }]
+              },
+              {
+                type: "paragraph",
+                content: [{ type: "text", text: req.description || "" }]
+              },
+              {
+                type: "paragraph",
+                content: [
+                  { type: "text", text: "Priority: ", marks: [{ type: "strong" }] },
+                  { type: "text", text: req.priority || "Medium" }
+                ]
+              },
+              ...(req.acceptanceCriteria && req.acceptanceCriteria.length > 0 ? [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: "Acceptance Criteria:", marks: [{ type: "strong" }] }]
+                },
+                {
+                  type: "bulletList",
+                  content: req.acceptanceCriteria.map((ac: string) => ({
+                    type: "listItem",
+                    content: [{
+                      type: "paragraph",
+                      content: [{ type: "text", text: ac }]
+                    }]
+                  }))
+                }
+              ] : [])
+            ]),
+            // Non-Functional Requirements
+            {
+              type: "heading",
+              attrs: { level: 2 },
+              content: [{ type: "text", text: "Non-Functional Requirements" }]
+            },
+            {
+              type: "bulletList",
+              content: (content.nonFunctionalRequirements || []).map((nfr: any) => ({
+                type: "listItem",
+                content: [{
+                  type: "paragraph",
+                  content: [
+                    { type: "text", text: `${nfr.category}: `, marks: [{ type: "strong" }] },
+                    { type: "text", text: nfr.description }
+                  ]
+                }]
+              }))
+            },
+            // Technical Considerations
+            {
+              type: "heading",
+              attrs: { level: 2 },
+              content: [{ type: "text", text: "Technical Considerations" }]
+            },
+            {
+              type: "bulletList",
+              content: (content.technicalConsiderations || []).map((tc: string) => ({
+                type: "listItem",
+                content: [{
+                  type: "paragraph",
+                  content: [{ type: "text", text: tc }]
+                }]
+              }))
+            },
+            // Dependencies
+            {
+              type: "heading",
+              attrs: { level: 2 },
+              content: [{ type: "text", text: "Dependencies" }]
+            },
+            {
+              type: "bulletList",
+              content: (content.dependencies || []).map((dep: string) => ({
+                type: "listItem",
+                content: [{
+                  type: "paragraph",
+                  content: [{ type: "text", text: dep }]
+                }]
+              }))
+            },
+            // Risks
+            {
+              type: "heading",
+              attrs: { level: 2 },
+              content: [{ type: "text", text: "Risks" }]
+            },
+            ...(content.risks || []).map((risk: any) => ({
+              type: "paragraph",
+              content: [
+                { type: "text", text: "Risk: ", marks: [{ type: "strong" }] },
+                { type: "text", text: risk.description || "" },
+                { type: "hardBreak" },
+                { type: "text", text: "Mitigation: ", marks: [{ type: "strong" }] },
+                { type: "text", text: risk.mitigation || "" }
+              ]
+            })),
+            // Metadata footer
+            {
+              type: "rule"
+            },
+            {
+              type: "paragraph",
+              content: [
+                { type: "text", text: `Generated by DocuGen AI | Version: ${brd.version} | Status: ${brd.status}`, marks: [{ type: "em" }] }
+              ]
+            }
+          ]
+        };
+
+        return adfContent;
+      };
+
+      const adfContent = buildConfluenceContent(brd);
+
+      // Create a new page in Confluence using v2 API
+      const pageData = {
+        spaceId: confluenceSpaceKey.startsWith("~") ? undefined : confluenceSpaceKey,
+        title: `BRD: ${brd.title} - ${new Date().toLocaleDateString()}`,
+        body: {
+          representation: "atlas_doc_format",
+          value: JSON.stringify(adfContent)
+        },
+        status: "current"
+      };
+
+      // First, get space ID if using space key
+      let spaceId: string;
+      try {
+        const spaceResponse = await fetch(
+          `https://${confluenceInstanceUrl}/wiki/api/v2/spaces?keys=${confluenceSpaceKey}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Basic ${auth}`,
+              'Accept': 'application/json'
+            }
+          }
+        );
+        
+        if (spaceResponse.ok) {
+          const spaceData = await spaceResponse.json();
+          if (spaceData.results && spaceData.results.length > 0) {
+            spaceId = spaceData.results[0].id;
+          } else {
+            // Try to use the space key directly as ID for personal spaces
+            spaceId = confluenceSpaceKey;
+          }
+        } else {
+          spaceId = confluenceSpaceKey;
+        }
+      } catch (error) {
+        console.log("Could not fetch space ID, using key directly");
+        spaceId = confluenceSpaceKey;
+      }
+
+      // Create page request body
+      const createPageBody = {
+        spaceId: spaceId,
+        status: "current",
+        title: `BRD: ${brd.title} - ${new Date().toLocaleDateString()}`,
+        body: {
+          representation: "atlas_doc_format",
+          value: JSON.stringify(adfContent)
+        }
+      };
+
+      console.log("Creating Confluence page...", createPageBody.title);
+      
+      const response = await fetch(`${confluenceBaseUrl}/pages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(createPageBody)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const pageUrl = `https://${confluenceInstanceUrl}/wiki${data._links?.webui || `/spaces/${confluenceSpaceKey}/pages/${data.id}`}`;
+        console.log("Confluence page created:", pageUrl);
+        
+        res.json({ 
+          success: true, 
+          pageId: data.id,
+          pageUrl: pageUrl,
+          message: `BRD published to Confluence successfully`
+        });
+      } else {
+        const errorData = await response.text();
+        console.error(`Confluence API error (${response.status}):`, errorData);
+        res.status(response.status).json({ 
+          error: `Failed to publish to Confluence: ${response.status}`,
+          details: errorData
+        });
+      }
+    } catch (error) {
+      console.error("Error publishing to Confluence:", error);
+      res.status(500).json({ error: "Failed to publish to Confluence" });
+    }
+  });
+
   // Knowledge Base Routes
   
   // Get all knowledge documents for current project

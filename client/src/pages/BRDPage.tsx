@@ -243,6 +243,7 @@ export default function BRDPage() {
     id: "1",
     projectId: "1",
     featureRequestId: "1",
+    requestType: "feature",
     title: "User Dashboard with Analytics",
     version: "1.0",
     status: "draft",

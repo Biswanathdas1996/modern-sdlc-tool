@@ -123,6 +123,7 @@ The project includes pre-built integrations in `server/replit_integrations/` and
 - `POST /api/database-schema/connect` - Connect to external PostgreSQL and fetch schema
 - `GET /api/database-schema/current` - Get current database schema for project
 - `DELETE /api/database-schema/current` - Remove database schema from project
+- `POST /api/confluence/publish` - Publish BRD to Confluence page
 
 ### External Database Schema Integration
 - **Connect to External PostgreSQL**: Users can paste a PostgreSQL connection string to fetch table schema
@@ -131,11 +132,25 @@ The project includes pre-built integrations in `server/replit_integrations/` and
 - **AI Context Integration**: Database schema is included in AI prompts for BRD, User Stories, and Copilot Prompts
 - **Visual Display**: Schema is displayed in collapsible table view on Documentation page
 
+### Request Type Tabs
+- **New Feature Tab**: Creates JIRA Stories for new functionality requests
+- **Bug Report Tab**: Creates JIRA Bugs with reproduction-focused tips and placeholders
+- **Change Request Tab**: Creates JIRA Tasks for modifications to existing functionality
+- **Context-Specific UI**: Each tab has tailored placeholders, tips, and JIRA issue type badges
+
 ### JIRA Integration Features
 - **Smart Story Detection**: Before generating user stories, the app fetches existing JIRA stories and uses AI semantic search to find related ones
 - **Subtask Creation**: Users can choose to create new user stories as subtasks of existing JIRA stories
 - **Parent Context**: When creating subtasks, the parent story's content is used as context for more relevant generation
 - **Edit Before Sync**: All user stories are editable (title, description, acceptance criteria, etc.) before syncing to JIRA
+- **Dynamic Issue Types**: Creates Story/Bug/Task based on request type from Requirements page
+
+### Confluence Integration
+- **Publish to Confluence**: Button on BRD page to publish generated BRDs to Confluence
+- **Same Credentials**: Uses JIRA_EMAIL and JIRA_API_TOKEN (same Atlassian account)
+- **ADF Format**: Converts BRD content to Atlassian Document Format for proper rendering
+- **Full Content Export**: Includes overview, objectives, scope, requirements, risks, and metadata
+- **Environment Variables**: CONFLUENCE_SPACE_KEY for target space (defaults to personal space)
 
 ### BPMN Business Flow Diagram
 - **Automatic Generation**: After documentation is generated, a comprehensive BPMN diagram is automatically created
