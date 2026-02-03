@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { FileText, Upload, Mic, MicOff, FileUp, X, ArrowRight, Check, AlertCircle, Loader2 } from "lucide-react";
+import { FileText, Upload, Mic, MicOff, FileUp, X, ArrowRight, Check, AlertCircle, Loader2, Lightbulb, Bug, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,7 +24,31 @@ const workflowSteps = [
   { id: "test-data", label: "Data", completed: false, active: false },
 ];
 
+type RequestType = "feature" | "bug" | "change_request";
+
+const requestTypeLabels: Record<RequestType, { title: string; description: string; placeholder: string; jiraType: string }> = {
+  feature: {
+    title: "New Feature",
+    description: "Describe a new feature or enhancement you want to add to the system.",
+    placeholder: "Describe the new feature in detail. Include user stories, acceptance criteria, and expected behavior...",
+    jiraType: "Story"
+  },
+  bug: {
+    title: "Bug Report", 
+    description: "Report an issue or defect that needs to be fixed.",
+    placeholder: "Describe the bug in detail. Include steps to reproduce, expected vs actual behavior, and any error messages...",
+    jiraType: "Bug"
+  },
+  change_request: {
+    title: "Change Request",
+    description: "Request a modification to existing functionality.",
+    placeholder: "Describe the change you need. Include the current behavior, desired behavior, and reason for the change...",
+    jiraType: "Task"
+  }
+};
+
 export default function RequirementsPage() {
+  const [requestType, setRequestType] = useState<RequestType>("feature");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [inputType, setInputType] = useState<"text" | "file" | "audio">("text");
@@ -161,6 +185,7 @@ export default function RequirementsPage() {
     formData.append("title", title);
     formData.append("description", description);
     formData.append("inputType", inputType);
+    formData.append("requestType", requestType);
 
     if (uploadedFile) {
       formData.append("file", uploadedFile);
@@ -186,19 +211,44 @@ export default function RequirementsPage() {
       <WorkflowHeader
         steps={workflowSteps}
         title="Requirements Input"
-        description="Describe your feature request, bug report, or change request. You can type, upload a document, or use voice input."
+        description="Select the type of request and provide details. Creates the appropriate issue in JIRA."
       />
 
       <div className="flex-1 overflow-auto p-6">
         <div className="max-w-3xl mx-auto space-y-6">
+          {/* Request Type Tabs */}
+          <Tabs value={requestType} onValueChange={(v) => setRequestType(v as RequestType)}>
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="feature" className="flex items-center gap-2" data-testid="tab-feature">
+                <Lightbulb className="h-4 w-4" />
+                New Feature
+              </TabsTrigger>
+              <TabsTrigger value="bug" className="flex items-center gap-2" data-testid="tab-bug">
+                <Bug className="h-4 w-4" />
+                Bug Report
+              </TabsTrigger>
+              <TabsTrigger value="change_request" className="flex items-center gap-2" data-testid="tab-change-request">
+                <RefreshCw className="h-4 w-4" />
+                Change Request
+              </TabsTrigger>
+            </TabsList>
+
+            <div className="mt-4 p-4 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-2 text-sm">
+                <Badge variant="secondary">{requestTypeLabels[requestType].jiraType}</Badge>
+                <span className="text-muted-foreground">{requestTypeLabels[requestType].description}</span>
+              </div>
+            </div>
+          </Tabs>
+
           <Card>
             <CardHeader>
-              <CardTitle>Request Title</CardTitle>
-              <CardDescription>Give your request a clear, descriptive title (feature, bug fix, or change)</CardDescription>
+              <CardTitle>{requestTypeLabels[requestType].title} Title</CardTitle>
+              <CardDescription>Give your {requestType === "bug" ? "bug report" : requestType === "change_request" ? "change request" : "feature"} a clear, descriptive title</CardDescription>
             </CardHeader>
             <CardContent>
               <Input
-                placeholder="e.g., User Dashboard Feature, Login Bug Fix, UI Change Request"
+                placeholder={requestType === "bug" ? "e.g., Login fails with incorrect error message" : requestType === "change_request" ? "e.g., Update password validation rules" : "e.g., User Dashboard with Analytics"}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 data-testid="input-feature-title"
@@ -209,7 +259,7 @@ export default function RequirementsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Request Details</CardTitle>
-              <CardDescription>Choose how you want to provide your requirements</CardDescription>
+              <CardDescription>Choose how you want to provide your {requestType === "bug" ? "bug details" : "requirements"}</CardDescription>
             </CardHeader>
             <CardContent>
               <Tabs value={inputType} onValueChange={(v) => setInputType(v as typeof inputType)}>
@@ -233,7 +283,7 @@ export default function RequirementsPage() {
                     <Label htmlFor="description">Description</Label>
                     <Textarea
                       id="description"
-                      placeholder="Describe your request in detail. This can be a new feature, bug report, or change request. Include user stories, acceptance criteria, reproduction steps (for bugs), or specific requirements..."
+                      placeholder={requestTypeLabels[requestType].placeholder}
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       className="min-h-[200px] mt-2"
@@ -243,10 +293,28 @@ export default function RequirementsPage() {
                   <div className="text-sm text-muted-foreground">
                     <p className="font-medium mb-2">Tips for better results:</p>
                     <ul className="list-disc pl-5 space-y-1">
-                      <li>Be specific about user interactions and flows</li>
-                      <li>Include acceptance criteria when possible</li>
-                      <li>Mention any technical constraints or preferences</li>
-                      <li>Describe expected inputs and outputs</li>
+                      {requestType === "bug" ? (
+                        <>
+                          <li>Include steps to reproduce the bug</li>
+                          <li>Describe expected vs actual behavior</li>
+                          <li>Include any error messages or logs</li>
+                          <li>Mention browser/device if relevant</li>
+                        </>
+                      ) : requestType === "change_request" ? (
+                        <>
+                          <li>Describe the current behavior clearly</li>
+                          <li>Explain what needs to change and why</li>
+                          <li>Include any business justification</li>
+                          <li>Note any dependencies or impacts</li>
+                        </>
+                      ) : (
+                        <>
+                          <li>Be specific about user interactions and flows</li>
+                          <li>Include acceptance criteria when possible</li>
+                          <li>Mention any technical constraints or preferences</li>
+                          <li>Describe expected inputs and outputs</li>
+                        </>
+                      )}
                     </ul>
                   </div>
                 </TabsContent>
@@ -358,7 +426,7 @@ export default function RequirementsPage() {
                           )}
                         </p>
                         <p className="text-sm text-muted-foreground text-center max-w-md">
-                          Speak clearly about your requirements. This can be a feature request, bug report, or change request. The AI will transcribe and analyze your input.
+                          Speak clearly about your {requestType === "bug" ? "bug report" : requestType === "change_request" ? "change request" : "feature requirements"}. The AI will transcribe and analyze your input.
                         </p>
                       </div>
                     )}
