@@ -276,7 +276,8 @@ async def connect_database_schema(request: Request):
             cursor = conn.cursor()
             
             cursor.execute("SELECT current_database()")
-            database_name = cursor.fetchone()[0]
+            result = cursor.fetchone()
+            database_name = result[0] if result else "unknown"
             
             query = """
                 SELECT 
@@ -332,7 +333,8 @@ async def connect_database_schema(request: Request):
             tables = []
             for table_name, columns in tables_map.items():
                 cursor.execute(f'SELECT COUNT(*) FROM "{table_name}"')
-                row_count = cursor.fetchone()[0]
+                count_result = cursor.fetchone()
+                row_count = count_result[0] if count_result else 0
                 tables.append({
                     "name": table_name,
                     "columns": columns,

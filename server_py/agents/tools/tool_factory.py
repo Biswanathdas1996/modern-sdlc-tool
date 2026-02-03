@@ -1,6 +1,6 @@
 """Factory for creating LangChain tools for JIRA operations."""
 from typing import List
-from langchain.tools import Tool
+from langchain_core.tools import Tool
 
 from .ticket_tools import (
     TicketToolsContext,
