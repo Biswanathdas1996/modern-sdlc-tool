@@ -30,6 +30,7 @@ from jira_service import (
     sync_subtask_to_jira, get_jira_parent_story_context
 )
 from agents.jira_agent import jira_agent
+from agents.conversation_manager import conversation_manager
 from mongodb_client import (
     ingest_document, search_knowledge_base, delete_document_chunks,
     get_knowledge_stats, create_knowledge_document_in_mongo,
@@ -789,6 +790,124 @@ async def find_related_jira_stories_endpoint(request: Request):
         raise HTTPException(status_code=500, detail="Failed to find related stories")
 
 
+@app.post("/api/v1/jira-agent/chat")
+async def chat_with_jira_agent(request: Request):
+    """Interactive chat endpoint with smart information gathering."""
+    try:
+        import uuid
+        body = await request.json()
+        prompt = body.get("prompt")
+        session_id = body.get("session_id") or str(uuid.uuid4())
+        context_data = body.get("context_data", {})
+        
+        if not prompt:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "error": "Prompt is required",
+                    "response": "Please provide a query prompt"
+                }
+            )
+        
+        # Get or create conversation context with memory
+        conversation_ctx = conversation_manager.get_or_create_context(session_id)
+        conversation_ctx.add_message("user", prompt)
+        
+        # Log conversation context
+        print(f"📝 Session {session_id}: {len(conversation_ctx.messages)} messages in history")
+        
+        # Process with conversation context and memory
+        result = await jira_agent.process_query_interactive(
+            prompt,
+            conversation_ctx=conversation_ctx,
+            context_data=context_data
+        )
+        
+        # Add agent response to conversation memory
+        conversation_ctx.add_message("assistant", result.get("response", ""))
+        
+        return JSONResponse(
+            content={
+                "success": result.get("success", False),
+                "session_id": session_id,
+                "state": result.get("state", "initial"),
+                "response": result.get("response", ""),
+                "missing_fields": result.get("missing_fields", []),
+                "tickets": result.get("tickets"),
+                "intent": result.get("intent"),
+                "error": result.get("error"),
+                "collected_data": result.get("collected_data"),
+                # Include conversation metadata
+                "conversation_info": {
+                    "message_count": len(conversation_ctx.messages),
+                    "summary": conversation_ctx.get_summary(),
+                    "state": conversation_ctx.state.value
+                }
+            }
+        )
+    except Exception as e:
+        print(f"Error in JIRA agent chat: {e}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": str(e),
+                "response": f"Failed to process chat request: {str(e)}"
+            }
+        )
+
+
+@app.delete("/api/v1/jira-agent/session/{session_id}")
+async def end_jira_agent_session(session_id: str):
+    """End a conversation session and clear its context."""
+    try:
+        conversation_manager.delete_context(session_id)
+        return {
+            "message": "Session ended successfully",
+            "session_id": session_id
+        }
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to end session: {str(e)}"}
+        )
+
+
+@app.get("/api/v1/jira-agent/session/{session_id}")
+async def get_jira_agent_session(session_id: str):
+    """Get conversation history and context for a session."""
+    try:
+        context = conversation_manager.get_context(session_id)
+        
+        if not context:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "error": "Session not found",
+                    "session_id": session_id
+                }
+            )
+        
+        return {
+            "session_id": session_id,
+            "state": context.state.value,
+            "summary": context.get_summary(),
+            "message_count": len(context.messages),
+            "messages": context.messages,
+            "collected_data": context.collected_data,
+            "created_at": context.created_at.isoformat(),
+            "updated_at": context.updated_at.isoformat()
+        }
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Failed to get session: {str(e)}"}
+        )
+
+
 @app.post("/api/v1/jira-agent/process")
 async def process_jira_query_with_agent(request: Request):
     """Process natural language JIRA query using the AI agent."""
@@ -833,10 +952,17 @@ async def process_jira_query_with_agent(request: Request):
 @app.get("/api/v1/jira-agent/health")
 async def jira_agent_health():
     """Health check for JIRA agent."""
+    active_conversations = conversation_manager.get_active_count()
     return {
         "status": "healthy", 
         "service": "jira-agent",
-        "capabilities": ["intelligent_query_processing", "search", "create", "update", "chained_operations"]
+        "capabilities": ["intelligent_query_processing", "search", "create", "update", "chained_operations", "interactive_chat"],
+        "features": {
+            "interactive_mode": True,
+            "smart_info_gathering": True,
+            "multi_turn_conversations": True,
+            "active_conversations": active_conversations
+        }
     }
 
 

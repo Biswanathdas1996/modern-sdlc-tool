@@ -61,16 +61,40 @@ def analyze_intent(user_prompt: str) -> Dict[str, Any]:
     """
     prompt_lower = user_prompt.lower()
     
-    # Detect action patterns
-    create_patterns = ['create', 'add', 'new ticket', 'make a', 'open a ticket', 'raise a']
+    # Detect action patterns (with common typo variations)
+    create_patterns = [
+        'create', 'crete', 'creat',  # typos
+        'add', 'ad',
+        'new ticket', 'new task', 'new bug', 'new story', 'new issue',
+        'make a', 'make an',
+        'open a ticket', 'open ticket', 'raise a', 'raise ticket',
+        'file a', 'submit a', 'log a'
+    ]
     update_patterns = ['update', 'change', 'modify', 'set status', 'mark as', 'move to', 'transition']
-    search_patterns = ['find', 'search', 'show', 'list', 'get', 'what are', 'which tickets']
+    search_patterns = ['find', 'search', 'show', 'list', 'get', 'what are', 'which tickets', 'show me', 'give me']
     chained_patterns = ['and update', 'and change', 'then update', 'then mark', 'and mark']
+    
+    # Problem description patterns - these suggest the user is reporting an issue
+    problem_patterns = [
+        "can't see", "cannot see", "can't find", "cannot find",
+        "not working", "doesn't work", "does not work", "isn't working",
+        "not loading", "won't load", "will not load",
+        "broken", "error", "issue with", "problem with",
+        "missing", "disappeared", "gone"
+    ]
     
     is_search = any(p in prompt_lower for p in search_patterns)
     is_create = any(p in prompt_lower for p in create_patterns)
     is_update = any(p in prompt_lower for p in update_patterns)
     is_chained = any(p in prompt_lower for p in chained_patterns)
+    is_problem_description = any(p in prompt_lower for p in problem_patterns)
+    
+    # Additional check: if prompt contains words like "new" + "ticket/bug/task/story"
+    # even if misspelled, treat as create
+    has_new = 'new' in prompt_lower
+    has_ticket_word = any(word in prompt_lower for word in ['ticket', 'tickt', 'tkt', 'bug', 'task', 'story', 'issue'])
+    if has_new and has_ticket_word and not is_search:
+        is_create = True
     
     # Detect ticket key in prompt
     ticket_key_match = re.search(r'\b([A-Z]{2,10}-\d+)\b', user_prompt)
@@ -86,5 +110,9 @@ def analyze_intent(user_prompt: str) -> Dict[str, Any]:
         return {"action": ActionType.GET_DETAILS, "ticket_key": specific_ticket}
     elif is_search:
         return {"action": ActionType.SEARCH, "ticket_key": specific_ticket}
+    elif is_problem_description and not is_search:
+        # If user is describing a problem without explicit "create" command,
+        # treat it as CREATE so they can be guided through ticket creation
+        return {"action": ActionType.CREATE, "ticket_key": specific_ticket}
     else:
         return {"action": ActionType.UNKNOWN, "ticket_key": specific_ticket}

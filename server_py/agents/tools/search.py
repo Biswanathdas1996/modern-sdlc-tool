@@ -97,6 +97,7 @@ async def search_jira_tickets(jira_service, query: str) -> List[Dict[str, Any]]:
         
         log_debug(f"Scoring tickets against query: '{query_lower}'", "jira_agent")
         
+        relevant_tickets = []
         for story in stories_to_search:
             score = 0
             summary = story.get("summary", "").lower()

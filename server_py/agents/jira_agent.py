@@ -1,9 +1,9 @@
 """
-Robust LangChain-based JIRA Agent with intelligent query analysis.
-Supports: Search, Create, Update tickets, and chained operations (search -> update).
+Robust LangChain-based JIRA Agent with intelligent query analysis and interactive info gathering.
+Supports: Search, Create, Update tickets, chained operations, and multi-turn conversations.
 """
 import asyncio
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain_core.prompts import PromptTemplate
@@ -16,6 +16,7 @@ from .tools import TicketToolsContext, create_jira_tools
 from .utils import handle_parsing_error, analyze_intent
 from .direct_processor import direct_process
 from .prompts import prompt_loader
+from .conversation_manager import ConversationContext
 
 
 class JiraAgent:
@@ -60,8 +61,14 @@ class JiraAgent:
         )
     
     async def process_query(self, user_prompt: str) -> Dict[str, Any]:
+        """
+        Legacy single-turn processing method.
+        Maintained for backward compatibility with existing integrations.
+        
+        For new integrations, use process_query_interactive() instead.
+        """
         try:
-            log_info(f"🚀 Processing query: {user_prompt}", "jira_agent")
+            log_info(f"🚀 Processing query (legacy): {user_prompt}", "jira_agent")
             print(f"🤖 JIRA AGENT - Processing Query")
             print(f"Query: {user_prompt}\n")
             
@@ -99,7 +106,7 @@ class JiraAgent:
                 log_error(f"Agent error, falling back to direct processing: {agent_error}", "jira_agent")
                 print(f"⚠️ Agent encountered issue, using direct processing...")
                 
-                # Fallback to direct processing based on intent
+                # Fallback to direct processing without conversation context
                 return await direct_process(user_prompt, intent, self.jira_service, self.ai_service, self.context)
             
         except Exception as e:
@@ -107,6 +114,84 @@ class JiraAgent:
             print(f"\n❌ ERROR: {str(e)}\n")
             return {
                 "success": False,
+                "prompt": user_prompt,
+                "error": str(e),
+                "response": f"I encountered an error: {str(e)}. Please try rephrasing your request.",
+                "tickets": []
+            }
+    
+    async def process_query_interactive(
+        self,
+        user_prompt: str,
+        conversation_ctx: Optional[ConversationContext] = None,
+        context_data: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Interactive multi-turn processing with smart information gathering and memory.
+        
+        This method maintains conversation context and remembers previous interactions
+        within the same session_id.
+        
+        Args:
+            user_prompt: User's natural language query
+            conversation_ctx: Conversation context for multi-turn interactions with memory
+            context_data: Additional context data from previous turns
+            
+        Returns:
+            Response dictionary with state, missing_fields, collected_data, and conversation history
+        """
+        try:
+            log_info(f"🚀 Processing interactive query: {user_prompt}", "jira_agent")
+            print(f"🤖 JIRA AGENT - Interactive Processing")
+            print(f"Query: {user_prompt}")
+            if conversation_ctx:
+                print(f"Session: {conversation_ctx.session_id}")
+                print(f"State: {conversation_ctx.state.value}")
+                print(f"Context: {conversation_ctx.get_summary()}\n")
+            
+            # Analyze intent
+            intent = analyze_intent(user_prompt)
+            log_info(f"Detected intent: {intent['action'].value}", "jira_agent")
+            print(f"🎯 Detected Intent: {intent['action'].value}")
+            if intent.get('ticket_key'):
+                print(f"🎫 Ticket Key Found: {intent['ticket_key']}")
+            
+            # Use direct processor with conversation context for interactive mode
+            # This allows for information gathering and multi-turn conversations
+            result = await direct_process(
+                user_prompt,
+                intent,
+                self.jira_service,
+                self.ai_service,
+                self.context,
+                conversation_ctx=conversation_ctx
+            )
+            
+            # Add conversation summary to result
+            if conversation_ctx:
+                result["conversation_summary"] = conversation_ctx.get_summary()
+                result["message_count"] = len(conversation_ctx.messages)
+            
+            if result.get("success"):
+                print(f"\n{'='*80}")
+                print(f"✅ JIRA AGENT COMPLETED")
+                print(f"{'='*80}\n")
+            else:
+                state = result.get("state", "unknown")
+                if state == "awaiting_info":
+                    print(f"\n{'='*80}")
+                    print(f"ℹ️ AWAITING USER INPUT")
+                    print(f"{'='*80}\n")
+            
+            return result
+            
+        except Exception as e:
+            log_error(f"Error in interactive processing", "jira_agent", e)
+            print(f"\n❌ ERROR: {str(e)}\n")
+            return {
+                "success": False,
+                "state": "initial",
+                "session_id": conversation_ctx.session_id if conversation_ctx else "unknown",
                 "prompt": user_prompt,
                 "error": str(e),
                 "response": f"I encountered an error: {str(e)}. Please try rephrasing your request.",

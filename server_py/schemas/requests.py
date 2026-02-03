@@ -74,3 +74,35 @@ class SyncSubtaskRequest(BaseModel):
 class PublishConfluenceRequest(BaseModel):
     """Request to publish BRD to Confluence."""
     brdId: Optional[str] = None
+
+
+# Jira Agent Interactive Schemas
+class MissingInfoField(BaseModel):
+    """Field that needs to be collected from user."""
+    field: str = Field(..., description="Name of the missing field")
+    description: str = Field(..., description="Description of what information is needed")
+    options: Optional[List[str]] = Field(default=None, description="Optional list of valid options")
+
+
+class JiraAgentRequest(BaseModel):
+    """Enhanced request model for Jira agent with session support."""
+    prompt: str = Field(..., description="User's natural language query")
+    session_id: Optional[str] = Field(default=None, description="Session ID for multi-turn conversations")
+    context_data: Optional[Dict[str, Any]] = Field(default=None, description="Additional context data from previous turns")
+
+
+class JiraAgentResponse(BaseModel):
+    """Enhanced response model with conversation state."""
+    success: bool
+    session_id: str
+    state: str = Field(..., description="Conversation state: initial, awaiting_info, processing, completed")
+    response: str
+    
+    # Optional fields based on state
+    missing_fields: Optional[List[MissingInfoField]] = None
+    tickets: Optional[List[Any]] = None
+    intent: Optional[str] = None
+    error: Optional[str] = None
+    
+    # Collected data so far
+    collected_data: Optional[Dict[str, Any]] = None

@@ -1,0 +1,82 @@
+### Interactive Jira Agent - REST Client Examples
+### Use with VS Code REST Client extension
+### NOW WITH CONVERSATION MEMORY - Agent remembers previous messages in the same session!
+
+@baseUrl = http://localhost:5000/api
+@sessionId = 567e8f90-1234-4abc-89de-1234567890ab
+
+### ============================================
+### CONVERSATION MEMORY DEMO
+### ============================================
+
+### 1. Start conversation - Agent will remember this throughout the session
+# @name startConversation
+POST {{baseUrl}}/v1/jira-agent/chat
+Content-Type: application/json
+
+{
+  "prompt": "yes",
+  "session_id": "{{sessionId}}"
+}
+
+### 2. Continue conversation - Reference what you said before (agent remembers!)
+# @name continueWithDetails
+POST {{baseUrl}}/v1/jira-agent/chat
+Content-Type: application/json
+
+{
+  "prompt": "It's about the login page not loading properly on mobile devices",
+  "session_id": "{{sessionId}}"
+}
+
+### 3. Agent remembers context - You can say "that issue" or "the bug I mentioned"
+# @name addMoreContext
+POST {{baseUrl}}/v1/jira-agent/chat
+Content-Type: application/json
+
+{
+  "prompt": "Make it high priority because it affects all iOS users",
+  "session_id": "{{sessionId}}"
+}
+
+### 4. Get conversation history for this session
+# @name getHistory
+GET {{baseUrl}}/v1/jira-agent/session/{{sessionId}}
+
+### 5. Search tickets - Agent remembers you were talking about mobile issues
+# @name searchRelated
+POST {{baseUrl}}/v1/jira-agent/chat
+Content-Type: application/json
+
+{
+  "prompt": "Show me other mobile-related tickets",
+  "session_id": "{{sessionId}}"
+}
+
+### 6. End the session and clear memory
+# @name endSession
+DELETE {{baseUrl}}/v1/jira-agent/session/{{sessionId}}
+
+### ============================================
+### INTERACTIVE CHAT - Create Ticket Example
+### ============================================
+
+### 1. Start conversation - Create ticket (agent will ask for details)
+# @name createTicketStart
+POST {{baseUrl}}/v1/jira-agent/chat
+Content-Type: application/json
+
+{
+  "prompt": "Create a ticket",
+  "session_id": "{{sessionId}}"
+}
+
+### 2. Provide summary
+# @name createTicketSummary
+POST {{baseUrl}}/v1/jira-agent/chat
+Content-Type: application/json
+
+{
+  "prompt": "bug",
+  "session_id": "{{sessionId}}"
+}
