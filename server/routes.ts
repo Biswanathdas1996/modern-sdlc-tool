@@ -951,9 +951,9 @@ export async function registerRoutes(
           // Determine if this is a subtask or a regular story
           const isSubtask = !!story.parentJiraKey;
           
-          // Map requestType to JIRA issue type
-          const getJiraIssueType = (requestType: string | undefined, isSubtask: boolean): string => {
-            if (isSubtask) return "Subtask";
+          // Map requestType to JIRA issue type name
+          const getJiraIssueTypeName = (requestType: string | undefined, isSubtask: boolean): string => {
+            if (isSubtask) return "Sub-task"; // Try both common subtask names
             switch (requestType) {
               case "bug": return "Bug";
               case "change_request": return "Task";
@@ -962,12 +962,55 @@ export async function registerRoutes(
             }
           };
           
+          // Get the issue type - try fetching available types from JIRA project
+          let issueTypeName = getJiraIssueTypeName(brd.requestType, isSubtask);
+          
+          // Fetch available issue types for the project to find the correct ID
+          try {
+            const metaResponse = await fetch(
+              `${jiraBaseUrl}/issue/createmeta/${jiraProjectKey}/issuetypes`,
+              {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Basic ${auth}`,
+                  'Accept': 'application/json'
+                }
+              }
+            );
+            
+            if (metaResponse.ok) {
+              const metaData = await metaResponse.json();
+              const issueTypes = metaData.issueTypes || metaData.values || [];
+              
+              // Find the matching issue type (case-insensitive)
+              const matchingType = issueTypes.find((t: any) => 
+                t.name.toLowerCase() === issueTypeName.toLowerCase() ||
+                (issueTypeName === "Sub-task" && t.name.toLowerCase() === "subtask")
+              );
+              
+              if (matchingType) {
+                issueTypeName = matchingType.name; // Use exact name from JIRA
+              } else if (!isSubtask) {
+                // If requested type not found, fall back to Story
+                const storyType = issueTypes.find((t: any) => 
+                  t.name.toLowerCase() === "story" || t.name.toLowerCase() === "task"
+                );
+                if (storyType) {
+                  console.log(`Issue type '${issueTypeName}' not found, falling back to '${storyType.name}'`);
+                  issueTypeName = storyType.name;
+                }
+              }
+            }
+          } catch (metaErr) {
+            console.log("Could not fetch issue types metadata, using default:", issueTypeName);
+          }
+          
           const issueData: any = {
             fields: {
               project: { key: jiraProjectKey },
               summary: story.title,
               description: description,
-              issuetype: { name: getJiraIssueType(brd.requestType, isSubtask) },
+              issuetype: { name: issueTypeName },
               labels: story.labels || []
             }
           };
