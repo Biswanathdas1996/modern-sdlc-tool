@@ -982,22 +982,47 @@ export async function registerRoutes(
               const metaData = await metaResponse.json();
               const issueTypes = metaData.issueTypes || metaData.values || [];
               
-              // Find the matching issue type (case-insensitive)
-              const matchingType = issueTypes.find((t: any) => 
-                t.name.toLowerCase() === issueTypeName.toLowerCase() ||
-                (issueTypeName === "Sub-task" && t.name.toLowerCase() === "subtask")
-              );
+              // Log available issue types for debugging
+              console.log(`Available JIRA issue types: ${issueTypes.map((t: any) => t.name).join(', ')}`);
+              
+              // Find the matching issue type (case-insensitive, handle variations)
+              const matchingType = issueTypes.find((t: any) => {
+                const typeLower = t.name.toLowerCase();
+                const requestedLower = issueTypeName.toLowerCase();
+                return typeLower === requestedLower ||
+                  (requestedLower === "bug" && typeLower.includes("bug")) ||
+                  (requestedLower === "sub-task" && (typeLower === "subtask" || typeLower === "sub-task"));
+              });
               
               if (matchingType) {
+                console.log(`Using JIRA issue type: '${matchingType.name}' for requested type '${issueTypeName}'`);
                 issueTypeName = matchingType.name; // Use exact name from JIRA
               } else if (!isSubtask) {
-                // If requested type not found, fall back to Story
-                const storyType = issueTypes.find((t: any) => 
-                  t.name.toLowerCase() === "story" || t.name.toLowerCase() === "task"
-                );
-                if (storyType) {
-                  console.log(`Issue type '${issueTypeName}' not found, falling back to '${storyType.name}'`);
-                  issueTypeName = storyType.name;
+                // If requested type not found, fall back based on request type
+                // For bugs, try to find Bug first, then Task, then Story
+                const requestType = brd.requestType || 'feature';
+                let fallbackType;
+                
+                if (requestType === 'bug') {
+                  fallbackType = issueTypes.find((t: any) => 
+                    t.name.toLowerCase().includes('bug') ||
+                    t.name.toLowerCase() === 'defect'
+                  ) || issueTypes.find((t: any) => 
+                    t.name.toLowerCase() === 'task'
+                  ) || issueTypes.find((t: any) => 
+                    t.name.toLowerCase() === 'story'
+                  );
+                } else {
+                  fallbackType = issueTypes.find((t: any) => 
+                    t.name.toLowerCase() === 'story'
+                  ) || issueTypes.find((t: any) => 
+                    t.name.toLowerCase() === 'task'
+                  );
+                }
+                
+                if (fallbackType) {
+                  console.log(`Issue type '${issueTypeName}' not found in project. Available types: ${issueTypes.map((t: any) => t.name).join(', ')}. Falling back to '${fallbackType.name}'`);
+                  issueTypeName = fallbackType.name;
                 }
               }
             }
