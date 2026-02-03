@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional
 
 
-def setup_logging(level: int = logging.INFO) -> logging.Logger:
+def setup_logging(level: int = logging.DEBUG) -> logging.Logger:
     """Setup application logging."""
     logger = logging.getLogger("docugen")
     logger.setLevel(level)
@@ -16,7 +16,7 @@ def setup_logging(level: int = logging.INFO) -> logging.Logger:
     
     # Format
     formatter = logging.Formatter(
-        '%(asctime)s [%(levelname)s] %(message)s',
+        '%(asctime)s [%(levelname)s] [%(name)s] %(message)s',
         datefmt='%I:%M:%S %p'
     )
     handler.setFormatter(formatter)
@@ -50,3 +50,9 @@ def log_warning(message: str, source: str = "app"):
     """Log warning message."""
     logger = logging.getLogger("docugen")
     logger.warning(f"[{source}] {message}")
+
+
+def log_debug(message: str, source: str = "app"):
+    """Log debug message."""
+    logger = logging.getLogger("docugen")
+    logger.debug(f"[{source}] {message}")

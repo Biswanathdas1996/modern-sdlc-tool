@@ -22,3 +22,9 @@ PyPDF2==3.0.1
 
 # File handling
 aiofiles==24.1.0
+
+# LangChain
+langchain==0.3.9
+langchain-core==0.3.21
+langchain-community==0.3.8
+nest-asyncio==1.6.0

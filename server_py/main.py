@@ -29,6 +29,7 @@ from jira_service import (
     sync_stories_to_jira, get_jira_stories, find_related_jira_stories,
     sync_subtask_to_jira, get_jira_parent_story_context
 )
+from agents.jira_agent import jira_agent
 from mongodb_client import (
     ingest_document, search_knowledge_base, delete_document_chunks,
     get_knowledge_stats, create_knowledge_document_in_mongo,
@@ -786,6 +787,57 @@ async def find_related_jira_stories_endpoint(request: Request):
     except Exception as e:
         print(f"Error finding related stories: {e}")
         raise HTTPException(status_code=500, detail="Failed to find related stories")
+
+
+@app.post("/api/v1/jira-agent/process")
+async def process_jira_query_with_agent(request: Request):
+    """Process natural language JIRA query using the AI agent."""
+    try:
+        body = await request.json()
+        prompt = body.get("prompt")
+        
+        if not prompt:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "error": "Prompt is required",
+                    "response": "Please provide a query prompt"
+                }
+            )
+        
+        result = await jira_agent.process_query(prompt)
+        
+        return JSONResponse(
+            content={
+                "success": result.get("success", False),
+                "prompt": result.get("prompt", ""),
+                "intent": result.get("intent"),
+                "response": result.get("response", ""),
+                "tickets": result.get("tickets", []),
+                "error": result.get("error")
+            }
+        )
+    except Exception as e:
+        print(f"Error in JIRA agent process: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": str(e),
+                "response": f"Failed to process JIRA query: {str(e)}"
+            }
+        )
+
+
+@app.get("/api/v1/jira-agent/health")
+async def jira_agent_health():
+    """Health check for JIRA agent."""
+    return {
+        "status": "healthy", 
+        "service": "jira-agent",
+        "capabilities": ["intelligent_query_processing", "search", "create", "update", "chained_operations"]
+    }
 
 
 @app.post("/api/jira/sync-subtask")

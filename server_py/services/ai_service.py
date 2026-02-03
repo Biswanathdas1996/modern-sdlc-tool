@@ -2,7 +2,7 @@
 import httpx
 from typing import Optional, Callable
 from core.config import get_settings
-from core.logging import log_info, log_error
+from core.logging import log_info, log_error, log_debug
 from utils.text import parse_json_response
 
 
@@ -49,13 +49,18 @@ class AIService:
         }
         
         log_info(f"Calling PwC GenAI (prompt length: {len(prompt)} chars)", "ai")
+        log_debug(f"AI parameters: temp={temperature}, max_tokens={max_tokens}", "ai")
+        log_debug(f"Using model: vertex_ai.gemini-2.0-flash", "ai")
         
         async with httpx.AsyncClient(timeout=120.0) as client:
+            log_debug(f"Sending POST request to {self.settings.pwc_genai_endpoint_url}", "ai")
             response = await client.post(
                 self.settings.pwc_genai_endpoint_url,
                 json=request_body,
                 headers=headers
             )
+        
+        log_debug(f"AI API response status: {response.status_code}", "ai")
         
         if response.status_code != 200:
             error_msg = f"PwC GenAI API Error: {response.status_code} - {response.text}"
@@ -63,6 +68,7 @@ class AIService:
             raise ValueError(error_msg)
         
         result = response.json()
+        log_debug(f"AI response structure: {list(result.keys())}", "ai")
         log_info("PwC GenAI response received successfully", "ai")
         
         # Extract content from response

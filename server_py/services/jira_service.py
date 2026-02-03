@@ -3,7 +3,7 @@ import base64
 import httpx
 from typing import Any, Dict, List, Optional
 from core.config import get_settings
-from core.logging import log_info, log_error
+from core.logging import log_info, log_error, log_debug
 
 
 class JiraService:
@@ -177,6 +177,7 @@ class JiraService:
     
     async def get_jira_stories(self) -> List[Dict[str, Any]]:
         """Fetch JIRA stories."""
+        log_debug(f"Fetching JIRA stories from {self.settings.jira_instance_url}", "jira_service")
         auth_header = self._get_auth_header()
         jira_base_url = (
             f"https://{self.settings.jira_instance_url}/rest/api/3"
@@ -187,7 +188,10 @@ class JiraService:
             "issuetype = Story ORDER BY created DESC"
         )
         
+        log_debug(f"JQL query: {jql}", "jira_service")
+        
         async with httpx.AsyncClient() as client:
+            log_debug(f"Making request to {jira_base_url}/search/jql", "jira_service")
             response = await client.get(
                 f"{jira_base_url}/search/jql",
                 params={
@@ -200,11 +204,14 @@ class JiraService:
                 }
             )
             
+            log_debug(f"JIRA API response status: {response.status_code}", "jira_service")
+            
             if response.status_code != 200:
                 log_error(f"JIRA API error: {response.text}", "jira")
                 raise Exception(f"Failed to fetch JIRA stories: {response.status_code}")
             
             data = response.json()
+            log_debug(f"Received {len(data.get('issues', []))} issues from JIRA", "jira_service")
             stories = [
                 {
                     "key": issue.get("key"),
