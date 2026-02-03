@@ -27,8 +27,28 @@ async def search_jira_tickets(jira_service, query: str) -> List[Dict[str, Any]]:
         
         log_debug(f"Retrieved {len(stories)} stories from JIRA", "jira_agent")
         
-        # Detect if this is a status-based query
+        # Detect if this is an issue type query
         query_lower = query.lower()
+        issue_type_keywords = {
+            'bug': 'Bug',
+            'bugs': 'Bug',
+            'story': 'Story',
+            'stories': 'Story',
+            'task': 'Task',
+            'tasks': 'Task',
+            'sub-task': 'Sub-task',
+            'subtask': 'Sub-task',
+            'epic': 'Epic'
+        }
+        
+        target_issue_type = None
+        for keyword, issue_type in issue_type_keywords.items():
+            if keyword in query_lower:
+                target_issue_type = issue_type
+                log_debug(f"Detected issue type query: filtering for type='{target_issue_type}'", "jira_agent")
+                break
+        
+        # Detect if this is a status-based query
         status_keywords = {
             'in progress': 'In Progress',
             'in-progress': 'In Progress',
@@ -51,24 +71,33 @@ async def search_jira_tickets(jira_service, query: str) -> List[Dict[str, Any]]:
                 log_debug(f"Detected status-based query: filtering for status='{target_status}'", "jira_agent")
                 break
         
-        # Filter by status if detected
+        # Apply filters (issue type and/or status)
+        filtered_stories = stories
+        
+        if target_issue_type:
+            filtered_stories = [s for s in filtered_stories if s.get("issueType") == target_issue_type]
+            log_debug(f"Issue type filter applied: {len(filtered_stories)} tickets with type '{target_issue_type}'", "jira_agent")
+        
         if target_status:
-            filtered_stories = [s for s in stories if s.get("status") == target_status]
+            filtered_stories = [s for s in filtered_stories if s.get("status") == target_status]
             log_debug(f"Status filter applied: {len(filtered_stories)} tickets with status '{target_status}'", "jira_agent")
-            
-            if not filtered_stories:
-                log_debug(f"No tickets found with status '{target_status}'", "jira_agent")
-                return []
-            
-            # Return all tickets matching the status (no need to score)
+        
+        # If we have specific filters and results, return them
+        if (target_issue_type or target_status) and filtered_stories:
+            log_debug(f"Returning {len(filtered_stories)} filtered tickets", "jira_agent")
             return filtered_stories
         
-        # Otherwise, do keyword-based search
-        relevant_tickets = []
+        # If filters were applied but no results, return empty
+        if (target_issue_type or target_status) and not filtered_stories:
+            log_debug(f"No tickets found matching filters", "jira_agent")
+            return []
+        
+        # Otherwise, do keyword-based search on all tickets
+        stories_to_search = filtered_stories if (target_issue_type or target_status) else stories
         
         log_debug(f"Scoring tickets against query: '{query_lower}'", "jira_agent")
         
-        for story in stories:
+        for story in stories_to_search:
             score = 0
             summary = story.get("summary", "").lower()
             description = story.get("description", "").lower()

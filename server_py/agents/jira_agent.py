@@ -15,6 +15,7 @@ from core.logging import log_info, log_error
 from .tools import TicketToolsContext, create_jira_tools
 from .utils import handle_parsing_error, analyze_intent
 from .direct_processor import direct_process
+from .prompts import prompt_loader
 
 
 class JiraAgent:
@@ -35,50 +36,9 @@ class JiraAgent:
     def _create_agent(self) -> AgentExecutor:
         """Create the LangChain ReAct agent with robust parsing."""
         
-        prompt_template = """You are an intelligent JIRA assistant that helps users manage their JIRA tickets.
-You can search, create, update, and perform bulk operations on tickets.
-
-IMPORTANT RULES:
-1. For SEARCH queries: Use search_jira_tickets tool with descriptive search terms
-2. For CREATE requests: Extract summary, description, type, and priority from the user's message
-3. For UPDATE requests: Identify the ticket key and what fields to update
-4. For CHAINED operations (e.g., "find X and update Y"): First search, then use bulk_update_tickets
-5. Always provide clear, actionable responses with ticket keys and details
-6. If a user refers to "these tickets" or "them", use get_last_search_results
-
-CRITICAL FORMAT RULES:
-- You must EITHER use an Action OR give a Final Answer, NEVER BOTH in the same response
-- After getting an Observation, decide if you need another Action or can give Final Answer
-- When you have enough information, respond ONLY with "Final Answer:" followed by your response
-
-Available tools:
-{tools}
-
-Tool names: {tool_names}
-
-FORMAT (follow exactly):
-
-Question: the user's question or request
-Thought: I need to [analyze what action to take]
-Action: [tool name]
-Action Input: [input for the tool]
-
-After receiving an Observation, continue with:
-Thought: [analyze the observation and decide next step]
-Action: [next tool if needed]
-Action Input: [input]
-
-OR if you have enough information:
-Thought: I now have the information to answer the user's question
-Final Answer: [your helpful response to the user]
-
-REMEMBER: Never put Action and Final Answer in the same response block!
-
-Begin!
-
-Question: {input}
-{agent_scratchpad}"""
-
+        # Load prompt from YAML file
+        prompt_template = prompt_loader.get_prompt('jira_agent.yml', 'agent_prompt')
+        
         prompt = PromptTemplate(
             template=prompt_template,
             input_variables=["input", "tools", "tool_names", "agent_scratchpad"]

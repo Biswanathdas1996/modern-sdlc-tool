@@ -176,16 +176,17 @@ class JiraService:
         return description
     
     async def get_jira_stories(self) -> List[Dict[str, Any]]:
-        """Fetch JIRA stories."""
-        log_debug(f"Fetching JIRA stories from {self.settings.jira_instance_url}", "jira_service")
+        """Fetch all JIRA issues (Stories, Bugs, Tasks, etc.)."""
+        log_debug(f"Fetching JIRA issues from {self.settings.jira_instance_url}", "jira_service")
         auth_header = self._get_auth_header()
         jira_base_url = (
             f"https://{self.settings.jira_instance_url}/rest/api/3"
         )
         
+        # Fetch all issue types, not just Stories
         jql = (
-            f"project = {self.settings.jira_project_key} AND "
-            "issuetype = Story ORDER BY created DESC"
+            f"project = {self.settings.jira_project_key} "
+            "ORDER BY created DESC"
         )
         
         log_debug(f"JQL query: {jql}", "jira_service")
@@ -196,7 +197,8 @@ class JiraService:
                 f"{jira_base_url}/search/jql",
                 params={
                     "jql": jql,
-                    "fields": "summary,description,status,priority,labels,subtasks"
+                    "fields": "summary,description,status,priority,labels,subtasks,issuetype",
+                    "maxResults": 100  # Increase limit
                 },
                 headers={
                     "Authorization": auth_header,
@@ -208,7 +210,7 @@ class JiraService:
             
             if response.status_code != 200:
                 log_error(f"JIRA API error: {response.text}", "jira")
-                raise Exception(f"Failed to fetch JIRA stories: {response.status_code}")
+                raise Exception(f"Failed to fetch JIRA issues: {response.status_code}")
             
             data = response.json()
             log_debug(f"Received {len(data.get('issues', []))} issues from JIRA", "jira_service")
@@ -222,12 +224,13 @@ class JiraService:
                     "status": issue.get("fields", {}).get("status", {}).get("name", "Unknown"),
                     "priority": issue.get("fields", {}).get("priority", {}).get("name", "Medium"),
                     "labels": issue.get("fields", {}).get("labels", []),
+                    "issueType": issue.get("fields", {}).get("issuetype", {}).get("name", "Story"),
                     "subtaskCount": len(issue.get("fields", {}).get("subtasks", []))
                 }
                 for issue in data.get("issues", [])
             ]
             
-            log_info(f"Fetched {len(stories)} JIRA stories", "jira")
+            log_info(f"Fetched {len(stories)} JIRA issues", "jira")
             return stories
     
     async def get_parent_story_context(self, parent_jira_key: str) -> Optional[str]:
