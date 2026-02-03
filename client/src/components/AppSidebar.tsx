@@ -12,6 +12,7 @@ import {
   Bookmark,
   Library,
   Upload,
+  Bot,
 } from "lucide-react";
 import {
   Sidebar,
@@ -238,6 +239,45 @@ export function AppSidebar({ currentProject, completedSteps = [] }: AppSidebarPr
                         <span className="text-xs text-muted-foreground truncate">Upload & manage docs</span>
                       </div>
                       {location === "/knowledge-base" && (
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </div>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
+            AI Agent
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  className={cn(
+                    "group",
+                    location === "/agent-chat" && "bg-sidebar-accent text-sidebar-accent-foreground"
+                  )}
+                >
+                  <Link href="/agent-chat" data-testid="link-agent-chat">
+                    <div className="flex items-center gap-3 w-full">
+                      <div className={cn(
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
+                        location === "/agent-chat" 
+                          ? "bg-primary border-primary text-primary-foreground"
+                          : "bg-muted border-border text-muted-foreground"
+                      )}>
+                        <Bot className="h-4 w-4" />
+                      </div>
+                      <div className="flex flex-col flex-1 min-w-0">
+                        <span className="text-sm font-medium truncate">Agent Chat</span>
+                        <span className="text-xs text-muted-foreground truncate">Interactive AI assistant</span>
+                      </div>
+                      {location === "/agent-chat" && (
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       )}
                     </div>
