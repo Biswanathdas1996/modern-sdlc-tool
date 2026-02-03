@@ -1,10 +1,139 @@
-import OpenAI from "openai";
 import type { RepoAnalysis, FeatureRequest, BRD, TestCase, TestData, Documentation, Project, UserStory, BPMNDiagram, DatabaseSchemaInfo } from "@shared/schema";
 
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
+// PwC GenAI environment configuration
+const GENAI_ENDPOINT = process.env.PWC_GENAI_ENDPOINT_URL!;
+const API_KEY = process.env.PWC_GENAI_API_KEY!;
+const BEARER_TOKEN = process.env.PWC_GENAI_BEARER_TOKEN!;
+
+/**
+ * Makes a prompt-based API call to PwC's internal GenAI service
+ * using vertex_ai.gemini-2.0-flash model (text-only).
+ *
+ * @param prompt The input prompt to send to the AI model
+ * @param options Optional parameters for the API call
+ * @returns The text content from the GenAI API response
+ */
+async function callPwcGenAI(prompt: string, options: { temperature?: number; maxTokens?: number } = {}): Promise<string> {
+  if (!API_KEY || !BEARER_TOKEN || !GENAI_ENDPOINT) {
+    throw new Error(
+      "PwC GenAI credentials not configured. Please provide PWC_GENAI_API_KEY, PWC_GENAI_BEARER_TOKEN, and PWC_GENAI_ENDPOINT_URL.",
+    );
+  }
+
+  const requestBody = JSON.stringify({
+    model: "vertex_ai.gemini-2.0-flash",
+    prompt,
+    temperature: options.temperature ?? 0.7,
+    top_p: 1,
+    presence_penalty: 0,
+    stream: false,
+    stream_options: null,
+    seed: 25,
+    stop: null,
+  });
+
+  const headers = {
+    accept: "application/json",
+    "API-Key": API_KEY,
+    Authorization: `Bearer ${BEARER_TOKEN}`,
+    "Content-Type": "application/json",
+  };
+
+  console.log("Calling PwC GenAI with prompt length:", prompt.length);
+
+  const response = await fetch(GENAI_ENDPOINT, {
+    method: "POST",
+    headers,
+    body: requestBody,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("PwC GenAI API error:", {
+      status: response.status,
+      error: errorText,
+    });
+    throw new Error(`PwC GenAI API Error: ${response.status} - ${errorText}`);
+  }
+
+  const result = await response.json();
+  console.log("PwC GenAI API response received:", {
+    keys: Object.keys(result),
+  });
+
+  // Extract text from the response - handle different response formats
+  if (result.choices && result.choices[0]) {
+    const choice = result.choices[0];
+    if (choice.message?.content) {
+      return choice.message.content;
+    }
+    if (choice.text) {
+      return choice.text;
+    }
+  }
+  if (result.text) {
+    return result.text;
+  }
+  if (result.content) {
+    return result.content;
+  }
+  
+  throw new Error("Unexpected response format from PwC GenAI API");
+}
+
+/**
+ * Helper function to build a prompt from system and user messages
+ */
+function buildPrompt(systemMessage: string, userMessage: string): string {
+  return `System: ${systemMessage}\n\nUser: ${userMessage}`;
+}
+
+/**
+ * Helper to parse JSON from AI response, handling markdown code blocks
+ * with robust fallback for extracting JSON from mixed content
+ */
+function parseJsonResponse(text: string): any {
+  // First attempt: Remove markdown code blocks if present
+  let cleaned = text.trim();
+  if (cleaned.startsWith("```json")) {
+    cleaned = cleaned.slice(7);
+  } else if (cleaned.startsWith("```")) {
+    cleaned = cleaned.slice(3);
+  }
+  if (cleaned.endsWith("```")) {
+    cleaned = cleaned.slice(0, -3);
+  }
+  
+  try {
+    return JSON.parse(cleaned.trim());
+  } catch (firstError) {
+    // Fallback: Try to extract JSON object/array using regex
+    console.log("First JSON parse failed, attempting regex extraction...");
+    
+    // Try to find a JSON object
+    const objectMatch = text.match(/\{[\s\S]*\}/);
+    if (objectMatch) {
+      try {
+        return JSON.parse(objectMatch[0]);
+      } catch {
+        // Continue to array match
+      }
+    }
+    
+    // Try to find a JSON array
+    const arrayMatch = text.match(/\[[\s\S]*\]/);
+    if (arrayMatch) {
+      try {
+        return JSON.parse(arrayMatch[0]);
+      } catch {
+        // Continue to throw
+      }
+    }
+    
+    // If all attempts fail, throw the original error with context
+    throw new Error(`Failed to parse JSON from response. Original error: ${firstError}. Response preview: ${text.slice(0, 200)}...`);
+  }
+}
 
 // GitHub API headers with authentication
 function getGitHubHeaders(): Record<string, string> {
@@ -180,12 +309,7 @@ ${fileContents.join("\n")}
 export async function analyzeRepository(repoUrl: string, projectId: string): Promise<RepoAnalysis> {
   const repoContext = await fetchRepoContents(repoUrl);
   
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "system",
-        content: `You are a senior software architect analyzing GitHub repositories. Carefully examine ALL provided file contents, directory structure, and code to generate an ACCURATE and DETAILED analysis.
+  const systemPrompt = `You are a senior software architect analyzing GitHub repositories. Carefully examine ALL provided file contents, directory structure, and code to generate an ACCURATE and DETAILED analysis.
 
 IMPORTANT INSTRUCTIONS:
 1. Read EVERY file content provided - each file reveals important details
@@ -215,19 +339,15 @@ Return your analysis as a JSON object with this exact structure:
   },
   "testingFramework": "Testing framework from devDependencies if any",
   "codePatterns": ["patterns actually observed in the code like hooks, components, services, etc"]
-}`
-      },
-      {
-        role: "user",
-        content: `Analyze this repository carefully. Read all file contents and provide an accurate analysis:\n\n${repoContext}`
-      }
-    ],
-    response_format: { type: "json_object" },
-    max_completion_tokens: 4096,
-  });
+}`;
+
+  const userPrompt = `Analyze this repository carefully. Read all file contents and provide an accurate analysis:\n\n${repoContext}`;
   
-  const content = response.choices[0]?.message?.content || "{}";
-  const analysisData = JSON.parse(content);
+  const prompt = buildPrompt(systemPrompt, userPrompt);
+  const responseText = await callPwcGenAI(prompt);
+  
+  const content = responseText || "{}";
+  const analysisData = parseJsonResponse(content);
   
   return {
     ...analysisData,
@@ -250,12 +370,7 @@ export async function generateDocumentation(
     console.error("Failed to fetch repo for documentation:", err);
   }
   
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "system",
-        content: `You are a technical writer creating ACCURATE and DETAILED documentation for a software project. You have access to the ACTUAL SOURCE CODE files. Read them carefully and generate documentation that EXACTLY matches what the code does.
+  const systemPrompt = `You are a technical writer creating ACCURATE and DETAILED documentation for a software project. You have access to the ACTUAL SOURCE CODE files. Read them carefully and generate documentation that EXACTLY matches what the code does.
 
 CRITICAL INSTRUCTIONS:
 1. READ the actual file contents provided - they contain the real implementation
@@ -304,11 +419,9 @@ Return a JSON object with this structure:
       "content": "Actual file structure from the repository"
     }
   ]
-}`
-      },
-      {
-        role: "user",
-        content: `Generate accurate technical documentation by reading the ACTUAL SOURCE CODE below.
+}`;
+
+  const userPrompt = `Generate accurate technical documentation by reading the ACTUAL SOURCE CODE below.
 
 Project Name: ${project.name}
 Repository URL: ${project.repoUrl}
@@ -319,41 +432,23 @@ ${repoContext}
 === ANALYSIS SUMMARY (for reference) ===
 - Summary: ${analysis.summary}
 - Tech Stack: ${JSON.stringify(analysis.techStack, null, 2)}
-- Features Found: ${JSON.stringify(analysis.features, null, 2)}`
-      }
-    ],
-    response_format: { type: "json_object" },
-    max_completion_tokens: 8192,
-  });
+- Features Found: ${JSON.stringify(analysis.features, null, 2)}`;
 
-  const rawContent = response.choices[0]?.message?.content || "{}";
+  const prompt = buildPrompt(systemPrompt, userPrompt);
+  const rawContent = await callPwcGenAI(prompt);
   
   // Robust JSON parsing with fallback
   let docData: any;
   try {
-    docData = JSON.parse(rawContent);
+    docData = parseJsonResponse(rawContent);
   } catch (parseError) {
     console.error("Failed to parse documentation JSON, attempting recovery:", parseError);
-    const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      try {
-        docData = JSON.parse(jsonMatch[0]);
-      } catch {
-        // Fallback to basic documentation structure
-        docData = {
-          title: `${project.name} Documentation`,
-          content: rawContent,
-          sections: []
-        };
-      }
-    } else {
-      // Create basic fallback
-      docData = {
-        title: `${project.name} Documentation`,
-        content: `# ${project.name}\n\n${analysis.summary || "Documentation for this repository."}`,
-        sections: []
-      };
-    }
+    // Create basic fallback
+    docData = {
+      title: `${project.name} Documentation`,
+      content: `# ${project.name}\n\n${analysis.summary || "Documentation for this repository."}`,
+      sections: []
+    };
   }
 
   return {
@@ -368,12 +463,7 @@ export async function generateBPMNDiagram(
   documentation: Documentation,
   analysis: RepoAnalysis
 ): Promise<Omit<BPMNDiagram, "id" | "createdAt">> {
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "system",
-        content: `You are an expert at creating professional BPMN-style business flow diagrams using Mermaid.js flowchart syntax.
+  const systemPrompt = `You are an expert at creating professional BPMN-style business flow diagrams using Mermaid.js flowchart syntax.
 
 Create a SINGLE comprehensive flowchart that shows the ENTIRE business flow of the application from start to finish.
 
@@ -431,11 +521,9 @@ CRITICAL:
 - NO parentheses or special chars inside node labels
 - NO colons inside labels
 - Short readable labels
-- Valid Mermaid syntax that will render correctly`
-      },
-      {
-        role: "user",
-        content: `Generate a SINGLE comprehensive BPMN-style diagram showing the COMPLETE business flow of this application.
+- Valid Mermaid syntax that will render correctly`;
+
+  const userPrompt = `Generate a SINGLE comprehensive BPMN-style diagram showing the COMPLETE business flow of this application.
 
 === APPLICATION OVERVIEW ===
 Title: ${documentation.title}
@@ -444,18 +532,14 @@ ${documentation.sections.map(s => `## ${s.title}\n${s.content}`).join('\n\n')}
 === ALL FEATURES ===
 ${JSON.stringify(analysis.features, null, 2)}
 
-Create ONE comprehensive diagram that shows how a user progresses through the entire application workflow, from initial entry through all stages to final outputs. Use subgraphs to organize the flow by major stages/features.`
-      }
-    ],
-    response_format: { type: "json_object" },
-    max_completion_tokens: 4096,
-  });
+Create ONE comprehensive diagram that shows how a user progresses through the entire application workflow, from initial entry through all stages to final outputs. Use subgraphs to organize the flow by major stages/features.`;
 
-  const rawContent = response.choices[0]?.message?.content || "{}";
+  const prompt = buildPrompt(systemPrompt, userPrompt);
+  const rawContent = await callPwcGenAI(prompt);
   
   let diagramData: any;
   try {
-    diagramData = JSON.parse(rawContent);
+    diagramData = parseJsonResponse(rawContent);
   } catch (parseError) {
     console.error("Failed to parse BPMN diagram JSON:", parseError);
     diagramData = { diagrams: [] };
@@ -469,15 +553,9 @@ Create ONE comprehensive diagram that shows how a user progresses through the en
 }
 
 export async function transcribeAudio(audioBuffer: Buffer): Promise<string> {
-  const { toFile } = await import("openai");
-  const file = await toFile(audioBuffer, "audio.webm");
-  
-  const response = await openai.audio.transcriptions.create({
-    file,
-    model: "gpt-4o-mini-transcribe",
-  });
-  
-  return response.text;
+  // Audio transcription is not available with PWC GenAI
+  // This would require a separate speech-to-text service
+  throw new Error("Audio transcription is not currently available. Please use text input instead.");
 }
 
 export async function generateBRD(
@@ -579,12 +657,7 @@ Repository Context (from analysis):
 `;
   }
 
-  const stream = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "system",
-        content: `You are a senior business analyst creating a Business Requirements Document (BRD). 
+  const systemPrompt = `You are a senior business analyst creating a Business Requirements Document (BRD). 
 
 IMPORTANT: You are generating this BRD based on the TECHNICAL DOCUMENTATION that was generated from analyzing the repository${databaseSchema ? " AND the connected DATABASE SCHEMA" : ""}. 
 Your BRD must:
@@ -639,11 +712,9 @@ Return a JSON object with this structure:
       }
     ]
   }
-}`
-      },
-      {
-        role: "user",
-        content: `Create a BRD for this feature request. Make sure to thoroughly review the technical documentation${databaseSchema ? ", database schema" : ""}${knowledgeContext ? ", and knowledge base documents" : ""} and reference them in your requirements.
+}`;
+
+  const userPrompt = `Create a BRD for this feature request. Make sure to thoroughly review the technical documentation${databaseSchema ? ", database schema" : ""}${knowledgeContext ? ", and knowledge base documents" : ""} and reference them in your requirements.
 
 Feature Request:
 Title: ${featureRequest.title}
@@ -651,41 +722,21 @@ Description: ${featureRequest.description}
 
 ${documentationContext}
 ${databaseSchemaContext}
-${knowledgeBaseContext}`
-      }
-    ],
-    response_format: { type: "json_object" },
-    max_completion_tokens: 4096,
-    stream: true,
-  });
+${knowledgeBaseContext}`;
 
-  let fullContent = "";
+  const prompt = buildPrompt(systemPrompt, userPrompt);
+  const fullContent = await callPwcGenAI(prompt);
   
-  for await (const chunk of stream) {
-    const content = chunk.choices[0]?.delta?.content || "";
-    if (content) {
-      fullContent += content;
-      onChunk?.(content);
-    }
-  }
+  // Send the full content as a single chunk for compatibility with existing frontend
+  onChunk?.(fullContent);
   
   // Robust JSON parsing with fallback
   let brdData: any;
   try {
-    brdData = JSON.parse(fullContent);
+    brdData = parseJsonResponse(fullContent);
   } catch (parseError) {
-    console.error("Failed to parse BRD JSON, attempting recovery:", parseError);
-    // Try to extract JSON from the content
-    const jsonMatch = fullContent.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      try {
-        brdData = JSON.parse(jsonMatch[0]);
-      } catch {
-        throw new Error("Failed to parse BRD response as JSON");
-      }
-    } else {
-      throw new Error("No valid JSON found in BRD response");
-    }
+    console.error("Failed to parse BRD JSON:", parseError);
+    throw new Error("Failed to parse BRD response as JSON");
   }
   
   // Validate required fields with defaults
@@ -758,12 +809,7 @@ ${docContent.techStack ? `## Technology Stack\n${JSON.stringify(docContent.techS
 `;
   }
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "system",
-        content: `You are a senior QA engineer creating comprehensive test cases from a BRD. Generate test cases for each functional requirement organized into 4 CATEGORIES.
+  const systemPrompt = `You are a senior QA engineer creating comprehensive test cases from a BRD. Generate test cases for each functional requirement organized into 4 CATEGORIES.
 
 CRITICAL: Your test cases MUST be based on the repository documentation provided. Reference actual:
 - API endpoints with their actual URL routes (e.g., /api/users, /dashboard, /login) - NOT file paths
@@ -833,11 +879,9 @@ Return a JSON object with this structure:
   ]
 }
 
-IMPORTANT: Generate at least 2-3 test cases for EACH category (happy_path, edge_case, negative, e2e) per requirement.`
-      },
-      {
-        role: "user",
-        content: `Generate test cases for this BRD based on the repository documentation:
+IMPORTANT: Generate at least 2-3 test cases for EACH category (happy_path, edge_case, negative, e2e) per requirement.`;
+
+  const userPrompt = `Generate test cases for this BRD based on the repository documentation:
 
 ${documentationContext}
 
@@ -859,15 +903,11 @@ Existing System Context (from BRD):
 
 IMPORTANT: 
 1. Create test cases that reference the actual components, APIs, and data models from the documentation above. Do not use generic or placeholder names.
-2. Generate test cases for ALL 4 CATEGORIES: happy_path, edge_case, negative, and e2e.`
-      }
-    ],
-    response_format: { type: "json_object" },
-    max_completion_tokens: 8192,
-  });
+2. Generate test cases for ALL 4 CATEGORIES: happy_path, edge_case, negative, and e2e.`;
 
-  const content = response.choices[0]?.message?.content || '{"testCases":[]}';
-  const data = JSON.parse(content);
+  const prompt = buildPrompt(systemPrompt, userPrompt);
+  const content = await callPwcGenAI(prompt);
+  const data = parseJsonResponse(content);
   
   return data.testCases.map((tc: any, index: number) => ({
     brdId: brd.id,
@@ -916,12 +956,7 @@ ${docContent.components && docContent.components.length > 0 ? `## Components (fo
 `;
   }
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "system",
-        content: `You are a senior QA engineer creating test data for test cases. Generate comprehensive test datasets including valid, invalid, edge, and boundary cases.
+  const systemPrompt = `You are a senior QA engineer creating test data for test cases. Generate comprehensive test datasets including valid, invalid, edge, and boundary cases.
 
 CRITICAL: Your test data MUST be based on the repository documentation provided. Use:
 - Actual field names and types from documented data models
@@ -941,11 +976,9 @@ Return a JSON object with this structure:
       }
     }
   ]
-}`
-      },
-      {
-        role: "user",
-        content: `Generate test data for these test cases based on the repository documentation:
+}`;
+
+  const userPrompt = `Generate test data for these test cases based on the repository documentation:
 
 ${documentationContext}
 
@@ -957,15 +990,11 @@ ${testCases.map(tc => `- ${tc.id || tc.title}: ${tc.description}`).join("\n")}
 Requirements context:
 ${JSON.stringify(brd.content.functionalRequirements.slice(0, 3), null, 2)}
 
-IMPORTANT: Generate test data that uses actual field names and data structures from the documentation. Do not use generic placeholder names.`
-      }
-    ],
-    response_format: { type: "json_object" },
-    max_completion_tokens: 4096,
-  });
+IMPORTANT: Generate test data that uses actual field names and data structures from the documentation. Do not use generic placeholder names.`;
 
-  const content = response.choices[0]?.message?.content || '{"testData":[]}';
-  const data = JSON.parse(content);
+  const prompt = buildPrompt(systemPrompt, userPrompt);
+  const content = await callPwcGenAI(prompt);
+  const data = parseJsonResponse(content);
   
   return data.testData.map((td: any) => ({
     testCaseId: td.testCaseId || testCases[0]?.id || "TC-001",
@@ -1051,12 +1080,7 @@ ${tableDescriptions}
   // Get project prefix from BRD title (first 3-4 chars uppercase)
   const projectPrefix = brd.title.split(/\s+/)[0]?.substring(0, 4).toUpperCase() || "PROJ";
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "system",
-        content: `You are a senior product manager creating JIRA-style user stories from a Business Requirements Document (BRD).
+  const systemPrompt = `You are a senior product manager creating JIRA-style user stories from a Business Requirements Document (BRD).
 
 Create well-structured user stories that:
 1. Follow the format: "As a [user type], I want [feature], so that [benefit]"
@@ -1099,11 +1123,9 @@ Return a JSON object with this structure:
       "dependencies": ["${projectPrefix}-002", "External API setup", etc.]
     }
   ]
-}`
-      },
-      {
-        role: "user",
-        content: `Generate JIRA-style user stories for this BRD based on the repository documentation${databaseSchema ? ", database schema" : ""}${knowledgeContext ? ", and knowledge base documents" : ""}:
+}`;
+
+  const userPrompt = `Generate JIRA-style user stories for this BRD based on the repository documentation${databaseSchema ? ", database schema" : ""}${knowledgeContext ? ", and knowledge base documents" : ""}:
 
 ${documentationContext}
 ${databaseSchemaContext}
@@ -1154,15 +1176,11 @@ IMPORTANT:
 1. Create user stories that reference actual components and APIs from the documentation
 2. Include technical notes that guide developers on how to integrate with existing code
 3. Ensure acceptance criteria are specific and testable
-4. Group related stories under logical epics${parentContext ? "\n5. Since these will be subtasks, make them more granular and specific to support the parent story" : ""}`
-      }
-    ],
-    response_format: { type: "json_object" },
-    max_completion_tokens: 4096,
-  });
+4. Group related stories under logical epics${parentContext ? "\n5. Since these will be subtasks, make them more granular and specific to support the parent story" : ""}`;
 
-  const content = response.choices[0]?.message?.content || '{"userStories":[]}';
-  const data = JSON.parse(content);
+  const prompt = buildPrompt(systemPrompt, userPrompt);
+  const content = await callPwcGenAI(prompt);
+  const data = parseJsonResponse(content);
   
   return data.userStories.map((story: any, index: number) => ({
     brdId: brd.id,
@@ -1239,12 +1257,7 @@ ${tableDescriptions}
 `;
   }
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "system",
-        content: `You are an expert at creating detailed implementation prompts for VS Code Copilot agents.
+  const systemPrompt = `You are an expert at creating detailed implementation prompts for VS Code Copilot agents.
 Your task is to generate a comprehensive, actionable prompt that a developer can use with GitHub Copilot
 to implement the requested features.
 
@@ -1256,11 +1269,9 @@ The prompt should:
 5. List step-by-step implementation instructions
 6. Include testing requirements
 7. Be formatted for easy copy-paste into VS Code Copilot chat
-${databaseSchema ? "8. Include database schema details for any data-related implementation" : ""}`
-      },
-      {
-        role: "user",
-        content: `Generate a VS Code Copilot implementation prompt based on the following context:
+${databaseSchema ? "8. Include database schema details for any data-related implementation" : ""}`;
+
+  const userPrompt = `Generate a VS Code Copilot implementation prompt based on the following context:
 
 ## User Stories to Implement
 ${storiesText}
@@ -1289,13 +1300,12 @@ Generate a comprehensive Copilot prompt that:
 7. Lists acceptance criteria as checkboxes
 8. Adds testing requirements
 
-Format the output as a ready-to-use Copilot prompt that can be pasted directly into VS Code.`
-      }
-    ],
-    max_completion_tokens: 4096,
-  });
+Format the output as a ready-to-use Copilot prompt that can be pasted directly into VS Code.`;
 
-  return response.choices[0]?.message?.content || "Failed to generate prompt";
+  const prompt = buildPrompt(systemPrompt, userPrompt);
+  const response = await callPwcGenAI(prompt);
+
+  return response || "Failed to generate prompt";
 }
 
 // Semantic search to find related JIRA stories
@@ -1326,12 +1336,7 @@ export async function findRelatedStories(
     `${i + 1}. [${story.key}] ${story.summary}\n   Description: ${story.description?.slice(0, 200) || "N/A"}...`
   ).join("\n\n");
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "system",
-        content: `You are an expert at analyzing user stories and feature requirements to find semantic relationships.
+  const systemPrompt = `You are an expert at analyzing user stories and feature requirements to find semantic relationships.
 Your task is to identify existing JIRA stories that are related to a new feature request.
 
 Consider stories related if they:
@@ -1353,26 +1358,20 @@ Response format:
       "reason": "Brief explanation of why this story is related"
     }
   ]
-}`
-      },
-      {
-        role: "user",
-        content: `## New Feature Request:
+}`;
+
+  const userPrompt = `## New Feature Request:
 ${featureDescription}
 
 ## Existing JIRA Stories:
 ${storiesContext}
 
-Analyze the feature request and find which existing stories are semantically related. Return empty array if no strong matches found.`
-      }
-    ],
-    response_format: { type: "json_object" },
-    max_completion_tokens: 1024,
-  });
+Analyze the feature request and find which existing stories are semantically related. Return empty array if no strong matches found.`;
 
   try {
-    const content = response.choices[0]?.message?.content || '{"relatedStories":[]}';
-    const result = JSON.parse(content);
+    const prompt = buildPrompt(systemPrompt, userPrompt);
+    const responseText = await callPwcGenAI(prompt);
+    const result = parseJsonResponse(responseText);
     
     const relatedStories: RelatedStoryResult[] = (result.relatedStories || [])
       .map((match: any) => {
