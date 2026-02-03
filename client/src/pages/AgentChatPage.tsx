@@ -25,6 +25,21 @@ function generateSessionId(): string {
   return crypto.randomUUID();
 }
 
+function formatMarkdown(content: string): string {
+  return content
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.+<\/li>\n?)+/g, '<ul>$&</ul>')
+    .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+    .replace(/\n\n/g, '<br/><br/>')
+    .replace(/\n/g, '<br/>');
+}
+
 export default function AgentChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -204,13 +219,20 @@ export default function AgentChatPage() {
                       >
                         <div
                           className={cn(
-                            "rounded-lg px-4 py-2",
+                            "rounded-lg px-4 py-3",
                             message.role === "user"
                               ? "bg-primary text-primary-foreground"
-                              : "bg-muted"
+                              : "bg-card border shadow-sm"
                           )}
                         >
-                          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                          {message.role === "user" ? (
+                            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                          ) : (
+                            <div 
+                              className="prose-chat text-sm"
+                              dangerouslySetInnerHTML={{ __html: formatMarkdown(message.content) }}
+                            />
+                          )}
                         </div>
                         {message.metadata?.intent && (
                           <Badge variant="secondary" className="mt-1 text-xs" data-testid={`badge-intent-${index}`}>
