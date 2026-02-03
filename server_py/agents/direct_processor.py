@@ -53,18 +53,21 @@ async def _enrich_with_context(
         kb_results = kb_service.search_knowledge_base(
             project_id="global",
             query=user_prompt,
-            limit=2  # Reduced to 2 most relevant
+            limit=5  # Increased to 5 for better context
         )
         
         if kb_results:
             kb_contents = []
             for result in kb_results:
                 content = result.get('content', '').strip()
+                source = result.get('source', 'Unknown')
                 if content and len(content) > 50:  # Only substantial content
-                    kb_contents.append(content[:300])  # Reduced to 300 chars
+                    # Include more content for detailed descriptions
+                    kb_contents.append(f"[Source: {source}]\n{content[:800]}")
             
             if kb_contents:
-                enriched_context["knowledge_context"] = "\n".join(kb_contents)
+                enriched_context["knowledge_context"] = "\n\n---\n\n".join(kb_contents)
+                enriched_context["kb_results"] = kb_results  # Keep full results for description generation
                 enriched_context["has_context"] = True
                 log_info(f"📚 Found {len(kb_contents)} relevant KB documents", "context_enrichment")
         
@@ -320,6 +323,51 @@ Return ONLY JSON. If nothing found, return {{}}."""
             "collected_data": conversation_ctx.collected_data,
             "tickets": []
         }
+    
+    # All info collected - enhance description with knowledge base content if available
+    if enriched_context.get('knowledge_context') and conversation_ctx.collected_data.get('summary'):
+        log_info("📝 Generating detailed description from knowledge base", "direct_processor")
+        try:
+            kb_content = enriched_context.get('knowledge_context', '')
+            current_desc = conversation_ctx.collected_data.get('description', '')
+            summary = conversation_ctx.collected_data.get('summary', '')
+            issue_type = conversation_ctx.collected_data.get('issue_type', 'Story')
+            
+            enhance_prompt = f"""You are a Business Analyst creating a JIRA {issue_type}.
+
+**Ticket Summary:** {summary}
+
+**User's Initial Description:** {current_desc if current_desc else 'Not provided'}
+
+**Relevant Knowledge Base Content:**
+{kb_content}
+
+**Task:** Generate a comprehensive, detailed description for this {issue_type} by:
+1. Incorporating relevant information from the knowledge base
+2. Adding acceptance criteria if applicable
+3. Including technical context from the KB documents
+4. Structuring the description professionally
+
+**Format the description with:**
+- Overview/Background section
+- Detailed requirements or steps to reproduce (for bugs)
+- Acceptance criteria (if Story/Task)
+- Technical notes from KB (if relevant)
+- Any dependencies or related items
+
+Return ONLY the enhanced description text, formatted with markdown."""
+            
+            enhanced_description = await ai_service.call_genai(
+                prompt=enhance_prompt,
+                temperature=0.3,
+                max_tokens=1500
+            )
+            
+            if enhanced_description and len(enhanced_description) > 50:
+                conversation_ctx.collected_data['description'] = enhanced_description.strip()
+                log_info("✅ Enhanced description with KB content", "direct_processor")
+        except Exception as e:
+            log_error(f"Failed to enhance description: {e}", "direct_processor")
     
     # All info collected, create the ticket
     conversation_ctx.state = ConversationState.PROCESSING
