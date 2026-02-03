@@ -1065,7 +1065,17 @@ Create well-structured user stories that:
 4. Include relevant labels based on the feature area
 5. Reference the documentation to ensure stories align with existing system architecture
 6. Group related stories under appropriate epics
-${databaseSchema ? "7. Reference specific database tables and columns when the story involves data changes\n8. Include database-related acceptance criteria (e.g., data validation, constraints)" : ""}
+${databaseSchema ? `7. Reference specific database tables and columns when the story involves data changes
+8. Include database-related acceptance criteria (e.g., data validation, constraints)
+
+CRITICAL DATABASE REQUIREMENT:
+If the BRD requirements involve ANY data storage, new entities, data models, or modifications to existing data structures, you MUST include at least one dedicated "Database Schema" user story that covers:
+- Creating new tables or modifying existing tables
+- Adding/modifying columns, constraints, indexes
+- Setting up foreign key relationships
+- Data migration if applicable
+This database story should be one of the first stories (high priority) since other features depend on it.
+Label it with "database" and include specific table/column names in the acceptance criteria.` : ""}
 
 Use the following story key format: ${projectPrefix}-XXX (e.g., ${projectPrefix}-001, ${projectPrefix}-002)
 
