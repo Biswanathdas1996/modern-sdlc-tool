@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { GitBranch, Search, ArrowRight, ExternalLink, Folder, FileCode, Clock, Star, GitFork } from "lucide-react";
+import { GitBranch, Search, ArrowRight, ExternalLink, Folder, FileCode, Clock, Star, GitFork, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,12 +61,30 @@ export default function AnalyzePage() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/projects/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/documentation/current"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analysis/current"] });
+    },
+  });
+
   const isAnalyzing = analyzeMutation.isPending || !!analyzingProjectId;
   const analyzingProject = projects?.find(p => p.id === analyzingProjectId);
 
   const handleAnalyze = () => {
     if (repoUrl.trim()) {
       analyzeMutation.mutate(repoUrl.trim());
+    }
+  };
+
+  const handleDelete = (e: React.MouseEvent, projectId: string) => {
+    e.stopPropagation();
+    if (confirm("Are you sure you want to delete this project?")) {
+      deleteMutation.mutate(projectId);
     }
   };
 
@@ -256,6 +274,15 @@ export default function AnalyzePage() {
                               >
                                 <ExternalLink className="h-4 w-4" />
                               </a>
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              onClick={(e) => handleDelete(e, project.id)}
+                              disabled={deleteMutation.isPending}
+                              data-testid={`button-delete-project-${project.id}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
                           </div>
                         </div>

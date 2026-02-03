@@ -71,6 +71,22 @@ export async function registerRoutes(
     }
   });
 
+  // Delete a project
+  app.delete("/api/projects/:id", async (req: Request, res: Response) => {
+    try {
+      const id = req.params.id as string;
+      const project = await storage.getProject(id);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      await storage.deleteProject(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting project:", error);
+      res.status(500).json({ error: "Failed to delete project" });
+    }
+  });
+
   // Analyze Repository
   app.post("/api/projects/analyze", async (req: Request, res: Response) => {
     try {
