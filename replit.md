@@ -27,21 +27,17 @@ Preferred communication style: Simple, everyday language.
 - **Build Tool**: Vite with custom plugins for Replit integration
 
 ### Backend Architecture
-**Python/FastAPI Backend (Primary - Converted from Node.js)**
+**Python/FastAPI Backend**
 - **Runtime**: Python 3.11 with FastAPI
 - **Language**: Python with async/await support
-- **API Design**: RESTful JSON APIs under `/api/*` routes (same endpoints as Node.js version)
+- **API Design**: RESTful JSON APIs under `/api/*` routes
 - **AI Integration**: PWC GenAI (Gemini 2.0 Flash) via httpx async client
 - **File Handling**: python-multipart for file uploads, PyPDF2 and python-docx for parsing
 - **SSE Streaming**: sse-starlette for BRD generation streaming
 - **Database**: psycopg2 for PostgreSQL schema introspection
 - **MongoDB**: pymongo for knowledge base operations
 - **Location**: `server_py/` directory
-
-**Legacy Node.js Backend (Original)**
-- **Runtime**: Node.js with Express.js
-- **Language**: TypeScript with ES modules
-- **Location**: `server/` directory
+- **Launcher**: `server/index.ts` (Node wrapper that starts Python backend)
 
 ### Data Storage
 - **ORM**: Drizzle ORM with PostgreSQL dialect
@@ -195,26 +191,10 @@ The following features are disabled because PWC GenAI only supports text generat
 
 ### Running the Application
 
-**Python Backend (Recommended)**
-```bash
-./run-python-backend.sh
-```
-This starts the Python FastAPI backend on port 5000 with Vite dev server on port 5173 for hot-reload.
-
-Alternatively, run components separately:
-```bash
-# Terminal 1: Start Vite dev server
-npx vite --port 5173
-
-# Terminal 2: Start Python backend
-cd server_py && python main.py
-```
-
-**Legacy Node.js Backend**
 ```bash
 npm run dev
 ```
-This starts the Express backend and Vite frontend on port 5000.
+This starts the Python FastAPI backend on port 5000. The Node.js wrapper (`server/index.ts`) launches the Python backend automatically.
 
 ### Adding New Pages
 1. Create component in `client/src/pages/`
