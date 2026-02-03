@@ -185,20 +185,20 @@ export default function RequirementsPage() {
 
       <WorkflowHeader
         steps={workflowSteps}
-        title="Feature Requirements"
-        description="Describe your new feature requirements. You can type, upload a document, or use voice input."
+        title="Requirements Input"
+        description="Describe your feature request, bug report, or change request. You can type, upload a document, or use voice input."
       />
 
       <div className="flex-1 overflow-auto p-6">
         <div className="max-w-3xl mx-auto space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Feature Title</CardTitle>
-              <CardDescription>Give your feature request a clear, descriptive title</CardDescription>
+              <CardTitle>Request Title</CardTitle>
+              <CardDescription>Give your request a clear, descriptive title (feature, bug fix, or change)</CardDescription>
             </CardHeader>
             <CardContent>
               <Input
-                placeholder="e.g., User Dashboard with Analytics"
+                placeholder="e.g., User Dashboard Feature, Login Bug Fix, UI Change Request"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 data-testid="input-feature-title"
@@ -208,8 +208,8 @@ export default function RequirementsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Requirements Input</CardTitle>
-              <CardDescription>Choose how you want to provide your feature requirements</CardDescription>
+              <CardTitle>Request Details</CardTitle>
+              <CardDescription>Choose how you want to provide your requirements</CardDescription>
             </CardHeader>
             <CardContent>
               <Tabs value={inputType} onValueChange={(v) => setInputType(v as typeof inputType)}>
@@ -233,7 +233,7 @@ export default function RequirementsPage() {
                     <Label htmlFor="description">Description</Label>
                     <Textarea
                       id="description"
-                      placeholder="Describe your feature requirements in detail. Include user stories, acceptance criteria, and any specific technical requirements..."
+                      placeholder="Describe your request in detail. This can be a new feature, bug report, or change request. Include user stories, acceptance criteria, reproduction steps (for bugs), or specific requirements..."
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       className="min-h-[200px] mt-2"
@@ -358,7 +358,7 @@ export default function RequirementsPage() {
                           )}
                         </p>
                         <p className="text-sm text-muted-foreground text-center max-w-md">
-                          Speak clearly about your feature requirements. The AI will transcribe and analyze your input.
+                          Speak clearly about your requirements. This can be a feature request, bug report, or change request. The AI will transcribe and analyze your input.
                         </p>
                       </div>
                     )}
