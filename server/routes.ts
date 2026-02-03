@@ -38,7 +38,8 @@ const analyzeRequestSchema = z.object({
 const requirementsSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
-  inputType: z.enum(["text", "file", "audio"])
+  inputType: z.enum(["text", "file", "audio"]),
+  requestType: z.enum(["feature", "bug", "change_request"]).default("feature"),
 });
 
 export async function registerRoutes(
@@ -462,7 +463,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Invalid request: title is required" });
       }
       
-      const { title, description, inputType } = parseResult.data;
+      const { title, description, inputType, requestType } = parseResult.data;
       const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
 
       const projects = await storage.getAllProjects();
@@ -487,6 +488,7 @@ export async function registerRoutes(
         title,
         description: finalDescription,
         inputType,
+        requestType,
         rawInput: finalDescription,
       });
 

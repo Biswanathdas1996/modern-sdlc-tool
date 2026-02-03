@@ -88,12 +88,16 @@ export const bpmnDiagramSchema = z.object({
 export type BPMNDiagram = z.infer<typeof bpmnDiagramSchema>;
 
 // Feature Request - input describing a new feature
+export const requestTypeEnum = z.enum(["feature", "bug", "change_request"]);
+export type RequestType = z.infer<typeof requestTypeEnum>;
+
 export const featureRequestSchema = z.object({
   id: z.string(),
   projectId: z.string(),
   title: z.string(),
   description: z.string(),
   inputType: z.enum(["text", "file", "audio"]),
+  requestType: requestTypeEnum.default("feature"),
   rawInput: z.string().optional(),
   createdAt: z.string(),
 });
@@ -105,6 +109,7 @@ export const insertFeatureRequestSchema = z.object({
   title: z.string(),
   description: z.string(),
   inputType: z.enum(["text", "file", "audio"]),
+  requestType: requestTypeEnum.default("feature"),
   rawInput: z.string().optional(),
 });
 
