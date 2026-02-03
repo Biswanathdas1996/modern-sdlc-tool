@@ -24,7 +24,7 @@ import {
   Plus,
   BookOpen,
 } from "lucide-react";
-import { SiJira } from "react-icons/si";
+import { SiJira, SiConfluence } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -201,6 +201,28 @@ export default function BRDPage() {
       setIsCheckingRelated(false);
     }
   };
+
+  const publishToConfluenceMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/confluence/publish", {
+        brdId: brd?.id,
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Published to Confluence",
+        description: `BRD published successfully. View at: ${data.pageUrl}`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Confluence Publish Failed",
+        description: error.message || "Failed to publish BRD to Confluence",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleGenerateWithChoice = () => {
     if (creationMode === "subtask" && selectedParentKey) {
@@ -425,6 +447,19 @@ export default function BRDPage() {
                   <Button variant="outline" onClick={handleExport} data-testid="button-export-brd">
                     <Download className="h-4 w-4 mr-2" />
                     Export
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => publishToConfluenceMutation.mutate()}
+                    disabled={publishToConfluenceMutation.isPending || !brd}
+                    data-testid="button-publish-confluence"
+                  >
+                    {publishToConfluenceMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <SiConfluence className="h-4 w-4 mr-2" />
+                    )}
+                    Publish to Confluence
                   </Button>
                 </div>
               </div>
