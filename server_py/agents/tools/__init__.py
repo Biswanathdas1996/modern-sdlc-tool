@@ -12,6 +12,11 @@ from .ticket_tools import (
     get_last_results_tool,
     make_async_sync
 )
+from .knowledge_base import (
+    search_knowledge_base_tool,
+    get_knowledge_stats_tool,
+    query_mongodb_tool
+)
 from .tool_factory import create_jira_tools
 
 __all__ = [
@@ -28,5 +33,8 @@ __all__ = [
     "bulk_update_tool",
     "get_last_results_tool",
     "make_async_sync",
+    "search_knowledge_base_tool",
+    "get_knowledge_stats_tool",
+    "query_mongodb_tool",
     "create_jira_tools"
 ]

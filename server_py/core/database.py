@@ -33,7 +33,7 @@ class MongoDatabase:
             
     def _ensure_indexes(self):
         """Ensure required indexes exist."""
-        if not self.db:
+        if self.db is None:
             return
             
         chunks_collection = self.db["knowledge_chunks"]
@@ -57,7 +57,7 @@ class MongoDatabase:
             
     def disconnect(self):
         """Disconnect from MongoDB."""
-        if self.client:
+        if self.client is not None:
             self.client.close()
             self.client = None
             self.db = None
@@ -65,7 +65,7 @@ class MongoDatabase:
             
     def get_database(self) -> Database:
         """Get the database instance, connecting if necessary."""
-        if not self.db:
+        if self.db is None:
             return self.connect()
         return self.db
 

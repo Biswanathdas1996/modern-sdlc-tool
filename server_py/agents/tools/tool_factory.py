@@ -12,6 +12,11 @@ from .ticket_tools import (
     get_last_results_tool,
     make_async_sync
 )
+from .knowledge_base import (
+    search_knowledge_base_tool,
+    get_knowledge_stats_tool,
+    query_mongodb_tool
+)
 
 
 def create_jira_tools(jira_service, context: TicketToolsContext) -> List[Tool]:
@@ -107,4 +112,85 @@ def create_jira_tools(jira_service, context: TicketToolsContext) -> List[Tool]:
             func=lambda _: get_last_results_tool(context, _),
             coroutine=lambda _: get_last_results_tool(context, _)
         ),
+        Tool(
+            name="search_knowledge_base",
+            description="""Search the knowledge base for relevant documentation and information.
+            Use this tool when the user wants to:
+            - Find information from uploaded documents
+            - Search for documentation, guidelines, or requirements
+            - Look up context from the knowledge base
+            
+            Input should be a search query string.
+            Examples: "authentication requirements", "API documentation", "security guidelines", "Compliance Audit Workflow"
+            
+            CRITICAL: After receiving search results, you MUST:
+            1. Read and understand the content provided
+            2. Synthesize the information (don't copy-paste raw chunks)
+            3. Create well-structured, formatted output appropriate for the task
+            4. For JIRA tickets: Use clear sections with headers, bullet points, and proper markdown
+            5. Focus on the specific user request - extract only relevant portions
+            6. Format professionally with proper spacing and structure
+            
+            Note: Searches across all projects (both 'default' and 'global').
+            """,
+            func=make_async_sync(lambda q: search_knowledge_base_tool(q, "global", 10)),
+            coroutine=lambda q: search_knowledge_base_tool(q, "global", 10)
+        ),
+        Tool(
+            name="get_knowledge_stats",
+            description="""Get statistics about the knowledge base.
+            Use this tool when the user asks about:
+            - How many documents are in the knowledge base
+            - Knowledge base size or statistics
+            - What's available in the documentation
+            
+            No input required (or use "default" for default project).
+            """,
+            func=make_async_sync(lambda p: get_knowledge_stats_tool("default")),
+            coroutine=lambda p: get_knowledge_stats_tool("default")
+        ),
+        Tool(
+            name="query_mongodb",
+            description="""Query MongoDB directly with custom filters.
+            Use this tool for advanced database queries when you need to:
+            - Retrieve specific data from MongoDB collections
+            - Execute custom queries with filters
+            - Access raw data from the database
+            
+            Input should be a JSON string with: collection (required), query (required as JSON string), limit (optional, default: 10)
+            
+            IMPORTANT: For knowledge_chunks collection, use these field names:
+            - "content" (not "text") - the actual text content
+            - "projectId" (not "project_id") - the project identifier
+            - "documentId" - the document identifier
+            - "metadata.filename" - the source file name
+            
+            Example: {"collection": "knowledge_chunks", "query": "{\\"content\\": {\\"$regex\\": \\"Compliance\\", \\"$options\\": \\"i\\"}}", "limit": 5}
+            """,
+            func=make_async_sync(_create_query_mongodb_wrapper()),
+            coroutine=_create_query_mongodb_wrapper()
+        ),
     ]
+
+
+def _create_query_mongodb_wrapper():
+    """Create a wrapper function for query_mongodb_tool that handles JSON parsing."""
+    import json
+    
+    async def wrapper(input_json: str):
+        try:
+            params = json.loads(input_json)
+            collection = params.get('collection')
+            query = params.get('query', '{}')
+            limit = params.get('limit', 10)
+            
+            if not collection:
+                return "Error: 'collection' parameter is required"
+            
+            return await query_mongodb_tool(collection, query, limit)
+        except json.JSONDecodeError as e:
+            return f"Error parsing JSON input: {str(e)}"
+        except Exception as e:
+            return f"Error: {str(e)}"
+    
+    return wrapper

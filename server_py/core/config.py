@@ -1,5 +1,6 @@
 """Application configuration settings."""
 import os
+from pathlib import Path
 from typing import Optional
 from pydantic_settings import BaseSettings
 from functools import lru_cache
@@ -42,11 +43,21 @@ class Settings(BaseSettings):
     mongodb_uri: Optional[str] = None
     mongodb_db_name: str = "docugen_knowledge"
     
+    # Database (PostgreSQL - optional)
+    database_url: Optional[str] = None
+    
+    # Session
+    session_secret: Optional[str] = None
+    
+    # Node environment (for compatibility)
+    node_env: Optional[str] = None
+    
     # Vite Dev Server
     vite_dev_server: str = "http://localhost:5173"
     
     class Config:
-        env_file = ".env"
+        # Look for .env in project root (parent of server_py)
+        env_file = os.path.join(Path(__file__).parent.parent.parent, ".env")
         case_sensitive = False
         
     @classmethod
