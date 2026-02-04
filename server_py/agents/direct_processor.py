@@ -428,7 +428,7 @@ async def _process_create_subtask(
     description = conversation_ctx.collected_data.get('description', '')
     
     if not parent_key:
-        conversation_ctx.state = ConversationState.GATHERING_INFO
+        conversation_ctx.state = ConversationState.AWAITING_INFO
         return {
             "success": False,
             "state": conversation_ctx.state.value,
@@ -442,7 +442,7 @@ async def _process_create_subtask(
         }
     
     if not summary:
-        conversation_ctx.state = ConversationState.GATHERING_INFO
+        conversation_ctx.state = ConversationState.AWAITING_INFO
         return {
             "success": False,
             "state": conversation_ctx.state.value,
@@ -524,7 +524,7 @@ async def _process_link_issues(
     conversation_ctx.collected_data['link_type'] = link_type
     
     if not source_key:
-        conversation_ctx.state = ConversationState.GATHERING_INFO
+        conversation_ctx.state = ConversationState.AWAITING_INFO
         return {
             "success": False,
             "state": conversation_ctx.state.value,
@@ -538,7 +538,7 @@ async def _process_link_issues(
         }
     
     if not target_key:
-        conversation_ctx.state = ConversationState.GATHERING_INFO
+        conversation_ctx.state = ConversationState.AWAITING_INFO
         return {
             "success": False,
             "state": conversation_ctx.state.value,
@@ -629,7 +629,7 @@ async def _process_issue_report(
         elif any(word in response_lower for word in ['update', 'add', 'comment']):
             # User wants to update existing ticket - need to know which one
             if not conversation_ctx.collected_data.get('ticket_key'):
-                conversation_ctx.state = ConversationState.GATHERING_INFO
+                conversation_ctx.state = ConversationState.AWAITING_INFO
                 return {
                     "success": False,
                     "state": conversation_ctx.state.value,
@@ -664,7 +664,7 @@ async def _process_issue_report(
                 }
             else:
                 # Ask for ticket key
-                conversation_ctx.state = ConversationState.GATHERING_INFO
+                conversation_ctx.state = ConversationState.AWAITING_INFO
                 return {
                     "success": False,
                     "state": conversation_ctx.state.value,
@@ -743,7 +743,7 @@ Return JSON only:
     if related_tickets:
         # Found related tickets - show them and ask what to do
         conversation_ctx.collected_data['pending_action_choice'] = True
-        conversation_ctx.state = ConversationState.GATHERING_INFO
+        conversation_ctx.state = ConversationState.AWAITING_INFO
         
         tickets_list = "\n".join([
             f"- **{t.get('key')}**: {t.get('summary')} ({t.get('status')})"
@@ -775,7 +775,7 @@ Please let me know how you'd like to proceed."""
     else:
         # No related tickets found - offer to create
         conversation_ctx.collected_data['pending_action_choice'] = True
-        conversation_ctx.state = ConversationState.GATHERING_INFO
+        conversation_ctx.state = ConversationState.AWAITING_INFO
         
         response = f"""I searched for related tickets but didn't find any existing issues matching your description.
 

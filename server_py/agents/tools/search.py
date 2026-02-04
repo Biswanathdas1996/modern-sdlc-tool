@@ -74,7 +74,14 @@ Return ONLY the JQL query, nothing else. No explanation, no markdown."""
         
         # Add project filter if provided and not already present
         if project_key and 'project' not in jql.lower():
-            jql = f"project = {project_key} AND ({jql})"
+            # Handle ORDER BY - it must come at the end, outside parentheses
+            if 'order by' in jql.lower():
+                order_idx = jql.lower().index('order by')
+                query_part = jql[:order_idx].strip()
+                order_part = jql[order_idx:].strip()
+                jql = f"project = {project_key} AND ({query_part}) {order_part}"
+            else:
+                jql = f"project = {project_key} AND ({jql})"
         elif project_key:
             # Project is mentioned, ensure it's using the right key
             pass
