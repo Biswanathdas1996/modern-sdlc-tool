@@ -23,7 +23,11 @@ setTimeout(() => {
   const pythonProcess = spawn("python", ["main.py"], {
     cwd: path.join(process.cwd(), "server_py"),
     stdio: "inherit",
-    env: { ...process.env, PYTHONUNBUFFERED: "1" }
+    env: { 
+      ...process.env, 
+      PYTHONUNBUFFERED: "1",
+      NODE_ENV: isDev ? "development" : "production"
+    }
   });
 
   pythonProcess.on("error", (err) => {

@@ -1233,23 +1233,40 @@ async def proxy_to_vite(request: Request, path: str):
     
     if os.environ.get("NODE_ENV") == "production":
         try:
-            static_path = f"../client/dist/{path}" if path else "../client/dist/index.html"
-            if os.path.exists(static_path):
-                with open(static_path, "rb") as f:
-                    content = f.read()
-                content_type = "text/html"
-                if path.endswith(".js"):
-                    content_type = "application/javascript"
-                elif path.endswith(".css"):
-                    content_type = "text/css"
-                elif path.endswith(".json"):
-                    content_type = "application/json"
-                return Response(content=content, media_type=content_type)
-            else:
-                with open("../client/dist/index.html", "rb") as f:
-                    content = f.read()
-                return Response(content=content, media_type="text/html")
-        except Exception:
+            # Production assets are in dist/public/ (built by Vite)
+            dist_path = "../dist/public"
+            static_path = f"{dist_path}/{path}" if path else f"{dist_path}/index.html"
+            
+            # Handle assets subdirectory
+            if path.startswith("assets/") or os.path.exists(static_path):
+                if os.path.exists(static_path) and os.path.isfile(static_path):
+                    with open(static_path, "rb") as f:
+                        content = f.read()
+                    content_type = "text/html"
+                    if path.endswith(".js"):
+                        content_type = "application/javascript"
+                    elif path.endswith(".css"):
+                        content_type = "text/css"
+                    elif path.endswith(".json"):
+                        content_type = "application/json"
+                    elif path.endswith(".png"):
+                        content_type = "image/png"
+                    elif path.endswith(".svg"):
+                        content_type = "image/svg+xml"
+                    elif path.endswith(".ico"):
+                        content_type = "image/x-icon"
+                    elif path.endswith(".woff2"):
+                        content_type = "font/woff2"
+                    elif path.endswith(".woff"):
+                        content_type = "font/woff"
+                    return Response(content=content, media_type=content_type)
+            
+            # SPA fallback - serve index.html for all other routes
+            with open(f"{dist_path}/index.html", "rb") as f:
+                content = f.read()
+            return Response(content=content, media_type="text/html")
+        except Exception as e:
+            print(f"Static file error: {e}")
             raise HTTPException(status_code=404, detail="Not found")
     else:
         try:
