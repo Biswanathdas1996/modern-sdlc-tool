@@ -206,6 +206,9 @@ async def direct_process(
         elif action == ActionType.LINK:
             return await _process_link_issues(user_prompt, conversation_ctx, jira_service, ai_service, context)
         
+        elif action == ActionType.ISSUE_REPORT:
+            return await _process_issue_report(user_prompt, conversation_ctx, jira_service, ai_service, context)
+        
         else:
             # Default search
             return await _process_search_tickets(user_prompt, conversation_ctx, jira_service, ai_service, context)
@@ -573,6 +576,226 @@ async def _process_link_issues(
     }
 
 
+async def _process_issue_report(
+    user_prompt: str,
+    conversation_ctx: ConversationContext,
+    jira_service,
+    ai_service,
+    context: Optional[TicketToolsContext] = None
+) -> Dict[str, Any]:
+    """Process issue report - search for related tickets first, then ask what to do.
+    
+    This provides a smarter flow when users describe problems:
+    1. Extract the issue description
+    2. Search for related existing tickets
+    3. Present findings and ask what action to take
+    """
+    log_info(f"🔎 Processing issue report: {user_prompt}", "direct_processor")
+    
+    # Check if we're waiting for user's action choice
+    pending_action = conversation_ctx.collected_data.get('pending_action_choice')
+    if pending_action:
+        # User is responding to "what do you want to do?"
+        response_lower = user_prompt.lower()
+        
+        # Handle simple yes/no confirmations
+        if any(word in response_lower for word in ['yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'please', 'go ahead']):
+            # Affirmative response - create the ticket
+            conversation_ctx.collected_data['summary'] = conversation_ctx.collected_data.get('issue_description', user_prompt)
+            conversation_ctx.collected_data.pop('pending_action_choice', None)
+            return await _process_create_ticket(user_prompt, conversation_ctx, jira_service, ai_service, context)
+        
+        elif any(word in response_lower for word in ['no', 'nope', 'cancel', 'nevermind', 'never mind']):
+            # User doesn't want to proceed
+            conversation_ctx.collected_data.pop('pending_action_choice', None)
+            conversation_ctx.state = ConversationState.COMPLETED
+            return {
+                "success": True,
+                "state": conversation_ctx.state.value,
+                "session_id": conversation_ctx.session_id,
+                "prompt": user_prompt,
+                "intent": "issue_report",
+                "response": "No problem! Let me know if there's anything else I can help you with.",
+                "collected_data": {},
+                "tickets": []
+            }
+        
+        elif any(word in response_lower for word in ['create', 'new', 'open', 'file', 'raise']):
+            # User wants to create a new ticket
+            conversation_ctx.collected_data['summary'] = conversation_ctx.collected_data.get('issue_description', user_prompt)
+            conversation_ctx.collected_data.pop('pending_action_choice', None)
+            return await _process_create_ticket(user_prompt, conversation_ctx, jira_service, ai_service, context)
+        
+        elif any(word in response_lower for word in ['update', 'add', 'comment']):
+            # User wants to update existing ticket - need to know which one
+            if not conversation_ctx.collected_data.get('ticket_key'):
+                conversation_ctx.state = ConversationState.GATHERING_INFO
+                return {
+                    "success": False,
+                    "state": conversation_ctx.state.value,
+                    "session_id": conversation_ctx.session_id,
+                    "prompt": user_prompt,
+                    "intent": "issue_report",
+                    "response": "Which ticket would you like to update? Please provide the ticket key (e.g., PROJ-123) from the list above.",
+                    "missing_fields": [{"field": "ticket_key", "description": "Ticket to update"}],
+                    "collected_data": conversation_ctx.collected_data,
+                    "tickets": context.last_search_results if context else []
+                }
+            conversation_ctx.collected_data.pop('pending_action_choice', None)
+            return await _process_update_ticket(user_prompt, conversation_ctx, jira_service, ai_service, context)
+        
+        elif any(word in response_lower for word in ['view', 'details', 'show', 'see']):
+            # User wants to view details of a ticket
+            ticket_match = re.search(r'\b([A-Z]{2,10}-\d+)\b', user_prompt)
+            if ticket_match:
+                ticket_key = ticket_match.group(1)
+                conversation_ctx.collected_data.pop('pending_action_choice', None)
+                conversation_ctx.state = ConversationState.COMPLETED
+                result = await get_details_tool(jira_service, ticket_key)
+                return {
+                    "success": True,
+                    "state": conversation_ctx.state.value,
+                    "session_id": conversation_ctx.session_id,
+                    "prompt": user_prompt,
+                    "intent": "get_details",
+                    "response": result,
+                    "collected_data": conversation_ctx.collected_data,
+                    "tickets": []
+                }
+            else:
+                # Ask for ticket key
+                conversation_ctx.state = ConversationState.GATHERING_INFO
+                return {
+                    "success": False,
+                    "state": conversation_ctx.state.value,
+                    "session_id": conversation_ctx.session_id,
+                    "prompt": user_prompt,
+                    "intent": "issue_report",
+                    "response": "Which ticket would you like to view? Please provide the ticket key (e.g., PROJ-123).",
+                    "missing_fields": [{"field": "ticket_key", "description": "Ticket to view"}],
+                    "collected_data": conversation_ctx.collected_data,
+                    "tickets": context.last_search_results if context else []
+                }
+        
+        elif re.search(r'\b([A-Z]{2,10}-\d+)\b', user_prompt):
+            # User provided a ticket key - check if they said "view" or default to details
+            ticket_key = re.search(r'\b([A-Z]{2,10}-\d+)\b', user_prompt).group(1)
+            conversation_ctx.collected_data['ticket_key'] = ticket_key
+            conversation_ctx.collected_data.pop('pending_action_choice', None)
+            # Default to showing details when they just provide a ticket key
+            conversation_ctx.state = ConversationState.COMPLETED
+            result = await get_details_tool(jira_service, ticket_key)
+            return {
+                "success": True,
+                "state": conversation_ctx.state.value,
+                "session_id": conversation_ctx.session_id,
+                "prompt": user_prompt,
+                "intent": "get_details",
+                "response": result,
+                "collected_data": conversation_ctx.collected_data,
+                "tickets": []
+            }
+    
+    # First time processing - extract issue description and search
+    # Use AI to extract what the issue is about
+    extract_prompt = f"""Extract the key issue or problem from this description for JIRA search.
+
+User said: "{user_prompt}"
+
+Extract:
+1. A brief search query (2-5 words) to find related JIRA tickets
+2. A summary of the issue for potential ticket creation
+
+Return JSON only:
+{{"search_query": "...", "issue_summary": "..."}}"""
+
+    try:
+        extracted = await ai_service.call_genai(
+            prompt=extract_prompt,
+            temperature=0.1,
+            max_tokens=200
+        )
+        
+        json_match = re.search(r'\{[^}]*\}', extracted, re.DOTALL)
+        if json_match:
+            data = json.loads(json_match.group())
+            search_query = data.get('search_query', user_prompt)
+            issue_summary = data.get('issue_summary', user_prompt)
+        else:
+            search_query = user_prompt
+            issue_summary = user_prompt
+    except Exception as e:
+        log_error(f"Issue extraction failed: {e}", "direct_processor")
+        search_query = user_prompt
+        issue_summary = user_prompt
+    
+    # Store the issue description for later
+    conversation_ctx.collected_data['issue_description'] = issue_summary
+    conversation_ctx.collected_data['original_report'] = user_prompt
+    
+    # Search for related tickets
+    log_info(f"🔍 Searching for related tickets: {search_query}", "direct_processor")
+    search_result = await search_tickets_tool(jira_service, context, search_query, ai_service)
+    
+    # Check if we found any related tickets
+    related_tickets = context.last_search_results if context else []
+    
+    if related_tickets:
+        # Found related tickets - show them and ask what to do
+        conversation_ctx.collected_data['pending_action_choice'] = True
+        conversation_ctx.state = ConversationState.GATHERING_INFO
+        
+        tickets_list = "\n".join([
+            f"- **{t.get('key')}**: {t.get('summary')} ({t.get('status')})"
+            for t in related_tickets[:5]
+        ])
+        
+        response = f"""I found **{len(related_tickets)}** related ticket(s) that might be relevant:
+
+{tickets_list}
+
+**What would you like to do?**
+1. **Create a new ticket** for this issue
+2. **Update an existing ticket** from the list above (add a comment or change status)
+3. **View details** of a specific ticket (just tell me the ticket key)
+
+Please let me know how you'd like to proceed."""
+
+        return {
+            "success": True,
+            "state": conversation_ctx.state.value,
+            "session_id": conversation_ctx.session_id,
+            "prompt": user_prompt,
+            "intent": "issue_report",
+            "response": response,
+            "collected_data": conversation_ctx.collected_data,
+            "tickets": related_tickets[:5],
+            "action_choices": ["create_new", "update_existing", "view_details"]
+        }
+    else:
+        # No related tickets found - offer to create
+        conversation_ctx.collected_data['pending_action_choice'] = True
+        conversation_ctx.state = ConversationState.GATHERING_INFO
+        
+        response = f"""I searched for related tickets but didn't find any existing issues matching your description.
+
+**Issue detected:** {issue_summary}
+
+Would you like me to **create a new ticket** for this issue?"""
+
+        return {
+            "success": True,
+            "state": conversation_ctx.state.value,
+            "session_id": conversation_ctx.session_id,
+            "prompt": user_prompt,
+            "intent": "issue_report",
+            "response": response,
+            "collected_data": conversation_ctx.collected_data,
+            "tickets": [],
+            "action_choices": ["create_new"]
+        }
+
+
 async def _process_update_ticket(
     user_prompt: str,
     conversation_ctx: ConversationContext,
@@ -830,6 +1053,8 @@ async def _handle_info_response(
         return await _process_create_subtask(conversation_ctx.original_intent, conversation_ctx, jira_service, ai_service, context)
     elif conversation_ctx.action_type == ActionType.LINK.value:
         return await _process_link_issues(conversation_ctx.original_intent, conversation_ctx, jira_service, ai_service, context)
+    elif conversation_ctx.action_type == ActionType.ISSUE_REPORT.value:
+        return await _process_issue_report(user_response, conversation_ctx, jira_service, ai_service, context)
     else:
         # Default to search
         return await _process_search_tickets(conversation_ctx.original_intent, conversation_ctx, jira_service, ai_service, context)

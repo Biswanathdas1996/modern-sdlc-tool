@@ -15,6 +15,7 @@ class ActionType(Enum):
     LINK = "link"
     SEARCH_AND_UPDATE = "search_and_update"
     GET_DETAILS = "get_details"
+    ISSUE_REPORT = "issue_report"
     UNKNOWN = "unknown"
 
 
@@ -121,9 +122,9 @@ def analyze_intent(user_prompt: str) -> Dict[str, Any]:
         return {"action": ActionType.GET_DETAILS, "ticket_key": specific_ticket}
     elif is_search:
         return {"action": ActionType.SEARCH, "ticket_key": specific_ticket}
-    elif is_problem_description and not is_search:
-        # If user is describing a problem without explicit "create" command,
-        # treat it as CREATE so they can be guided through ticket creation
-        return {"action": ActionType.CREATE, "ticket_key": specific_ticket}
+    elif is_problem_description and not is_search and not is_create:
+        # If user is describing a problem without explicit commands,
+        # use ISSUE_REPORT to search for related tickets first, then ask what to do
+        return {"action": ActionType.ISSUE_REPORT, "ticket_key": specific_ticket}
     else:
         return {"action": ActionType.UNKNOWN, "ticket_key": specific_ticket}
