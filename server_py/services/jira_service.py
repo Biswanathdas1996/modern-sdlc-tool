@@ -233,6 +233,63 @@ class JiraService:
             log_info(f"Fetched {len(stories)} JIRA issues", "jira")
             return stories
     
+    async def search_with_jql(self, jql: str, max_results: int = 50) -> List[Dict]:
+        """Execute a custom JQL query against JIRA.
+        
+        Args:
+            jql: JQL query string
+            max_results: Maximum number of results to return
+            
+        Returns:
+            List of matching issues
+        """
+        log_info(f"Executing JQL: {jql}", "jira_service")
+        auth_header = self._get_auth_header()
+        jira_base_url = f"https://{self.settings.jira_instance_url}/rest/api/3"
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{jira_base_url}/search/jql",
+                params={
+                    "jql": jql,
+                    "fields": "summary,description,status,priority,labels,subtasks,issuetype,assignee,reporter,created,updated,components",
+                    "maxResults": max_results
+                },
+                headers={
+                    "Authorization": auth_header,
+                    "Accept": "application/json"
+                }
+            )
+            
+            if response.status_code != 200:
+                log_error(f"JQL search error: {response.text}", "jira_service")
+                raise Exception(f"JQL search failed: {response.status_code}")
+            
+            data = response.json()
+            issues = [
+                {
+                    "key": issue.get("key"),
+                    "summary": issue.get("fields", {}).get("summary"),
+                    "description": self._extract_text_from_adf(
+                        issue.get("fields", {}).get("description")
+                    ),
+                    "status": issue.get("fields", {}).get("status", {}).get("name", "Unknown"),
+                    "priority": issue.get("fields", {}).get("priority", {}).get("name", "Medium"),
+                    "labels": issue.get("fields", {}).get("labels", []),
+                    "issueType": issue.get("fields", {}).get("issuetype", {}).get("name", "Story"),
+                    "subtaskCount": len(issue.get("fields", {}).get("subtasks", [])),
+                    "assignee": issue.get("fields", {}).get("assignee", {}).get("displayName") if issue.get("fields", {}).get("assignee") else None,
+                    "reporter": issue.get("fields", {}).get("reporter", {}).get("displayName") if issue.get("fields", {}).get("reporter") else None,
+                    "created": issue.get("fields", {}).get("created"),
+                    "updated": issue.get("fields", {}).get("updated"),
+                    "components": [c.get("name") for c in issue.get("fields", {}).get("components", [])]
+                }
+                for issue in data.get("issues", [])
+            ]
+            
+            log_info(f"JQL search returned {len(issues)} issues", "jira_service")
+            return issues
+
     async def get_parent_story_context(self, parent_jira_key: str) -> Optional[str]:
         """Fetch context from parent JIRA story."""
         try:

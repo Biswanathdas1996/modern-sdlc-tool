@@ -4,7 +4,7 @@ import asyncio
 from typing import List, Dict, Any
 
 from core.logging import log_info, log_error
-from .search import search_jira_tickets
+from .search import search_jira_tickets, search_with_jql
 from .jira_operations import (
     create_jira_issue, 
     update_jira_issue, 
@@ -37,20 +37,27 @@ def make_async_sync(async_func):
     return sync_wrapper
 
 
-async def search_tickets_tool(jira_service, context: TicketToolsContext, query: str) -> str:
-    """Search for JIRA tickets and format results.
+async def search_tickets_tool(jira_service, context: TicketToolsContext, query: str, ai_service=None) -> str:
+    """Search for JIRA tickets using LLM-generated JQL.
     
     Args:
         jira_service: JiraService instance
         context: Shared context for storing results
-        query: Search query string
+        query: Natural language search query
+        ai_service: Optional AI service for JQL generation
         
     Returns:
         Formatted search results
     """
     try:
         log_info(f"🔍 Searching tickets: {query}", "jira_agent")
-        tickets = await search_jira_tickets(jira_service, query)
+        
+        # Use JQL-based search if AI service is available
+        if ai_service:
+            project_key = getattr(jira_service.settings, 'jira_project_key', None)
+            tickets = await search_with_jql(jira_service, ai_service, query, project_key)
+        else:
+            tickets = await search_jira_tickets(jira_service, query)
         
         # Store for chained operations
         context.last_search_results = tickets
@@ -61,9 +68,13 @@ async def search_tickets_tool(jira_service, context: TicketToolsContext, query: 
         result = f"Found {len(tickets)} ticket(s):\n\n"
         for ticket in tickets:
             result += f"- **{ticket.get('key')}**: {ticket.get('summary')}\n"
-            result += f"  Status: {ticket.get('status')} | Priority: {ticket.get('priority')}\n"
+            result += f"  Type: {ticket.get('issueType', 'Unknown')} | Status: {ticket.get('status')} | Priority: {ticket.get('priority')}\n"
+            if ticket.get('assignee'):
+                result += f"  Assignee: {ticket.get('assignee')}\n"
             if ticket.get('labels'):
                 result += f"  Labels: {', '.join(ticket.get('labels', []))}\n"
+            if ticket.get('components'):
+                result += f"  Components: {', '.join(ticket.get('components', []))}\n"
             result += "\n"
         
         return result

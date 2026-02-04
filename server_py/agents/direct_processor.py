@@ -705,7 +705,7 @@ async def _process_search_tickets(
     
     # Perform search
     conversation_ctx.state = ConversationState.PROCESSING
-    result = await search_tickets_tool(jira_service, context, user_prompt)
+    result = await search_tickets_tool(jira_service, context, user_prompt, ai_service)
     
     # Generate AI analysis of results with enriched context
     if context.last_search_results:
@@ -848,7 +848,7 @@ async def _process_without_conversation(
     
     try:
         if action == ActionType.SEARCH or action == ActionType.UNKNOWN:
-            result = await search_tickets_tool(jira_service, context, user_prompt)
+            result = await search_tickets_tool(jira_service, context, user_prompt, ai_service)
             
             if context.last_search_results:
                 tickets_summary = format_tickets_for_agent(context.last_search_results)
@@ -971,7 +971,7 @@ JSON only, no other text:"""
             }
         
         else:
-            result = await search_tickets_tool(jira_service, context, user_prompt)
+            result = await search_tickets_tool(jira_service, context, user_prompt, ai_service)
             return {
                 "success": True,
                 "prompt": user_prompt,
