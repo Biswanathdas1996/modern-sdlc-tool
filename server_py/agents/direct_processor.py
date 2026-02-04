@@ -412,7 +412,7 @@ async def _process_create_subtask(
     context: Optional[TicketToolsContext] = None
 ) -> Dict[str, Any]:
     """Process subtask creation request."""
-    import re
+    from .conversation_manager import InfoRequest
     
     # Extract parent key from prompt or collected data
     parent_key = conversation_ctx.collected_data.get('parent_key')
@@ -428,6 +428,8 @@ async def _process_create_subtask(
     description = conversation_ctx.collected_data.get('description', '')
     
     if not parent_key:
+        missing = [InfoRequest(field="parent_key", description="Parent ticket key", required=True)]
+        conversation_ctx.set_missing_fields(missing)
         conversation_ctx.state = ConversationState.AWAITING_INFO
         return {
             "success": False,
@@ -436,12 +438,14 @@ async def _process_create_subtask(
             "prompt": user_prompt,
             "intent": "subtask",
             "response": "I need to know which ticket to create the subtask under. Please provide the parent ticket key (e.g., PROJ-123).",
-            "missing_fields": [{"field": "parent_key", "description": "Parent ticket key"}],
+            "missing_fields": [f.to_dict() for f in missing],
             "collected_data": conversation_ctx.collected_data,
             "tickets": []
         }
     
     if not summary:
+        missing = [InfoRequest(field="summary", description="Subtask summary", required=True)]
+        conversation_ctx.set_missing_fields(missing)
         conversation_ctx.state = ConversationState.AWAITING_INFO
         return {
             "success": False,
@@ -450,7 +454,7 @@ async def _process_create_subtask(
             "prompt": user_prompt,
             "intent": "subtask",
             "response": f"What should the subtask under **{parent_key}** be about? Please provide a summary.",
-            "missing_fields": [{"field": "summary", "description": "Subtask summary"}],
+            "missing_fields": [f.to_dict() for f in missing],
             "collected_data": conversation_ctx.collected_data,
             "tickets": []
         }
@@ -489,7 +493,7 @@ async def _process_link_issues(
     context: Optional[TicketToolsContext] = None
 ) -> Dict[str, Any]:
     """Process issue linking request."""
-    import re
+    from .conversation_manager import InfoRequest
     
     # Try to extract ticket keys from the prompt
     ticket_keys = re.findall(r'\b([A-Z]{2,10}-\d+)\b', user_prompt)
@@ -524,6 +528,8 @@ async def _process_link_issues(
     conversation_ctx.collected_data['link_type'] = link_type
     
     if not source_key:
+        missing = [InfoRequest(field="source_key", description="Source ticket key", required=True)]
+        conversation_ctx.set_missing_fields(missing)
         conversation_ctx.state = ConversationState.AWAITING_INFO
         return {
             "success": False,
@@ -532,12 +538,14 @@ async def _process_link_issues(
             "prompt": user_prompt,
             "intent": "link",
             "response": "Which ticket would you like to link from? Please provide the source ticket key (e.g., PROJ-123).",
-            "missing_fields": [{"field": "source_key", "description": "Source ticket key"}],
+            "missing_fields": [f.to_dict() for f in missing],
             "collected_data": conversation_ctx.collected_data,
             "tickets": []
         }
     
     if not target_key:
+        missing = [InfoRequest(field="target_key", description="Target ticket key", required=True)]
+        conversation_ctx.set_missing_fields(missing)
         conversation_ctx.state = ConversationState.AWAITING_INFO
         return {
             "success": False,
@@ -546,7 +554,7 @@ async def _process_link_issues(
             "prompt": user_prompt,
             "intent": "link",
             "response": f"Which ticket would you like to link **{source_key}** to? Please provide the target ticket key.",
-            "missing_fields": [{"field": "target_key", "description": "Target ticket key"}],
+            "missing_fields": [f.to_dict() for f in missing],
             "collected_data": conversation_ctx.collected_data,
             "tickets": []
         }
