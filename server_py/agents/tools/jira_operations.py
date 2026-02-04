@@ -391,38 +391,52 @@ async def create_subtask(
     # Build description in ADF format
     adf_description = markdown_to_adf(description)
     
-    issue_data = {
-        "fields": {
-            "project": {"key": settings.jira_project_key},
-            "parent": {"key": parent_key},
-            "summary": summary,
-            "description": adf_description,
-            "issuetype": {"name": "Sub-task"},
-        }
-    }
-    
-    if priority:
-        issue_data["fields"]["priority"] = {"name": priority}
+    # Try different subtask type names - JIRA projects can have different configurations
+    subtask_type_names = ["Subtask", "Sub-task", "Sub Task", "subtask"]
     
     async with httpx.AsyncClient() as client:
-        response = await client.post(
-            f"{jira_base_url}/issue",
-            headers={
-                "Authorization": f"Basic {auth}",
-                "Accept": "application/json",
-                "Content-Type": "application/json"
-            },
-            json=issue_data
-        )
-        
-        if response.status_code == 201:
-            data = response.json()
-            ticket_key = data.get("key")
-            return f"✅ Created subtask **{ticket_key}** under {parent_key}: {summary}"
-        else:
+        # Try each subtask type name until one works
+        for subtask_type in subtask_type_names:
+            issue_data = {
+                "fields": {
+                    "project": {"key": settings.jira_project_key},
+                    "parent": {"key": parent_key},
+                    "summary": summary,
+                    "description": adf_description,
+                    "issuetype": {"name": subtask_type},
+                }
+            }
+            
+            if priority:
+                issue_data["fields"]["priority"] = {"name": priority}
+            
+            response = await client.post(
+                f"{jira_base_url}/issue",
+                headers={
+                    "Authorization": f"Basic {auth}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                },
+                json=issue_data
+            )
+            
+            if response.status_code == 201:
+                data = response.json()
+                ticket_key = data.get("key")
+                return f"✅ Created subtask **{ticket_key}** under {parent_key}: {summary}"
+            
+            # Check if it's an issue type error - try next type
+            if "issuetype" in response.text.lower():
+                log_info(f"Subtask type '{subtask_type}' not valid, trying next...", "jira_agent")
+                continue
+            
+            # Other error - return it
             error_detail = response.text
             log_error(f"JIRA subtask create error: {error_detail}", "jira_agent")
             return f"❌ Failed to create subtask: {response.status_code} - {error_detail}"
+        
+        # If we get here, none of the subtask types worked
+        return f"❌ Failed to create subtask: Could not find a valid subtask issue type in your JIRA project"
 
 
 async def link_issues(
