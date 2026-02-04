@@ -48,9 +48,21 @@ async def create_jira_issue(
         }
     }
     
-    # Add priority if supported
+    # Add priority if supported - map to common JIRA priority names
     if priority:
-        issue_data["fields"]["priority"] = {"name": priority}
+        # Map priority names to common JIRA variants
+        priority_mapping = {
+            "critical": "Highest",  # Some projects use Highest
+            "highest": "Highest",
+            "high": "High",
+            "medium": "Medium",
+            "low": "Low",
+            "lowest": "Lowest"
+        }
+        # Use mapping or original value
+        mapped_priority = priority_mapping.get(priority.lower(), priority)
+        issue_data["fields"]["priority"] = {"name": mapped_priority}
+        log_info(f"Setting priority: {priority} -> {mapped_priority}", "jira_agent")
     
     async with httpx.AsyncClient() as client:
         response = await client.post(
@@ -408,7 +420,17 @@ async def create_subtask(
             }
             
             if priority:
-                issue_data["fields"]["priority"] = {"name": priority}
+                # Map priority names to common JIRA variants
+                priority_mapping = {
+                    "critical": "Highest",
+                    "highest": "Highest",
+                    "high": "High",
+                    "medium": "Medium",
+                    "low": "Low",
+                    "lowest": "Lowest"
+                }
+                mapped_priority = priority_mapping.get(priority.lower(), priority)
+                issue_data["fields"]["priority"] = {"name": mapped_priority}
             
             response = await client.post(
                 f"{jira_base_url}/issue",
