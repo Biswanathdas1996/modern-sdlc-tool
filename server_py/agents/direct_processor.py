@@ -13,7 +13,9 @@ from .tools import (
     create_ticket_tool,
     update_ticket_tool,
     get_details_tool,
-    format_tickets_for_agent
+    format_tickets_for_agent,
+    create_subtask_tool,
+    link_issues_tool
 )
 from .conversation_manager import ConversationContext, ConversationState
 from .info_gathering import (
@@ -197,6 +199,12 @@ async def direct_process(
                 "tickets": [],
                 "collected_data": conversation_ctx.collected_data
             }
+        
+        elif action == ActionType.SUBTASK:
+            return await _process_create_subtask(user_prompt, conversation_ctx, jira_service, ai_service, context)
+        
+        elif action == ActionType.LINK:
+            return await _process_link_issues(user_prompt, conversation_ctx, jira_service, ai_service, context)
         
         else:
             # Default search
@@ -387,6 +395,178 @@ Return ONLY the enhanced description text, formatted with markdown."""
         "session_id": conversation_ctx.session_id,
         "prompt": user_prompt,
         "intent": "create",
+        "response": result,
+        "collected_data": conversation_ctx.collected_data,
+        "tickets": []
+    }
+
+
+async def _process_create_subtask(
+    user_prompt: str,
+    conversation_ctx: ConversationContext,
+    jira_service,
+    ai_service,
+    context: Optional[TicketToolsContext] = None
+) -> Dict[str, Any]:
+    """Process subtask creation request."""
+    import re
+    
+    # Extract parent key from prompt or collected data
+    parent_key = conversation_ctx.collected_data.get('parent_key')
+    if not parent_key:
+        # Try to extract from prompt
+        ticket_match = re.search(r'\b([A-Z]{2,10}-\d+)\b', user_prompt)
+        if ticket_match:
+            parent_key = ticket_match.group(1)
+            conversation_ctx.collected_data['parent_key'] = parent_key
+    
+    # Check if we have all required information
+    summary = conversation_ctx.collected_data.get('summary')
+    description = conversation_ctx.collected_data.get('description', '')
+    
+    if not parent_key:
+        conversation_ctx.state = ConversationState.GATHERING_INFO
+        return {
+            "success": False,
+            "state": conversation_ctx.state.value,
+            "session_id": conversation_ctx.session_id,
+            "prompt": user_prompt,
+            "intent": "subtask",
+            "response": "I need to know which ticket to create the subtask under. Please provide the parent ticket key (e.g., PROJ-123).",
+            "missing_fields": [{"field": "parent_key", "description": "Parent ticket key"}],
+            "collected_data": conversation_ctx.collected_data,
+            "tickets": []
+        }
+    
+    if not summary:
+        conversation_ctx.state = ConversationState.GATHERING_INFO
+        return {
+            "success": False,
+            "state": conversation_ctx.state.value,
+            "session_id": conversation_ctx.session_id,
+            "prompt": user_prompt,
+            "intent": "subtask",
+            "response": f"What should the subtask under **{parent_key}** be about? Please provide a summary.",
+            "missing_fields": [{"field": "summary", "description": "Subtask summary"}],
+            "collected_data": conversation_ctx.collected_data,
+            "tickets": []
+        }
+    
+    # Create the subtask
+    log_info(f"📝 Creating subtask under {parent_key}: {summary}", "direct_processor")
+    
+    subtask_data = {
+        "parent_key": parent_key,
+        "summary": summary,
+        "description": description,
+        "priority": conversation_ctx.collected_data.get('priority', 'Medium')
+    }
+    
+    conversation_ctx.state = ConversationState.PROCESSING
+    result = await create_subtask_tool(jira_service, json.dumps(subtask_data))
+    conversation_ctx.state = ConversationState.COMPLETED
+    
+    return {
+        "success": "✅" in result,
+        "state": conversation_ctx.state.value,
+        "session_id": conversation_ctx.session_id,
+        "prompt": user_prompt,
+        "intent": "subtask",
+        "response": result,
+        "collected_data": conversation_ctx.collected_data,
+        "tickets": []
+    }
+
+
+async def _process_link_issues(
+    user_prompt: str,
+    conversation_ctx: ConversationContext,
+    jira_service,
+    ai_service,
+    context: Optional[TicketToolsContext] = None
+) -> Dict[str, Any]:
+    """Process issue linking request."""
+    import re
+    
+    # Try to extract ticket keys from the prompt
+    ticket_keys = re.findall(r'\b([A-Z]{2,10}-\d+)\b', user_prompt)
+    
+    source_key = conversation_ctx.collected_data.get('source_key')
+    target_key = conversation_ctx.collected_data.get('target_key')
+    
+    # If we found multiple keys in the prompt, use them
+    if len(ticket_keys) >= 2 and not source_key and not target_key:
+        source_key = ticket_keys[0]
+        target_key = ticket_keys[1]
+        conversation_ctx.collected_data['source_key'] = source_key
+        conversation_ctx.collected_data['target_key'] = target_key
+    elif len(ticket_keys) == 1:
+        if not source_key:
+            source_key = ticket_keys[0]
+            conversation_ctx.collected_data['source_key'] = source_key
+        elif not target_key:
+            target_key = ticket_keys[0]
+            conversation_ctx.collected_data['target_key'] = target_key
+    
+    # Check for link type
+    link_type = conversation_ctx.collected_data.get('link_type', 'Relates')
+    prompt_lower = user_prompt.lower()
+    if 'block' in prompt_lower:
+        link_type = 'Blocks'
+    elif 'duplicate' in prompt_lower:
+        link_type = 'Duplicate'
+    elif 'relate' in prompt_lower:
+        link_type = 'Relates'
+    
+    conversation_ctx.collected_data['link_type'] = link_type
+    
+    if not source_key:
+        conversation_ctx.state = ConversationState.GATHERING_INFO
+        return {
+            "success": False,
+            "state": conversation_ctx.state.value,
+            "session_id": conversation_ctx.session_id,
+            "prompt": user_prompt,
+            "intent": "link",
+            "response": "Which ticket would you like to link from? Please provide the source ticket key (e.g., PROJ-123).",
+            "missing_fields": [{"field": "source_key", "description": "Source ticket key"}],
+            "collected_data": conversation_ctx.collected_data,
+            "tickets": []
+        }
+    
+    if not target_key:
+        conversation_ctx.state = ConversationState.GATHERING_INFO
+        return {
+            "success": False,
+            "state": conversation_ctx.state.value,
+            "session_id": conversation_ctx.session_id,
+            "prompt": user_prompt,
+            "intent": "link",
+            "response": f"Which ticket would you like to link **{source_key}** to? Please provide the target ticket key.",
+            "missing_fields": [{"field": "target_key", "description": "Target ticket key"}],
+            "collected_data": conversation_ctx.collected_data,
+            "tickets": []
+        }
+    
+    # Create the link
+    log_info(f"🔗 Linking {source_key} to {target_key} ({link_type})", "direct_processor")
+    
+    link_data = {
+        "source_key": source_key,
+        "target_key": target_key,
+        "link_type": link_type
+    }
+    
+    conversation_ctx.state = ConversationState.PROCESSING
+    result = await link_issues_tool(jira_service, json.dumps(link_data))
+    conversation_ctx.state = ConversationState.COMPLETED
+    
+    return {
+        "success": "✅" in result,
+        "state": conversation_ctx.state.value,
+        "session_id": conversation_ctx.session_id,
+        "prompt": user_prompt,
+        "intent": "link",
         "response": result,
         "collected_data": conversation_ctx.collected_data,
         "tickets": []
@@ -646,6 +826,10 @@ async def _handle_info_response(
         return await _process_update_ticket(conversation_ctx.original_intent, conversation_ctx, jira_service, ai_service, context)
     elif conversation_ctx.action_type == ActionType.SEARCH.value:
         return await _process_search_tickets(conversation_ctx.original_intent, conversation_ctx, jira_service, ai_service, context)
+    elif conversation_ctx.action_type == ActionType.SUBTASK.value:
+        return await _process_create_subtask(conversation_ctx.original_intent, conversation_ctx, jira_service, ai_service, context)
+    elif conversation_ctx.action_type == ActionType.LINK.value:
+        return await _process_link_issues(conversation_ctx.original_intent, conversation_ctx, jira_service, ai_service, context)
     else:
         # Default to search
         return await _process_search_tickets(conversation_ctx.original_intent, conversation_ctx, jira_service, ai_service, context)

@@ -10,6 +10,8 @@ from .ticket_tools import (
     update_ticket_tool,
     bulk_update_tool,
     get_last_results_tool,
+    create_subtask_tool,
+    link_issues_tool,
     make_async_sync
 )
 from .knowledge_base import (
@@ -169,6 +171,45 @@ def create_jira_tools(jira_service, context: TicketToolsContext) -> List[Tool]:
             """,
             func=make_async_sync(_create_query_mongodb_wrapper()),
             coroutine=_create_query_mongodb_wrapper()
+        ),
+        Tool(
+            name="create_subtask",
+            description="""Create a subtask under an existing JIRA ticket.
+            Use this tool when the user wants to:
+            - Create a subtask for an existing story/bug/task
+            - Add a child task to a parent ticket
+            - Break down a ticket into smaller tasks
+            
+            Input should be a JSON string with: 
+            - parent_key (required): The parent ticket key (e.g., "PROJ-123")
+            - summary (required): Subtask summary/title
+            - description (optional): Subtask description
+            - priority (optional): Low/Medium/High/Critical, default: Medium
+            
+            Example: {"parent_key": "PROJ-123", "summary": "Implement unit tests", "description": "Add tests for login feature"}
+            """,
+            func=make_async_sync(lambda j: create_subtask_tool(jira_service, j)),
+            coroutine=lambda j: create_subtask_tool(jira_service, j)
+        ),
+        Tool(
+            name="link_issues",
+            description="""Link two JIRA issues together.
+            Use this tool when the user wants to:
+            - Link a story to another ticket
+            - Create relationships between issues (relates to, blocks, duplicates, etc.)
+            - Connect related tickets
+            
+            Input should be a JSON string with:
+            - source_key (required): The source ticket key (e.g., "PROJ-123")
+            - target_key (required): The target ticket key to link to
+            - link_type (optional): Type of link - "Relates", "Blocks", "Duplicates", etc. Default: "Relates"
+            
+            Available link types: Relates, Blocks, is blocked by, Duplicates, Clones
+            
+            Example: {"source_key": "PROJ-123", "target_key": "PROJ-456", "link_type": "Blocks"}
+            """,
+            func=make_async_sync(lambda j: link_issues_tool(jira_service, j)),
+            coroutine=lambda j: link_issues_tool(jira_service, j)
         ),
     ]
 

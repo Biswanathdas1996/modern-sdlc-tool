@@ -5,7 +5,14 @@ from typing import List, Dict, Any
 
 from core.logging import log_info, log_error
 from .search import search_jira_tickets
-from .jira_operations import create_jira_issue, update_jira_issue, get_ticket_details
+from .jira_operations import (
+    create_jira_issue, 
+    update_jira_issue, 
+    get_ticket_details,
+    create_subtask,
+    link_issues,
+    markdown_to_adf
+)
 
 
 class TicketToolsContext:
@@ -237,3 +244,87 @@ def get_last_results_tool(context: TicketToolsContext, _: str = "") -> str:
         result += f"- **{ticket.get('key')}**: {ticket.get('summary')} ({ticket.get('status')})\n"
     
     return result
+
+
+async def create_subtask_tool(jira_service, input_json: str) -> str:
+    """Create a subtask under an existing JIRA ticket.
+    
+    Args:
+        jira_service: JiraService instance
+        input_json: JSON string with subtask details
+        
+    Returns:
+        Success/failure message
+    """
+    try:
+        if isinstance(input_json, str):
+            data = json.loads(input_json)
+        else:
+            data = input_json
+        
+        parent_key = data.get('parent_key')
+        summary = data.get('summary')
+        description = data.get('description', '')
+        priority = data.get('priority', 'Medium')
+        
+        if not parent_key:
+            return "Error: 'parent_key' is required to create a subtask"
+        if not summary:
+            return "Error: 'summary' is required to create a subtask"
+        
+        log_info(f"📝 Creating subtask under {parent_key}: {summary}", "jira_agent")
+        
+        return await create_subtask(
+            jira_service=jira_service,
+            parent_key=parent_key,
+            summary=summary,
+            description=description,
+            priority=priority
+        )
+        
+    except json.JSONDecodeError as e:
+        return f"Error parsing input JSON: {str(e)}. Please provide valid JSON."
+    except Exception as e:
+        log_error(f"Create subtask error: {e}", "jira_agent", e)
+        return f"Error creating subtask: {str(e)}"
+
+
+async def link_issues_tool(jira_service, input_json: str) -> str:
+    """Link two JIRA issues together.
+    
+    Args:
+        jira_service: JiraService instance
+        input_json: JSON string with link details
+        
+    Returns:
+        Success/failure message
+    """
+    try:
+        if isinstance(input_json, str):
+            data = json.loads(input_json)
+        else:
+            data = input_json
+        
+        source_key = data.get('source_key')
+        target_key = data.get('target_key')
+        link_type = data.get('link_type', 'Relates')
+        
+        if not source_key:
+            return "Error: 'source_key' is required to link issues"
+        if not target_key:
+            return "Error: 'target_key' is required to link issues"
+        
+        log_info(f"🔗 Linking {source_key} to {target_key}", "jira_agent")
+        
+        return await link_issues(
+            jira_service=jira_service,
+            source_key=source_key,
+            target_key=target_key,
+            link_type=link_type
+        )
+        
+    except json.JSONDecodeError as e:
+        return f"Error parsing input JSON: {str(e)}. Please provide valid JSON."
+    except Exception as e:
+        log_error(f"Link issues error: {e}", "jira_agent", e)
+        return f"Error linking issues: {str(e)}"

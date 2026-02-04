@@ -11,6 +11,8 @@ class ActionType(Enum):
     SEARCH = "search"
     CREATE = "create"
     UPDATE = "update"
+    SUBTASK = "subtask"
+    LINK = "link"
     SEARCH_AND_UPDATE = "search_and_update"
     GET_DETAILS = "get_details"
     UNKNOWN = "unknown"
@@ -73,6 +75,8 @@ def analyze_intent(user_prompt: str) -> Dict[str, Any]:
     update_patterns = ['update', 'change', 'modify', 'set status', 'mark as', 'move to', 'transition']
     search_patterns = ['find', 'search', 'show', 'list', 'get', 'what are', 'which tickets', 'show me', 'give me']
     chained_patterns = ['and update', 'and change', 'then update', 'then mark', 'and mark']
+    subtask_patterns = ['subtask', 'sub-task', 'sub task', 'child task', 'add subtask', 'create subtask', 'add sub-task']
+    link_patterns = ['link', 'connect', 'relate', 'link to', 'relates to', 'blocks', 'is blocked by', 'duplicate']
     
     # Problem description patterns - these suggest the user is reporting an issue
     problem_patterns = [
@@ -87,6 +91,8 @@ def analyze_intent(user_prompt: str) -> Dict[str, Any]:
     is_create = any(p in prompt_lower for p in create_patterns)
     is_update = any(p in prompt_lower for p in update_patterns)
     is_chained = any(p in prompt_lower for p in chained_patterns)
+    is_subtask = any(p in prompt_lower for p in subtask_patterns)
+    is_link = any(p in prompt_lower for p in link_patterns)
     is_problem_description = any(p in prompt_lower for p in problem_patterns)
     
     # Additional check: if prompt contains words like "new" + "ticket/bug/task/story"
@@ -100,7 +106,12 @@ def analyze_intent(user_prompt: str) -> Dict[str, Any]:
     ticket_key_match = re.search(r'\b([A-Z]{2,10}-\d+)\b', user_prompt)
     specific_ticket = ticket_key_match.group(1) if ticket_key_match else None
     
-    if is_search and is_chained:
+    if is_subtask:
+        return {"action": ActionType.SUBTASK, "ticket_key": specific_ticket}
+    elif is_link:
+        # Allow LINK intent even without ticket keys - info gathering will prompt for them
+        return {"action": ActionType.LINK, "ticket_key": specific_ticket}
+    elif is_search and is_chained:
         return {"action": ActionType.SEARCH_AND_UPDATE, "ticket_key": specific_ticket}
     elif is_create:
         return {"action": ActionType.CREATE, "ticket_key": specific_ticket}

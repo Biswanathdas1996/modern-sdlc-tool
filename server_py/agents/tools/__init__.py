@@ -10,6 +10,8 @@ from .ticket_tools import (
     update_ticket_tool,
     bulk_update_tool,
     get_last_results_tool,
+    create_subtask_tool,
+    link_issues_tool,
     make_async_sync
 )
 from .knowledge_base import (
@@ -32,6 +34,8 @@ __all__ = [
     "update_ticket_tool",
     "bulk_update_tool",
     "get_last_results_tool",
+    "create_subtask_tool",
+    "link_issues_tool",
     "make_async_sync",
     "search_knowledge_base_tool",
     "get_knowledge_stats_tool",
