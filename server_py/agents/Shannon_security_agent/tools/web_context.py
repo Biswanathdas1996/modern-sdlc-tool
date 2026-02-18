@@ -10,6 +10,21 @@ from urllib.parse import urlparse, urljoin
 
 SSRF_BLOCKED = {"127.0.0.1", "localhost", "0.0.0.0", "::1", "169.254.169.254", "metadata.google.internal"}
 
+TRUSTED_HOSTING_SUFFIXES = [
+    ".replit.app", ".replit.dev", ".repl.co",
+    ".vercel.app", ".netlify.app", ".herokuapp.com",
+    ".railway.app", ".fly.dev", ".render.com",
+    ".onrender.com", ".azurewebsites.net",
+    ".web.app", ".firebaseapp.com",
+    ".amplifyapp.com", ".pages.dev",
+    ".github.io", ".gitlab.io",
+]
+
+
+def _is_trusted_hosting(hostname: str) -> bool:
+    hostname_lower = hostname.lower()
+    return any(hostname_lower.endswith(suffix) for suffix in TRUSTED_HOSTING_SUFFIXES)
+
 
 def validate_url(url: str) -> bool:
     try:
@@ -17,8 +32,12 @@ def validate_url(url: str) -> bool:
         if parsed.scheme not in ("http", "https"):
             return False
         hostname = parsed.hostname or ""
+        if not hostname:
+            return False
         if hostname.lower() in SSRF_BLOCKED:
             return False
+        if _is_trusted_hosting(hostname):
+            return True
         try:
             resolved = socket.gethostbyname(hostname)
             ip = ipaddress.ip_address(resolved)
