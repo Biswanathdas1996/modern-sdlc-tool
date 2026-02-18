@@ -5,7 +5,7 @@ Supports: Search, Create, Update tickets, chained operations, and multi-turn con
 import asyncio
 from typing import Dict, Any, Optional
 
-from langchain_classic.agents import AgentExecutor, create_react_agent
+from langchain.agents import AgentExecutor, create_react_agent
 from langchain_core.prompts import PromptTemplate
 
 from services.jira_service import JiraService
