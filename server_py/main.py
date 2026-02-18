@@ -1229,33 +1229,34 @@ async def chat_with_unit_test_agent(request: Request):
             import subprocess, re as _re, tempfile
             match = _re.match(r'https://github\.com/([\w.-]+)/([\w.-]+?)(?:\.git)?/?$', repo_url)
             if match:
+                repo_owner = match.group(1)
                 repo_name = match.group(2)
                 clone_dir = os.path.join(tempfile.gettempdir(), "unit_test_repos", f"{session_id}_{repo_name}")
                 if not os.path.exists(clone_dir):
                     os.makedirs(os.path.dirname(clone_dir), exist_ok=True)
-                    clone_env = os.environ.copy()
-                    github_token = clone_env.get("GITHUB_PERSONAL_ACCESS_TOKEN", "")
+                    github_token = os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN", "")
+                    clone_url = f"https://github.com/{repo_owner}/{repo_name}.git"
                     if github_token:
-                        clone_env["GIT_ASKPASS"] = "echo"
-                        clone_env["GIT_TERMINAL_PROMPT"] = "0"
-                        header_value = f"Authorization: Bearer {github_token}"
-                        clone_env["GIT_CONFIG_COUNT"] = "1"
-                        clone_env["GIT_CONFIG_KEY_0"] = "http.extraHeader"
-                        clone_env["GIT_CONFIG_VALUE_0"] = header_value
+                        clone_url = f"https://x-access-token:{github_token}@github.com/{repo_owner}/{repo_name}.git"
+                    clone_env = os.environ.copy()
+                    clone_env["GIT_TERMINAL_PROMPT"] = "0"
                     try:
-                        result = subprocess.run(
-                            ["git", "clone", "--depth", "1", repo_url, clone_dir],
+                        print(f"🔄 Cloning repo: {repo_owner}/{repo_name}")
+                        proc = subprocess.run(
+                            ["git", "clone", "--depth", "1", clone_url, clone_dir],
                             capture_output=True, text=True, timeout=120,
                             env=clone_env
                         )
-                        if result.returncode != 0:
-                            print(f"⚠️ Git clone failed (exit {result.returncode})")
+                        if proc.returncode != 0:
+                            stderr_safe = proc.stderr.replace(github_token, "***") if github_token and proc.stderr else proc.stderr
+                            print(f"⚠️ Git clone failed (exit {proc.returncode}): {stderr_safe}")
                     except subprocess.TimeoutExpired:
                         print("⚠️ Git clone timed out after 120s")
                     except Exception as clone_err:
                         print(f"⚠️ Git clone error: {type(clone_err).__name__}")
                 if os.path.exists(clone_dir) and os.path.isdir(os.path.join(clone_dir, ".git")):
                     unit_test_agent.set_repo(session_id, repo_url, clone_dir, repo_name)
+                    print(f"✅ Repo cloned and linked: {repo_owner}/{repo_name}")
                 elif os.path.exists(clone_dir):
                     import shutil
                     shutil.rmtree(clone_dir, ignore_errors=True)
