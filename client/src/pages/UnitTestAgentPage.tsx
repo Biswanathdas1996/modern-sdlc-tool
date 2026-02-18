@@ -208,7 +208,7 @@ export default function UnitTestAgentPage() {
         </div>
       </div>
 
-      <div className="flex-1 p-6 pt-4 overflow-hidden">
+      <div className="flex-1 min-h-0 p-6 pt-4 overflow-hidden">
         <Card className="h-full flex flex-col">
           <CardHeader className="flex-none pb-3 border-b">
             <CardTitle className="text-base flex items-center gap-2">
@@ -216,8 +216,8 @@ export default function UnitTestAgentPage() {
               Test Generation
             </CardTitle>
           </CardHeader>
-          <CardContent className="flex-1 flex flex-col p-0 overflow-hidden">
-            <div className="flex-1 overflow-y-auto p-4" data-testid="container-messages">
+          <CardContent className="flex-1 min-h-0 flex flex-col p-0 overflow-hidden">
+            <div className="flex-1 min-h-0 overflow-y-auto p-4" data-testid="container-messages">
               {messages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center py-12">
                   <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted mb-4">
