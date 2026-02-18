@@ -639,6 +639,35 @@ async def generate_user_stories_endpoint(request: Request):
         parent_jira_key = body.get("parentJiraKey")
         
         brd = storage.get_current_brd()
+        if not brd and body.get("brdData"):
+            from server_py.models import BRD as BRDModel, BRDContent as BRDContentModel
+            brd_data = body["brdData"]
+            try:
+                content = brd_data.get("content", {})
+                if isinstance(content, dict):
+                    brd_content = BRDContentModel(**content)
+                else:
+                    brd_content = content
+                now = datetime.now().isoformat()
+                brd = BRDModel(
+                    id=brd_data.get("id", "restored"),
+                    projectId=brd_data.get("projectId", ""),
+                    featureRequestId=brd_data.get("featureRequestId", ""),
+                    requestType=brd_data.get("requestType", "feature"),
+                    title=brd_data.get("title", ""),
+                    version=brd_data.get("version", "1.0"),
+                    status=brd_data.get("status", "draft"),
+                    content=brd_content,
+                    knowledgeSources=brd_data.get("knowledgeSources", []),
+                    createdAt=brd_data.get("createdAt", now),
+                    updatedAt=brd_data.get("updatedAt", now),
+                )
+                storage.brds[brd.id] = brd
+                storage.current_brd_id = brd.id
+                print(f"Restored BRD from request body: {brd.title}")
+            except Exception as restore_err:
+                print(f"Error restoring BRD from body: {restore_err}")
+        
         if not brd:
             raise HTTPException(status_code=400, detail="No BRD found. Please generate a BRD first.")
         

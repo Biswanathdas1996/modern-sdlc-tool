@@ -141,7 +141,9 @@ export default function BRDPage() {
 
   const generateStoriesMutation = useMutation({
     mutationFn: async (parentKey?: string) => {
-      const body = parentKey ? { parentJiraKey: parentKey } : {};
+      const body: Record<string, any> = {};
+      if (parentKey) body.parentJiraKey = parentKey;
+      if (brd) body.brdData = brd;
       const response = await apiRequest("POST", "/api/user-stories/generate", body);
       return response.json();
     },
@@ -155,6 +157,13 @@ export default function BRDPage() {
         description: "User stories have been successfully generated from the BRD.",
       });
       navigate("/user-stories");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Generation Failed",
+        description: error?.message || "Failed to generate user stories. Please try regenerating the BRD first.",
+        variant: "destructive",
+      });
     },
   });
 
