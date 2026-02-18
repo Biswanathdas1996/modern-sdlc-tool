@@ -22,6 +22,7 @@ import AgentChatPage from "@/pages/AgentChatPage";
 import SecurityAgentPage from "@/pages/SecurityAgentPage";
 import UnitTestAgentPage from "@/pages/UnitTestAgentPage";
 import WebTestAgentPage from "@/pages/WebTestAgentPage";
+import CodeGenerationPage from "@/pages/CodeGenerationPage";
 import type { Project } from "@shared/schema";
 
 hydrateFromLocalStorage();
@@ -34,6 +35,7 @@ function Router() {
       <Route path="/requirements" component={RequirementsPage} />
       <Route path="/brd" component={BRDPage} />
       <Route path="/user-stories" component={UserStoriesPage} />
+      <Route path="/code-generation" component={CodeGenerationPage} />
       <Route path="/test-cases" component={TestCasesPage} />
       <Route path="/test-data" component={TestDataPage} />
       <Route path="/knowledge-base" component={KnowledgeBasePage} />

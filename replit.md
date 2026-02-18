@@ -9,8 +9,10 @@ The workflow guides users through a multi-step process:
 2. **Documentation** - View AI-generated technical documentation
 3. **Requirements** - Input feature requirements via text or file upload (voice input disabled)
 4. **BRD Generation** - Generate business requirements documents
-5. **Test Cases** - Generate test cases from BRDs
-6. **Test Data** - Generate test data for test cases
+5. **User Stories** - Generate user stories for JIRA
+6. **Generate Code** - AI-powered code generation from user stories (clones repo, analyzes architecture, generates code following existing patterns, push to GitHub)
+7. **Test Cases** - Generate test cases from BRDs
+8. **Test Data** - Generate test data for test cases
 
 ## User Preferences
 
@@ -118,6 +120,7 @@ The following features are disabled because PWC GenAI only supports text generat
 - `SecurityAgentPage` - Shannon Security Agent chat interface for web security assessment
 - `UnitTestAgentPage` - Unit Test Agent chat with background task polling
 - `WebTestAgentPage` - Web Test Agent chat for web app test case generation
+- `CodeGenerationPage` - AI code generation with progress tracking and GitHub push
 - `BRDPage` - Business requirements with streaming generation
 - `TestCasesPage` - Test case viewing with filters
 - `TestDataPage` - Test data with JSON/table views
@@ -139,6 +142,9 @@ The following features are disabled because PWC GenAI only supports text generat
 - `POST /api/v1/unit-test-agent/chat` - Chat with Unit Test Agent
 - `GET /api/v1/unit-test-agent/task/:taskId` - Poll background test generation task status
 - `POST /api/v1/web-test-agent/chat` - Chat with Web Test Agent
+- `POST /api/v1/code-gen/generate` - Start AI code generation (clones repo, generates code)
+- `GET /api/v1/code-gen/task/:taskId` - Poll code generation task status
+- `POST /api/v1/code-gen/push-to-github` - Push generated code to GitHub branch
 - `POST /api/jira/sync-subtask` - Create a single story as a JIRA subtask
 - `POST /api/database-schema/connect` - Connect to external PostgreSQL and fetch schema
 - `GET /api/database-schema/current` - Get current database schema for project

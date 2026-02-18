@@ -16,6 +16,7 @@ import {
   Shield,
   FlaskConical,
   Globe,
+  Code2,
 } from "lucide-react";
 import {
   Sidebar,
@@ -86,12 +87,20 @@ const workflowSteps: WorkflowStep[] = [
     step: 5,
   },
   {
+    id: "code-gen",
+    title: "Generate Code",
+    description: "AI code implementation",
+    path: "/code-generation",
+    icon: Code2,
+    step: 6,
+  },
+  {
     id: "test-cases",
     title: "Test Cases",
     description: "Generate test scenarios",
     path: "/test-cases",
     icon: TestTube,
-    step: 6,
+    step: 7,
   },
   {
     id: "test-data",
@@ -99,7 +108,7 @@ const workflowSteps: WorkflowStep[] = [
     description: "Generate test datasets",
     path: "/test-data",
     icon: Database,
-    step: 7,
+    step: 8,
   },
 ];
 
