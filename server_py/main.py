@@ -1220,6 +1220,11 @@ async def chat_with_unit_test_agent(request: Request):
         if not prompt:
             return JSONResponse(status_code=400, content={"success": False, "error": "Prompt is required"})
 
+        if not repo_url:
+            import re as _re
+            url_match = _re.search(r'https://github\.com/[\w.-]+/[\w.-]+', prompt or "")
+            if url_match:
+                repo_url = url_match.group(0)
         if repo_url and not unit_test_agent._get_session(session_id).get("cloned"):
             import subprocess, re as _re, tempfile
             match = _re.match(r'https://github\.com/([\w.-]+)/([\w.-]+?)(?:\.git)?/?$', repo_url)

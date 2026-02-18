@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -47,8 +47,20 @@ export default function UnitTestAgentPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { getSessionArtifact } = useSession();
 
-  const projectData = getSessionArtifact<{ repoUrl?: string }>("project");
-  const repoUrl = projectData?.repoUrl || "";
+  const { data: projects } = useQuery<Array<{ id: number; repoUrl: string; status: string }>>({
+    queryKey: ["/api/projects"],
+  });
+
+  const getRepoUrl = (): string => {
+    const sessionProject = getSessionArtifact<{ repoUrl?: string }>("project");
+    if (sessionProject?.repoUrl) return sessionProject.repoUrl;
+    if (projects && projects.length > 0) {
+      const completed = projects.filter(p => p.status === "completed");
+      if (completed.length > 0) return completed[completed.length - 1].repoUrl;
+      return projects[projects.length - 1].repoUrl;
+    }
+    return "";
+  };
 
   useEffect(() => {
     document.title = "Unit Test Agent | DocuGen AI";
@@ -56,6 +68,9 @@ export default function UnitTestAgentPage() {
 
   const chatMutation = useMutation({
     mutationFn: async (prompt: string) => {
+      let repoUrl = getRepoUrl();
+      const urlMatch = prompt.match(/https:\/\/github\.com\/[\w.-]+\/[\w.-]+/);
+      if (urlMatch) repoUrl = urlMatch[0];
       const response = await apiRequest("POST", "/api/v1/unit-test-agent/chat", {
         prompt,
         session_id: sessionId,

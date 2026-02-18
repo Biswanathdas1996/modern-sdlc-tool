@@ -5,8 +5,21 @@ Supports: Search, Create, Update tickets, chained operations, and multi-turn con
 import asyncio
 from typing import Dict, Any, Optional
 
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain_core.prompts import PromptTemplate
+try:
+    from langchain.agents import AgentExecutor, create_react_agent
+    from langchain_core.prompts import PromptTemplate
+    HAS_LANGCHAIN_AGENTS = True
+except ImportError:
+    try:
+        from langchain_community.agents import AgentExecutor, create_react_agent
+        from langchain_core.prompts import PromptTemplate
+        HAS_LANGCHAIN_AGENTS = True
+    except ImportError:
+        HAS_LANGCHAIN_AGENTS = False
+        AgentExecutor = None
+        create_react_agent = None
+        PromptTemplate = None
+        print("⚠️ LangChain AgentExecutor not available - JIRA agent will use direct processing only")
 
 from services.jira_service import JiraService
 from services.ai_service import AIService
@@ -27,14 +40,12 @@ class JiraAgent:
         self.ai_service = AIService()
         self.llm = PwCGenAILLM(temperature=0.2, max_tokens=4096)
         
-        # Context storage for chained operations
         self.context = TicketToolsContext()
         
-        # Initialize tools and agent
         self.tools = create_jira_tools(self.jira_service, self.context)
-        self.agent = self._create_agent()
+        self.agent = self._create_agent() if HAS_LANGCHAIN_AGENTS else None
         
-    def _create_agent(self) -> AgentExecutor:
+    def _create_agent(self):
         """Create the LangChain ReAct agent with robust parsing."""
         
         # Load prompt from YAML file
@@ -79,8 +90,10 @@ class JiraAgent:
             if intent.get('ticket_key'):
                 print(f"🎫 Ticket Key Found: {intent['ticket_key']}")
             
-            # Try LangChain agent first
+            # Try LangChain agent first (if available)
             try:
+                if not self.agent:
+                    raise Exception("LangChain agent not available, using direct processing")
                 print(f"\n🔧 Running LangChain Agent...")
                 result = await self._run_agent(user_prompt)
                 agent_output = result.get("output", "")
