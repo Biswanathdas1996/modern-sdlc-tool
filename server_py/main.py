@@ -640,7 +640,7 @@ async def generate_user_stories_endpoint(request: Request):
         
         brd = storage.get_current_brd()
         if not brd and body.get("brdData"):
-            from server_py.models import BRD as BRDModel, BRDContent as BRDContentModel
+            from models import BRD as BRDModel, BRDContent as BRDContentModel
             brd_data = body["brdData"]
             try:
                 content = brd_data.get("content", {})
