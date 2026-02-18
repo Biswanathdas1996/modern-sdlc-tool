@@ -499,6 +499,7 @@ Output the COMPLETE file content:"""
             task["success"] = True
             task["response"] = response
             task["progress"] = "Complete"
+            task["elapsed"] = round(elapsed)
 
         except Exception as e:
             print(f"❌ Code gen task {task_id} error: {e}")
@@ -513,7 +514,7 @@ Output the COMPLETE file content:"""
         task = self.tasks.get(task_id)
         if not task:
             return None
-        return {
+        result = {
             "task_id": task_id,
             "status": task["status"],
             "progress": task.get("progress", ""),
@@ -521,6 +522,15 @@ Output the COMPLETE file content:"""
             "response": task.get("response"),
             "success": task.get("success"),
         }
+        if task["status"] == "completed" and task.get("session_id"):
+            session = self.sessions.get(task["session_id"], {})
+            result["generated_changes"] = session.get("generated_changes", [])
+            result["meta"] = {
+                "repo_name": session.get("repo_name", ""),
+                "language": session.get("language", ""),
+                "elapsed": task.get("elapsed", 0),
+            }
+        return result
 
 
 code_gen_agent = CodeGenAgent()

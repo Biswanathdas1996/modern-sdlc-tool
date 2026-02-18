@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { ArrowLeft, ArrowRight, Code2, Wand2, GitBranch, Loader2, CheckCircle2, Circle, AlertCircle, ExternalLink, FileCode, FilePlus, FilePen, ChevronDown, ChevronRight, Copy, Check } from "lucide-react";
+import { ArrowLeft, ArrowRight, Code2, Wand2, GitBranch, Loader2, CheckCircle2, Circle, AlertCircle, ExternalLink, FileCode, FilePlus, FilePen, ChevronDown, ChevronRight, Copy, Check, Clock, FolderGit2, Layers, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -140,6 +140,8 @@ export default function CodeGenerationPage() {
   const [thinkingSteps, setThinkingSteps] = useState<ThinkingStep[]>([]);
   const [result, setResult] = useState<string | null>(null);
   const [resultSuccess, setResultSuccess] = useState(false);
+  const [generatedChanges, setGeneratedChanges] = useState<GeneratedChange[]>([]);
+  const [resultMeta, setResultMeta] = useState<{ repo_name: string; language: string; elapsed: number } | null>(null);
   const [showThinking, setShowThinking] = useState(false);
   const [copilotPrompt, setCopilotPrompt] = useState<string | null>(null);
   const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
@@ -222,6 +224,8 @@ export default function CodeGenerationPage() {
           setTaskId(null);
           setResult(data.response || "Code generation completed.");
           setResultSuccess(data.success || false);
+          if (data.generated_changes) setGeneratedChanges(data.generated_changes);
+          if (data.meta) setResultMeta(data.meta);
           lastStepCountRef.current = 0;
         }
       } catch {
@@ -239,6 +243,8 @@ export default function CodeGenerationPage() {
     setPushResult(null);
     setThinkingSteps([]);
     setProgressSteps([]);
+    setGeneratedChanges([]);
+    setResultMeta(null);
     lastStepCountRef.current = 0;
 
     try {
