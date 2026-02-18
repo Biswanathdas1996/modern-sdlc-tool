@@ -38,7 +38,7 @@ interface WorkflowStep {
   step: number;
 }
 
-const workflowSteps: WorkflowStep[] = [
+const prerequisiteSteps: WorkflowStep[] = [
   {
     id: "analyze",
     title: "Analyze Repository",
@@ -55,6 +55,9 @@ const workflowSteps: WorkflowStep[] = [
     icon: FileText,
     step: 2,
   },
+];
+
+const workflowSteps: WorkflowStep[] = [
   {
     id: "requirements",
     title: "Feature Request",
@@ -152,6 +155,63 @@ export function AppSidebar({ currentProject, completedSteps = [] }: AppSidebarPr
             </SidebarGroupContent>
           </SidebarGroup>
         )}
+
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
+            Pre-requisite
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {prerequisiteSteps.map((step, index) => {
+                const status = getStepStatus(step);
+                const isActive = location === step.path;
+                const Icon = step.icon;
+
+                return (
+                  <SidebarMenuItem key={step.id}>
+                    <SidebarMenuButton
+                      asChild
+                      className={cn(
+                        "group relative",
+                        isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
+                      )}
+                    >
+                      <Link href={step.path} data-testid={`link-step-${step.id}`}>
+                        <div className="flex items-center gap-3 w-full">
+                          <div className={cn(
+                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
+                            status === "completed" && "bg-success border-success text-success-foreground",
+                            status === "active" && "bg-primary border-primary text-primary-foreground",
+                            status === "pending" && "bg-muted border-border text-muted-foreground"
+                          )}>
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <div className="flex flex-col flex-1 min-w-0">
+                            <span className="text-sm font-medium truncate">{step.title}</span>
+                            <span className="text-xs text-muted-foreground truncate">{step.description}</span>
+                          </div>
+                          {status === "completed" && (
+                            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-success text-success-foreground">
+                              <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
+                                <path d="M2 6l3 3 5-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </div>
+                          )}
+                          {isActive && status !== "completed" && (
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </div>
+                      </Link>
+                    </SidebarMenuButton>
+                    {index < prerequisiteSteps.length - 1 && (
+                      <div className="absolute left-[1.625rem] top-[3.25rem] h-4 w-0.5 bg-border" />
+                    )}
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
 
         <SidebarGroup>
           <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
