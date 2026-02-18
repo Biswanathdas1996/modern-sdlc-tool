@@ -64,7 +64,7 @@ export function clearGeneratedDataCache(): void {
   keysToClear.forEach(key => clearCache(key));
 }
 
-export type SessionArtifact = "project" | "documentation" | "analysis" | "featureRequest" | "brd" | "userStories" | "testCases" | "testData" | "bpmn" | "databaseSchema";
+export type SessionArtifact = "project" | "documentation" | "analysis" | "featureRequest" | "brd" | "userStories" | "testCases" | "testData" | "bpmn" | "databaseSchema" | "copilotPrompt";
 
 export interface WorkflowSession {
   sessionId: string;

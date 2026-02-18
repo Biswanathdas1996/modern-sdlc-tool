@@ -82,6 +82,11 @@ export default function UserStoriesPage() {
     if (brd) saveSessionArtifact("brd", brd);
   }, [brd, saveSessionArtifact]);
 
+  useEffect(() => {
+    const savedPrompt = getSessionArtifact<string>("copilotPrompt");
+    if (savedPrompt) setCopilotPrompt(savedPrompt);
+  }, [getSessionArtifact]);
+
   const generateStoriesMutation = useMutation({
     mutationFn: async (parentKey?: string) => {
       const body: Record<string, any> = {};
@@ -174,6 +179,7 @@ export default function UserStoriesPage() {
     },
     onSuccess: (data) => {
       setCopilotPrompt(data.prompt);
+      saveSessionArtifact("copilotPrompt", data.prompt);
       setPromptDialogOpen(true);
     },
   });
@@ -370,10 +376,59 @@ export default function UserStoriesPage() {
                     )}
                   </Button>
                 </div>
-                <ScrollArea className="h-[60vh] rounded-md border p-4">
-                  <pre className="text-sm whitespace-pre-wrap font-mono text-foreground">
-                    {copilotPrompt || "Loading..."}
-                  </pre>
+                <ScrollArea className="h-[60vh] rounded-md border">
+                  <div className="p-5 space-y-4">
+                    {copilotPrompt ? (
+                      copilotPrompt.split('\n').reduce((acc: { sections: JSX.Element[], currentCode: string[], inCode: boolean, key: number }, line: string) => {
+                        if (line.startsWith('```')) {
+                          if (acc.inCode) {
+                            acc.sections.push(
+                              <div key={acc.key++} className="rounded-md bg-muted border overflow-x-auto">
+                                <pre className="p-3 text-xs font-mono text-foreground whitespace-pre-wrap">{acc.currentCode.join('\n')}</pre>
+                              </div>
+                            );
+                            acc.currentCode = [];
+                            acc.inCode = false;
+                          } else {
+                            acc.inCode = true;
+                          }
+                        } else if (acc.inCode) {
+                          acc.currentCode.push(line);
+                        } else if (line.match(/^#{1,3}\s/)) {
+                          const level = line.match(/^(#{1,3})\s/)![1].length;
+                          const text = line.replace(/^#{1,3}\s+/, '');
+                          acc.sections.push(
+                            <div key={acc.key++} className={`${level === 1 ? 'text-lg font-bold border-b pb-2' : level === 2 ? 'text-base font-semibold mt-3' : 'text-sm font-semibold mt-2'} text-foreground`}>
+                              {text}
+                            </div>
+                          );
+                        } else if (line.match(/^\d+\.\s/)) {
+                          acc.sections.push(
+                            <div key={acc.key++} className="flex gap-2 text-sm text-foreground pl-2">
+                              <span className="text-primary font-semibold shrink-0">{line.match(/^(\d+\.)\s/)![1]}</span>
+                              <span>{line.replace(/^\d+\.\s/, '')}</span>
+                            </div>
+                          );
+                        } else if (line.match(/^[-*]\s/)) {
+                          acc.sections.push(
+                            <div key={acc.key++} className="flex gap-2 text-sm text-foreground pl-4">
+                              <span className="text-muted-foreground shrink-0">-</span>
+                              <span>{line.replace(/^[-*]\s/, '')}</span>
+                            </div>
+                          );
+                        } else if (line.trim() === '') {
+                          acc.sections.push(<div key={acc.key++} className="h-2" />);
+                        } else {
+                          acc.sections.push(
+                            <p key={acc.key++} className="text-sm text-foreground leading-relaxed">{line}</p>
+                          );
+                        }
+                        return acc;
+                      }, { sections: [], currentCode: [], inCode: false, key: 0 }).sections
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Loading...</p>
+                    )}
+                  </div>
                 </ScrollArea>
               </DialogContent>
             </Dialog>
