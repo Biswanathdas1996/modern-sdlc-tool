@@ -200,9 +200,10 @@ export default function BRDPage() {
       const data = await response.json();
       console.log("Related stories response:", data);
       
-      if (data.relatedStories && data.relatedStories.length > 0) {
-        console.log("Found related stories:", data.relatedStories.length);
-        const mapped = data.relatedStories.map((s: any) => ({
+      const stories = data.relatedStories || [];
+      if (stories.length > 0) {
+        console.log("Found related stories:", stories.length);
+        const mapped = stories.map((s: any) => ({
           story: {
             key: s.key || s.story?.key || "",
             summary: s.summary || s.story?.summary || "",
@@ -215,12 +216,13 @@ export default function BRDPage() {
           reason: s.reason || "",
         }));
         setRelatedStories(mapped);
-        setRelatedStoriesDialogOpen(true);
       } else {
-        console.log("No related stories found, generating directly");
-        // No related stories found, generate directly
-        generateStoriesMutation.mutate(undefined);
+        console.log("No related stories found");
+        setRelatedStories([]);
       }
+      setCreationMode("new");
+      setSelectedParentKey(null);
+      setRelatedStoriesDialogOpen(true);
     } catch (error) {
       console.error("Error checking related stories:", error);
       // If error, just proceed with generation
@@ -858,88 +860,100 @@ export default function BRDPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <SiJira className="h-5 w-5 text-[#0052CC]" />
-              Related JIRA Stories Found
+              {relatedStories.length > 0 ? "Related JIRA Stories Found" : "Generate User Stories"}
             </DialogTitle>
             <DialogDescription>
-              We found existing stories in your JIRA board that may be related to this feature.
-              Choose how you'd like to proceed.
+              {relatedStories.length > 0
+                ? "We found existing stories in your JIRA board that may be related to this feature. Choose how you'd like to proceed."
+                : "No related stories were found in your JIRA board. The user stories will be created as new independent issues."}
             </DialogDescription>
           </DialogHeader>
           
           <ScrollArea className="max-h-[50vh] pr-4">
             <div className="space-y-4">
-              <RadioGroup
-                value={creationMode}
-                onValueChange={(value) => {
-                  setCreationMode(value as "subtask" | "new");
-                  if (value === "new") {
-                    setSelectedParentKey(null);
-                  }
-                }}
-              >
-                <div className="space-y-3">
-                  <div className="flex items-start space-x-3 p-3 rounded-lg border bg-card hover-elevate">
-                    <RadioGroupItem value="subtask" id="subtask" className="mt-1" />
-                    <div className="flex-1">
-                      <Label htmlFor="subtask" className="text-base font-medium cursor-pointer">
-                        <GitBranch className="h-4 w-4 inline mr-2" />
-                        Create as Subtasks
-                      </Label>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Generate user stories as subtasks of an existing story. The parent story's context will be used to create more relevant content.
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start space-x-3 p-3 rounded-lg border bg-card hover-elevate">
-                    <RadioGroupItem value="new" id="new" className="mt-1" />
-                    <div className="flex-1">
-                      <Label htmlFor="new" className="text-base font-medium cursor-pointer">
-                        <Plus className="h-4 w-4 inline mr-2" />
-                        Create as New Stories
-                      </Label>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Generate user stories as independent stories that will be synced to JIRA as new issues.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </RadioGroup>
-
-              {creationMode === "subtask" && (
-                <div className="mt-4">
-                  <Label className="text-sm font-medium mb-2 block">Select Parent Story:</Label>
-                  <div className="space-y-2">
-                    {relatedStories.map((related) => (
-                      <div
-                        key={related.story.key}
-                        onClick={() => setSelectedParentKey(related.story.key)}
-                        className={cn(
-                          "p-3 rounded-lg border cursor-pointer transition-colors",
-                          selectedParentKey === related.story.key
-                            ? "border-primary bg-primary/5"
-                            : "hover-elevate"
-                        )}
-                        data-testid={`related-story-${related.story.key}`}
-                      >
-                        <div className="flex items-start justify-between gap-2 flex-wrap">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="font-mono text-xs">
-                              {related.story.key}
-                            </Badge>
-                            <Badge variant="secondary">
-                              {related.relevanceScore}% match
-                            </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              {related.story.status}
-                            </Badge>
-                          </div>
+              {relatedStories.length > 0 ? (
+                <>
+                  <RadioGroup
+                    value={creationMode}
+                    onValueChange={(value) => {
+                      setCreationMode(value as "subtask" | "new");
+                      if (value === "new") {
+                        setSelectedParentKey(null);
+                      }
+                    }}
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-start space-x-3 p-3 rounded-lg border bg-card hover-elevate">
+                        <RadioGroupItem value="subtask" id="subtask" className="mt-1" />
+                        <div className="flex-1">
+                          <Label htmlFor="subtask" className="text-base font-medium cursor-pointer">
+                            <GitBranch className="h-4 w-4 inline mr-2" />
+                            Create as Subtasks
+                          </Label>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Generate user stories as subtasks of an existing story. The parent story's context will be used to create more relevant content.
+                          </p>
                         </div>
-                        <h4 className="font-medium mt-2">{related.story.summary}</h4>
-                        <p className="text-sm text-muted-foreground mt-1">{related.reason}</p>
                       </div>
-                    ))}
-                  </div>
+                      
+                      <div className="flex items-start space-x-3 p-3 rounded-lg border bg-card hover-elevate">
+                        <RadioGroupItem value="new" id="new" className="mt-1" />
+                        <div className="flex-1">
+                          <Label htmlFor="new" className="text-base font-medium cursor-pointer">
+                            <Plus className="h-4 w-4 inline mr-2" />
+                            Create as New Stories
+                          </Label>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Generate user stories as independent stories that will be synced to JIRA as new issues.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </RadioGroup>
+
+                  {creationMode === "subtask" && (
+                    <div className="mt-4">
+                      <Label className="text-sm font-medium mb-2 block">Select Parent Story:</Label>
+                      <div className="space-y-2">
+                        {relatedStories.map((related) => (
+                          <div
+                            key={related.story.key}
+                            onClick={() => setSelectedParentKey(related.story.key)}
+                            className={cn(
+                              "p-3 rounded-lg border cursor-pointer transition-colors",
+                              selectedParentKey === related.story.key
+                                ? "border-primary bg-primary/5"
+                                : "hover-elevate"
+                            )}
+                            data-testid={`related-story-${related.story.key}`}
+                          >
+                            <div className="flex items-start justify-between gap-2 flex-wrap">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="font-mono text-xs">
+                                  {related.story.key}
+                                </Badge>
+                                <Badge variant="secondary">
+                                  {related.relevanceScore}% match
+                                </Badge>
+                                <Badge variant="outline" className="text-xs">
+                                  {related.story.status}
+                                </Badge>
+                              </div>
+                            </div>
+                            <h4 className="font-medium mt-2">{related.story.summary}</h4>
+                            <p className="text-sm text-muted-foreground mt-1">{related.reason}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="p-4 rounded-lg border bg-card text-center">
+                  <Plus className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    Click "Generate User Stories" below to create new independent stories from your BRD.
+                  </p>
                 </div>
               )}
             </div>
