@@ -175,7 +175,19 @@ export default function BRDPage() {
       
       if (data.relatedStories && data.relatedStories.length > 0) {
         console.log("Found related stories:", data.relatedStories.length);
-        setRelatedStories(data.relatedStories);
+        const mapped = data.relatedStories.map((s: any) => ({
+          story: {
+            key: s.key || s.story?.key || "",
+            summary: s.summary || s.story?.summary || "",
+            description: s.description || s.story?.description || "",
+            status: s.status || s.story?.status || "",
+            priority: s.priority || s.story?.priority || "",
+            labels: s.labels || s.story?.labels || [],
+          },
+          relevanceScore: s.relevanceScore || 0,
+          reason: s.reason || "",
+        }));
+        setRelatedStories(mapped);
         setRelatedStoriesDialogOpen(true);
       } else {
         console.log("No related stories found, generating directly");
