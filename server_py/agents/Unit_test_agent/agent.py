@@ -1355,7 +1355,7 @@ Return ONLY the complete test file code, no explanations or markdown. The code m
     def _run_generate_task(self, task_id: str, session_id: str, repo_path: str, language: str):
         task = self.tasks[task_id]
         session = self._get_session(session_id)
-        MAX_FIX_ATTEMPTS = 3
+        MAX_FIX_ATTEMPTS = 2
         TIME_BUDGET_SECONDS = 15 * 60
         start_time = time.time()
 
@@ -1665,26 +1665,15 @@ Return ONLY the complete test file code, no explanations or markdown. The code m
                             "fix_attempts": fix_attempts,
                         }
 
-                        if test_passed:
-                            if actual_mode == "augment":
-                                augmented_tests.append(entry)
-                            else:
-                                generated_tests.append(entry)
+                        if actual_mode == "augment":
+                            augmented_tests.append(entry)
                         else:
-                            try:
-                                os.remove(str(Path(repo_path) / test_path))
-                            except Exception:
-                                pass
-                            last_err = error_output[-500:] if error_output else run_result.get("output", "")[-500:]
-                            failed_tests.append({
-                                "file": filepath,
-                                "test_path": test_path,
-                                "error": f"Tests failed after {fix_attempts} fix attempts + extract attempt",
-                                "last_output": last_err,
-                            })
+                            generated_tests.append(entry)
+
+                        if not test_passed:
                             task["thinking_steps"].append({
                                 "type": "tool_result",
-                                "content": f"❌ Removed {test_path} - could not fix or extract passing tests after {fix_attempts} attempts"
+                                "content": f"⚠️ Kept {test_path} (not all tests passing after {fix_attempts} fix attempts - file preserved for manual review)"
                             })
                     else:
                         failed_tests.append({"file": filepath, "error": write_result["error"]})
@@ -1730,6 +1719,8 @@ Return ONLY the complete test file code, no explanations or markdown. The code m
                     if t.get("validated"):
                         fix_note = f" (fixed in {t['fix_attempts']} attempt{'s' if t['fix_attempts'] != 1 else ''})" if t.get('fix_attempts', 0) > 0 else ""
                         status = f"✅ Passing{fix_note}"
+                    elif t.get("fix_attempts", 0) > 0:
+                        status = f"⚠️ Needs review (kept after {t['fix_attempts']} fix attempts)"
                     else:
                         status = "⚠️ Not validated"
                     response += f"| `{t['source_file']}` | `{t['test_path']}` | {t['priority']} | {status} |\n"
@@ -1743,6 +1734,8 @@ Return ONLY the complete test file code, no explanations or markdown. The code m
                     if t.get("validated"):
                         fix_note = f" (fixed in {t['fix_attempts']} attempt{'s' if t['fix_attempts'] != 1 else ''})" if t.get('fix_attempts', 0) > 0 else ""
                         status = f"✅ Passing{fix_note}"
+                    elif t.get("fix_attempts", 0) > 0:
+                        status = f"⚠️ Needs review (kept after {t['fix_attempts']} fix attempts)"
                     else:
                         status = "⚠️ Not validated"
                     response += f"| `{t['source_file']}` | `{t['test_path']}` | {t['priority']} | {status} |\n"
@@ -1752,7 +1745,7 @@ Return ONLY the complete test file code, no explanations or markdown. The code m
                 response += f"### ⚠️ Could Not Generate Passing Tests: {len(failed_tests)} files\n\n"
                 for f in failed_tests:
                     response += f"- `{f['file']}`: {f.get('error', 'Unknown error')}\n"
-                response += "\n*These files were skipped because tests could not be made to pass after multiple attempts. The failing test files have been removed to keep the test suite clean.*\n\n"
+                response += "\n*These files could not be generated. Source files that had tests generated but with some failures are preserved for manual review.*\n\n"
 
             if generated_tests or augmented_tests:
                 if validated_count > 0 and unvalidated_count == 0:
