@@ -1291,6 +1291,115 @@ async def get_unit_test_task_status(task_id: str):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+@app.post("/api/v1/unit-test-agent/push-to-github")
+async def push_tests_to_github(request: Request):
+    try:
+        body = await request.json()
+        session_id = body.get("session_id")
+        github_token = body.get("github_token", "")
+        branch_name = body.get("branch_name", "ai-generated-tests")
+        commit_message = body.get("commit_message", "feat: add AI-generated unit tests")
+
+        if not session_id:
+            return JSONResponse(status_code=400, content={"success": False, "error": "Session ID is required"})
+
+        session = unit_test_agent._get_session(session_id)
+        if not session.get("cloned") or not session.get("repo_path"):
+            return JSONResponse(status_code=400, content={"success": False, "error": "No repository cloned in this session"})
+
+        repo_path = session["repo_path"]
+        repo_url = session.get("repo_url", "")
+
+        if not os.path.exists(repo_path):
+            return JSONResponse(status_code=400, content={"success": False, "error": "Cloned repository no longer exists"})
+
+        if not github_token:
+            github_token = os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN", "")
+        if not github_token:
+            return JSONResponse(status_code=400, content={"success": False, "error": "GitHub token is required"})
+
+        import subprocess, re as _re
+        match = _re.match(r'https://github\.com/([\w.-]+)/([\w.-]+?)(?:\.git)?/?$', repo_url)
+        if not match:
+            return JSONResponse(status_code=400, content={"success": False, "error": "Invalid repository URL"})
+
+        repo_owner = match.group(1)
+        repo_name = match.group(2)
+        push_url = f"https://x-access-token:{github_token}@github.com/{repo_owner}/{repo_name}.git"
+
+        push_env = os.environ.copy()
+        push_env["GIT_TERMINAL_PROMPT"] = "0"
+
+        def run_git(args, cwd=repo_path):
+            r = subprocess.run(["git"] + args, capture_output=True, text=True, timeout=60, cwd=cwd, env=push_env)
+            return r
+
+        tests_generated = session.get("tests_generated", [])
+        if not tests_generated:
+            return JSONResponse(status_code=400, content={"success": False, "error": "No tests have been generated yet. Please generate tests first."})
+
+        run_git(["config", "user.email", "docugen-ai@automated.dev"])
+        run_git(["config", "user.name", "DocuGen AI"])
+
+        default_branch_result = run_git(["rev-parse", "--abbrev-ref", "HEAD"])
+        default_branch = default_branch_result.stdout.strip() if default_branch_result.returncode == 0 else "main"
+
+        checkout_result = run_git(["checkout", "-b", branch_name])
+        if checkout_result.returncode != 0:
+            run_git(["checkout", branch_name])
+
+        test_patterns = ["*test*", "*spec*", "*__tests__*", "*.test.*", "*.spec.*"]
+        added_any = False
+        for pattern in test_patterns:
+            r = run_git(["add", "--all", f"**/{pattern}"])
+            if r.returncode == 0:
+                added_any = True
+        run_git(["add", "-A", "--", "*.test.*", "*.spec.*"])
+
+        if not added_any:
+            run_git(["add", "-A"])
+
+        status_result = run_git(["status", "--porcelain"])
+        if not status_result.stdout.strip():
+            return JSONResponse(content={"success": True, "message": "No new test files to push. Everything is already up to date."})
+
+        def sanitize(text: str) -> str:
+            if not text or not github_token:
+                return text or ""
+            import urllib.parse
+            return text.replace(github_token, "***").replace(urllib.parse.quote(github_token, safe=""), "***")
+
+        commit_result = run_git(["commit", "-m", commit_message])
+        if commit_result.returncode != 0:
+            return JSONResponse(status_code=500, content={"success": False, "error": f"Failed to commit: {sanitize(commit_result.stderr)}"})
+
+        push_result = run_git(["push", push_url, branch_name])
+        if push_result.returncode != 0:
+            stderr_safe = sanitize(push_result.stderr)
+            if "already exists" in stderr_safe.lower():
+                push_result = run_git(["push", "--force", push_url, branch_name])
+                if push_result.returncode != 0:
+                    return JSONResponse(status_code=500, content={"success": False, "error": f"Push failed: {sanitize(push_result.stderr)}"})
+            else:
+                return JSONResponse(status_code=500, content={"success": False, "error": f"Push failed: {stderr_safe}"})
+
+        changed_files = [line.strip().split(maxsplit=1)[-1] for line in status_result.stdout.strip().split("\n") if line.strip()]
+        pr_url = f"https://github.com/{repo_owner}/{repo_name}/compare/{default_branch}...{branch_name}?expand=1"
+
+        return JSONResponse(content={
+            "success": True,
+            "message": f"Successfully pushed {len(changed_files)} test file(s) to branch `{branch_name}`",
+            "branch": branch_name,
+            "files_pushed": changed_files,
+            "pr_url": pr_url,
+            "repo_url": repo_url,
+        })
+    except subprocess.TimeoutExpired:
+        return JSONResponse(status_code=500, content={"success": False, "error": "Git operation timed out"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
+
 @app.post("/api/v1/web-test-agent/chat")
 async def chat_with_web_test_agent(request: Request):
     try:

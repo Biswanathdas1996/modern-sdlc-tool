@@ -4,8 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import { User, Send, FlaskConical, RefreshCw, MessageSquare, CheckCircle2, Circle, Loader2, AlertCircle, ChevronDown, ChevronRight } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { User, Send, FlaskConical, RefreshCw, MessageSquare, CheckCircle2, Circle, Loader2, AlertCircle, ChevronDown, ChevronRight, GitBranch, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useSession } from "@/hooks/useSession";
@@ -233,6 +236,11 @@ export default function UnitTestAgentPage() {
   const [progressSteps, setProgressSteps] = useState<ProgressStep[]>([]);
   const [latestThinkingSteps, setLatestThinkingSteps] = useState<Array<{ type: string; content: string; tool_name?: string }>>([]);
   const [progressExpanded, setProgressExpanded] = useState(true);
+  const [showPushDialog, setShowPushDialog] = useState(false);
+  const [pushToken, setPushToken] = useState("");
+  const [pushBranch, setPushBranch] = useState("ai-generated-tests");
+  const [pushCommitMsg, setPushCommitMsg] = useState("feat: add AI-generated unit tests");
+  const [isPushing, setIsPushing] = useState(false);
   const lastStepCountRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -417,17 +425,74 @@ export default function UnitTestAgentPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, progressSteps]);
 
+  const handlePushToGitHub = async () => {
+    setIsPushing(true);
+    setShowPushDialog(false);
+
+    const pushingMsg: Message = {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content: `Pushing generated tests to branch \`${pushBranch}\`...`,
+      timestamp: new Date(),
+    };
+    setMessages(prev => [...prev, pushingMsg]);
+
+    try {
+      const response = await apiRequest("POST", "/api/v1/unit-test-agent/push-to-github", {
+        session_id: sessionId,
+        github_token: pushToken,
+        branch_name: pushBranch,
+        commit_message: pushCommitMsg,
+      });
+      const data = await response.json();
+
+      const resultMsg: Message = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: data.success
+          ? `${data.message}\n\n**Branch:** \`${data.branch}\`\n**Files pushed:** ${data.files_pushed?.length || 0}\n${data.files_pushed?.map((f: string) => `- ${f}`).join("\n") || ""}\n\n[Create Pull Request](${data.pr_url})`
+          : `Push failed: ${data.error || "Unknown error"}`,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, resultMsg]);
+    } catch (err: any) {
+      const errorMsg: Message = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: `Push failed: ${err.message || "Network error"}`,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMsg]);
+    } finally {
+      setIsPushing(false);
+    }
+  };
+
+  const isPushCommand = (text: string): boolean => {
+    const lower = text.toLowerCase().trim();
+    return /push\s*(to\s*)?github/i.test(lower) || /push\s*(tests?\s*)?(to\s*)?repo/i.test(lower);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || chatMutation.isPending) return;
+    const trimmed = input.trim();
+
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: "user",
-      content: input.trim(),
+      content: trimmed,
       timestamp: new Date(),
     };
     setMessages((prev) => [...prev, userMessage]);
-    chatMutation.mutate(input.trim());
+
+    if (isPushCommand(trimmed)) {
+      setInput("");
+      setShowPushDialog(true);
+      return;
+    }
+
+    chatMutation.mutate(trimmed);
     setInput("");
   };
 
@@ -616,13 +681,13 @@ export default function UnitTestAgentPage() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Ask about unit tests or generate tests... (Press Enter to send)"
+                  placeholder="Ask about unit tests, generate tests, or type 'push to GitHub'... (Press Enter to send)"
                   className="resize-none"
                   rows={2}
-                  disabled={chatMutation.isPending || !!activeTaskId}
+                  disabled={chatMutation.isPending || !!activeTaskId || isPushing}
                   data-testid="input-chat-message"
                 />
-                <Button type="submit" disabled={!input.trim() || chatMutation.isPending || !!activeTaskId} data-testid="button-send-message">
+                <Button type="submit" disabled={!input.trim() || chatMutation.isPending || !!activeTaskId || isPushing} data-testid="button-send-message">
                   <Send className="h-4 w-4" />
                 </Button>
               </form>
@@ -630,6 +695,74 @@ export default function UnitTestAgentPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={showPushDialog} onOpenChange={setShowPushDialog}>
+        <DialogContent className="sm:max-w-md" data-testid="dialog-push-github">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GitBranch className="h-5 w-5" />
+              Push Tests to GitHub
+            </DialogTitle>
+            <DialogDescription>
+              Push the generated test files to your repository. A new branch will be created with your tests.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="github-token">GitHub Personal Access Token</Label>
+              <Input
+                id="github-token"
+                type="password"
+                value={pushToken}
+                onChange={(e) => setPushToken(e.target.value)}
+                placeholder="ghp_xxxxxxxxxxxx"
+                data-testid="input-github-token"
+              />
+              <p className="text-xs text-muted-foreground">
+                Leave empty to use the server-configured token. Needs <strong>repo</strong> scope permissions.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="branch-name">Branch Name</Label>
+              <Input
+                id="branch-name"
+                value={pushBranch}
+                onChange={(e) => setPushBranch(e.target.value)}
+                placeholder="ai-generated-tests"
+                data-testid="input-branch-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="commit-msg">Commit Message</Label>
+              <Input
+                id="commit-msg"
+                value={pushCommitMsg}
+                onChange={(e) => setPushCommitMsg(e.target.value)}
+                placeholder="feat: add AI-generated unit tests"
+                data-testid="input-commit-message"
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowPushDialog(false)} data-testid="button-cancel-push">
+              Cancel
+            </Button>
+            <Button onClick={handlePushToGitHub} disabled={isPushing} data-testid="button-confirm-push">
+              {isPushing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Pushing...
+                </>
+              ) : (
+                <>
+                  <GitBranch className="h-4 w-4 mr-2" />
+                  Push to GitHub
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
