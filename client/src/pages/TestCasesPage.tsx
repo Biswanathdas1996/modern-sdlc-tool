@@ -87,6 +87,10 @@ export default function TestCasesPage() {
       const body: Record<string, any> = {};
       const cachedTestCases = getSessionArtifact("testCases");
       if (cachedTestCases) body.testCases = cachedTestCases;
+      const cachedBrd = getSessionArtifact("brd");
+      if (cachedBrd) body.brd = cachedBrd;
+      const cachedDocumentation = getSessionArtifact("documentation");
+      if (cachedDocumentation) body.documentation = cachedDocumentation;
       const response = await apiRequest("POST", "/api/test-data/generate", body);
       return response.json();
     },

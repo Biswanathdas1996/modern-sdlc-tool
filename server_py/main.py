@@ -706,8 +706,43 @@ async def generate_test_data_endpoint(request: Request):
             pass
         
         brd = storage.get_current_brd()
+        if not brd and body.get("brd"):
+            try:
+                brd_data = body["brd"]
+                from schemas import BRD
+                brd = BRD(
+                    id=brd_data.get("id", str(uuid.uuid4())),
+                    projectId=brd_data.get("projectId", ""),
+                    title=brd_data.get("title", ""),
+                    content=brd_data.get("content", {}),
+                    status=brd_data.get("status", "generated"),
+                    createdAt=brd_data.get("createdAt", datetime.now().isoformat()),
+                )
+                storage.brds[brd.id] = brd
+                print(f"Restored BRD from request body: {brd.title}")
+            except Exception as restore_err:
+                print(f"Error restoring BRD from session: {restore_err}")
+        
         if not brd:
             raise HTTPException(status_code=400, detail="No BRD found. Please generate a BRD first.")
+        
+        documentation = None
+        projects = storage.get_all_projects()
+        if projects:
+            documentation = storage.get_documentation(projects[0].id)
+        if not documentation and body.get("documentation"):
+            try:
+                from schemas import Documentation
+                doc_data = body["documentation"]
+                documentation = Documentation(
+                    id=doc_data.get("id", str(uuid.uuid4())),
+                    projectId=doc_data.get("projectId", ""),
+                    content=doc_data.get("content", ""),
+                    generatedAt=doc_data.get("generatedAt", datetime.now().isoformat()),
+                )
+                print("Restored documentation from request body")
+            except Exception as restore_err:
+                print(f"Error restoring documentation from session: {restore_err}")
         
         test_cases_list = storage.get_test_cases(brd.id)
         if not test_cases_list and body.get("testCases"):
@@ -737,9 +772,6 @@ async def generate_test_data_endpoint(request: Request):
         
         if not test_cases_list:
             raise HTTPException(status_code=400, detail="No test cases found. Please generate test cases first.")
-        
-        projects = storage.get_all_projects()
-        documentation = storage.get_documentation(projects[0].id) if projects else None
         
         test_data = await generate_test_data(
             [tc.model_dump() for tc in test_cases_list],
