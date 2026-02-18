@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import { Bot, User, Send, Shield, RefreshCw, MessageSquare } from "lucide-react";
+import { User, Send, Shield, RefreshCw, MessageSquare, ChevronDown, ChevronRight, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -21,25 +21,298 @@ function generateSessionId(): string {
   return crypto.randomUUID();
 }
 
-function formatMarkdown(content: string): string {
-  return content
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code>$1</code>')
-    .replace(/^- (.+)$/gm, '<li>$1</li>')
-    .replace(/(<li>.+<\/li>\n?)+/g, '<ul>$&</ul>')
-    .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
-    .replace(/\n\n/g, '<br/><br/>')
-    .replace(/\n/g, '<br/>');
+function formatSecurityReport(content: string): string {
+  const lines = content.split("\n");
+  const html: string[] = [];
+  let inCodeBlock = false;
+  let codeLines: string[] = [];
+  let inTable = false;
+  let tableRows: string[] = [];
+  let isFirstTableRow = true;
+
+  const flushTable = () => {
+    if (tableRows.length > 0) {
+      html.push('<div class="sec-table-wrap"><table class="sec-table">');
+      html.push(tableRows.join(""));
+      html.push("</table></div>");
+      tableRows = [];
+      inTable = false;
+      isFirstTableRow = true;
+    }
+  };
+
+  const escapeHtml = (text: string) =>
+    text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  const inlineFormat = (text: string): string => {
+    return text
+      .replace(/\*\*`([^`]+)`\*\*/g, '<strong><code class="sec-code">$1</code></strong>')
+      .replace(/`([^`]+)`/g, '<code class="sec-code">$1</code>')
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>")
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="sec-link">$1</a>');
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith("```")) {
+      if (inCodeBlock) {
+        html.push('<div class="sec-codeblock"><pre><code>' + escapeHtml(codeLines.join("\n")) + "</code></pre></div>");
+        codeLines = [];
+        inCodeBlock = false;
+      } else {
+        flushTable();
+        inCodeBlock = true;
+      }
+      continue;
+    }
+
+    if (inCodeBlock) {
+      codeLines.push(line);
+      continue;
+    }
+
+    if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
+      if (trimmed.replace(/[|\s-:]/g, "") === "") {
+        continue;
+      }
+      if (!inTable) {
+        flushTable();
+        inTable = true;
+        isFirstTableRow = true;
+      }
+      const cells = trimmed
+        .slice(1, -1)
+        .split("|")
+        .map((c) => c.trim());
+      const tag = isFirstTableRow ? "th" : "td";
+      const rowClass = isFirstTableRow ? "sec-thead-row" : "sec-tbody-row";
+      tableRows.push(
+        `<tr class="${rowClass}">${cells.map((c) => `<${tag}>${inlineFormat(c)}</${tag}>`).join("")}</tr>`
+      );
+      isFirstTableRow = false;
+      continue;
+    } else if (inTable) {
+      flushTable();
+    }
+
+    if (trimmed === "---" || trimmed === "***" || trimmed === "___") {
+      html.push('<hr class="sec-hr" />');
+      continue;
+    }
+
+    if (trimmed === "") {
+      continue;
+    }
+
+    if (trimmed.startsWith("# ")) {
+      const text = trimmed.slice(2);
+      const isReport = text.includes("Security Assessment Report");
+      if (isReport) {
+        html.push(`<div class="sec-report-header"><div class="sec-report-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><h1 class="sec-h1">${inlineFormat(text.replace(/🛡️\s*/, ""))}</h1></div>`);
+      } else {
+        html.push(`<h1 class="sec-h1">${inlineFormat(text)}</h1>`);
+      }
+      continue;
+    }
+
+    if (trimmed.startsWith("## ")) {
+      const text = trimmed.slice(3);
+      const iconMap: Record<string, string> = {
+        "Risk Overview": "bar-chart",
+        "Detailed Findings": "alert-triangle",
+        "Reconnaissance Data": "search",
+        "Source Code Analysis": "folder",
+        "Methodology": "layers",
+        "Assessment Limitations": "alert-circle",
+      };
+      let iconSvg = "";
+      for (const [key, icon] of Object.entries(iconMap)) {
+        if (text.includes(key)) {
+          iconSvg = `<span class="sec-section-icon sec-icon-${icon}"></span>`;
+          break;
+        }
+      }
+      html.push(`<h2 class="sec-h2">${iconSvg}${inlineFormat(text.replace(/[🔍📂⚠️]/g, "").trim())}</h2>`);
+      continue;
+    }
+
+    if (trimmed.startsWith("### ")) {
+      const text = trimmed.slice(4);
+      const severityMatch = text.match(/^(🔴|🟠|🟡|🔵|⚪)\s*#(\d+)\s*—\s*(.+)/);
+      if (severityMatch) {
+        const [, icon, num, title] = severityMatch;
+        const severityMap: Record<string, string> = {
+          "🔴": "critical",
+          "🟠": "high",
+          "🟡": "medium",
+          "🔵": "low",
+          "⚪": "info",
+        };
+        const sev = severityMap[icon] || "info";
+        html.push(`<div class="sec-finding sec-finding-${sev}"><div class="sec-finding-header"><span class="sec-finding-num">#${num}</span><span class="sec-finding-title">${inlineFormat(title)}</span></div>`);
+        const endIdx = findFindingEnd(lines, i + 1);
+        const findingLines = lines.slice(i + 1, endIdx);
+        html.push(renderFindingBody(findingLines, inlineFormat, escapeHtml));
+        html.push("</div>");
+        i = endIdx - 1;
+        continue;
+      }
+
+      const headerMatch = text.match(/^(.+?)(?:\s*\((\d+)\s*found\))?$/);
+      if (headerMatch) {
+        html.push(`<h3 class="sec-h3">${inlineFormat(text.replace(/[❌✅⚠️🟢🔴🟠🟡🔵⚪]/g, "").trim())}</h3>`);
+      } else {
+        html.push(`<h3 class="sec-h3">${inlineFormat(text)}</h3>`);
+      }
+      continue;
+    }
+
+    if (trimmed.startsWith("> ")) {
+      const quoteContent = trimmed.slice(2);
+      const riskMatch = quoteContent.match(/^(🔴|🟠|🟡|🔵|🟢|⚠️)\s*\*\*Overall Risk:\s*(CRITICAL|HIGH|MEDIUM|LOW|PASS|INCONCLUSIVE)\*\*/);
+      if (riskMatch) {
+        const [, , level] = riskMatch;
+        const riskClass = level.toLowerCase();
+        html.push(`<div class="sec-risk-banner sec-risk-${riskClass}"><div class="sec-risk-level">${level}</div><div class="sec-risk-detail">${inlineFormat(quoteContent.replace(/^(🔴|🟠|🟡|🔵|🟢|⚠️)\s*/, "").replace(/\*\*Overall Risk:\s*(CRITICAL|HIGH|MEDIUM|LOW|PASS|INCONCLUSIVE)\*\*\s*—\s*/, ""))}</div></div>`);
+      } else if (quoteContent.includes("Remediation:") || quoteContent.includes("💡")) {
+        html.push(`<div class="sec-remediation">${inlineFormat(quoteContent.replace(/💡\s*/, ""))}</div>`);
+      } else if (quoteContent.includes("Evidence Policy")) {
+        html.push(`<div class="sec-policy">${inlineFormat(quoteContent)}</div>`);
+      } else if (quoteContent.includes("🟢")) {
+        html.push(`<div class="sec-pass-banner">${inlineFormat(quoteContent.replace(/🟢\s*/, ""))}</div>`);
+      } else {
+        html.push(`<blockquote class="sec-blockquote">${inlineFormat(quoteContent)}</blockquote>`);
+      }
+      continue;
+    }
+
+    if (trimmed.startsWith("- ")) {
+      const items: string[] = [trimmed.slice(2)];
+      while (i + 1 < lines.length && lines[i + 1].trim().startsWith("- ")) {
+        i++;
+        items.push(lines[i].trim().slice(2));
+      }
+      html.push('<ul class="sec-list">');
+      for (const item of items) {
+        const hasCheck = item.includes("✅");
+        const hasWarn = item.includes("⚠️") || item.includes("❌");
+        const cls = hasCheck ? "sec-list-ok" : hasWarn ? "sec-list-warn" : "";
+        html.push(`<li class="${cls}">${inlineFormat(item.replace(/[✅❌⚠️]/g, "").trim())}</li>`);
+      }
+      html.push("</ul>");
+      continue;
+    }
+
+    if (trimmed.match(/^\d+\.\s/)) {
+      const items: string[] = [trimmed.replace(/^\d+\.\s/, "")];
+      while (i + 1 < lines.length && lines[i + 1].trim().match(/^\d+\.\s/)) {
+        i++;
+        items.push(lines[i].trim().replace(/^\d+\.\s/, ""));
+      }
+      html.push('<ol class="sec-olist">');
+      for (const item of items) {
+        html.push(`<li>${inlineFormat(item)}</li>`);
+      }
+      html.push("</ol>");
+      continue;
+    }
+
+    if (trimmed.startsWith("**Scan Coverage:**") || trimmed.startsWith("**Evidence:**") || trimmed.startsWith("**Location:**")) {
+      html.push(`<div class="sec-meta">${inlineFormat(trimmed)}</div>`);
+      continue;
+    }
+
+    html.push(`<p class="sec-p">${inlineFormat(trimmed)}</p>`);
+  }
+
+  flushTable();
+  return html.join("");
+}
+
+function findFindingEnd(lines: string[], startIdx: number): number {
+  for (let i = startIdx; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (trimmed === "---" || trimmed === "***" || trimmed === "___") {
+      return i + 1;
+    }
+    if (trimmed.startsWith("### ") && i > startIdx) {
+      return i;
+    }
+    if (trimmed.startsWith("## ")) {
+      return i;
+    }
+  }
+  return lines.length;
+}
+
+function renderFindingBody(lines: string[], inlineFormat: (s: string) => string, escapeHtml: (s: string) => string): string {
+  const parts: string[] = [];
+  let inCode = false;
+  let codeLines: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed === "" || trimmed === "---") continue;
+
+    if (trimmed.startsWith("```")) {
+      if (inCode) {
+        parts.push('<div class="sec-codeblock sec-codeblock-sm"><pre><code>' + escapeHtml(codeLines.join("\n")) + "</code></pre></div>");
+        codeLines = [];
+        inCode = false;
+      } else {
+        inCode = true;
+      }
+      continue;
+    }
+    if (inCode) {
+      codeLines.push(line);
+      continue;
+    }
+
+    if (trimmed.startsWith("> ") && (trimmed.includes("Remediation") || trimmed.includes("💡"))) {
+      parts.push(`<div class="sec-remediation">${inlineFormat(trimmed.slice(2).replace(/💡\s*/, ""))}</div>`);
+      continue;
+    }
+
+    if (trimmed.startsWith("**`") && trimmed.includes("·")) {
+      const badgeMatch = trimmed.match(/\*\*`([^`]+)`\*\*\s*·\s*(.*)/);
+      if (badgeMatch) {
+        const [, severity, owasp] = badgeMatch;
+        const sevLower = severity.toLowerCase();
+        parts.push(`<div class="sec-finding-meta"><span class="sec-severity-badge sec-sev-${sevLower}">${severity}</span><span class="sec-owasp-tag">${inlineFormat(owasp)}</span></div>`);
+        continue;
+      }
+    }
+
+    if (trimmed.startsWith("**Location:**")) {
+      parts.push(`<div class="sec-finding-location">${inlineFormat(trimmed)}</div>`);
+      continue;
+    }
+
+    if (trimmed.startsWith("**Evidence:**")) {
+      parts.push(`<div class="sec-finding-evidence">${inlineFormat(trimmed)}</div>`);
+      continue;
+    }
+
+    if (trimmed.startsWith("**📸")) {
+      parts.push(`<div class="sec-snapshot-label">${inlineFormat(trimmed)}</div>`);
+      continue;
+    }
+
+    parts.push(`<p class="sec-finding-desc">${inlineFormat(trimmed)}</p>`);
+  }
+
+  return parts.join("");
 }
 
 export default function SecurityAgentPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sessionId, setSessionId] = useState(() => generateSessionId());
+  const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -104,6 +377,11 @@ export default function SecurityAgentPage() {
   const handleNewSession = () => {
     setSessionId(generateSessionId());
     setMessages([]);
+    setExpandedSteps({});
+  };
+
+  const toggleSteps = (msgId: string) => {
+    setExpandedSteps((prev) => ({ ...prev, [msgId]: !prev[msgId] }));
   };
 
   return (
@@ -180,31 +458,46 @@ export default function SecurityAgentPage() {
                       className={cn("flex gap-3", message.role === "user" ? "flex-row-reverse" : "flex-row")}
                     >
                       <div className={cn(
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full mt-1",
                         message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
                       )}>
                         {message.role === "user" ? <User className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
                       </div>
-                      <div className={cn("flex flex-col max-w-[80%]", message.role === "user" ? "items-end" : "items-start")}>
+                      <div className={cn("flex flex-col min-w-0", message.role === "user" ? "items-end max-w-[80%]" : "items-start flex-1")}>
                         <div className={cn(
-                          "rounded-xl",
+                          "rounded-xl w-full",
                           message.role === "user"
-                            ? "bg-primary text-primary-foreground px-4 py-2.5"
-                            : "bg-gradient-to-br from-card to-muted/30 border border-border/50 px-5 py-4 shadow-sm"
+                            ? "bg-primary text-primary-foreground px-4 py-2.5 w-auto"
+                            : "sec-report-container"
                         )}>
                           {message.role === "user" ? (
                             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                           ) : (
-                            <div className="prose-chat text-sm" dangerouslySetInnerHTML={{ __html: formatMarkdown(message.content) }} />
+                            <div className="sec-report" dangerouslySetInnerHTML={{ __html: formatSecurityReport(message.content) }} />
                           )}
                         </div>
                         {message.thinking_steps && message.thinking_steps.length > 0 && (
-                          <div className="mt-1 flex flex-wrap gap-1">
-                            {message.thinking_steps.map((step, i) => (
-                              <Badge key={i} variant="outline" className="text-xs" data-testid={`badge-step-${index}-${i}`}>
-                                {step.tool_name || step.type}: {step.content.slice(0, 50)}
-                              </Badge>
-                            ))}
+                          <div className="mt-2 w-full">
+                            <button
+                              onClick={() => toggleSteps(message.id)}
+                              className="flex items-center gap-1.5 text-xs text-muted-foreground hover-elevate rounded-md px-2 py-1"
+                              data-testid={`button-toggle-steps-${index}`}
+                            >
+                              {expandedSteps[message.id] ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                              {message.thinking_steps.length} scan phases
+                            </button>
+                            {expandedSteps[message.id] && (
+                              <div className="mt-1.5 space-y-1 pl-2 border-l-2 border-border/50">
+                                {message.thinking_steps.map((step, i) => (
+                                  <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground py-0.5" data-testid={`step-${index}-${i}`}>
+                                    <Badge variant="outline" className="text-[10px] shrink-0 px-1.5 py-0">
+                                      {step.tool_name || step.type}
+                                    </Badge>
+                                    <span className="break-words">{step.content}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                         <span className="text-xs text-muted-foreground mt-1">{message.timestamp.toLocaleTimeString()}</span>

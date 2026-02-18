@@ -381,4 +381,283 @@
   .prose-chat br + br {
     @apply block h-3;
   }
+
+  .sec-report-container {
+    @apply bg-card border border-border/60 rounded-xl px-6 py-5 shadow-sm;
+  }
+
+  .sec-report {
+    @apply text-sm leading-relaxed text-foreground;
+  }
+
+  .sec-report-header {
+    @apply flex items-center gap-3 mb-4;
+  }
+
+  .sec-report-icon {
+    @apply flex h-9 w-9 items-center justify-center rounded-lg bg-destructive/10 text-destructive shrink-0;
+  }
+
+  .sec-h1 {
+    @apply text-lg font-bold text-foreground m-0;
+  }
+
+  .sec-h2 {
+    @apply text-base font-semibold text-foreground mt-5 mb-3 flex items-center gap-2;
+  }
+
+  .sec-h3 {
+    @apply text-sm font-semibold text-foreground/90 mt-4 mb-2;
+  }
+
+  .sec-hr {
+    @apply border-t border-border/40 my-4;
+  }
+
+  .sec-p {
+    @apply text-sm text-foreground/85 my-1.5 leading-relaxed;
+  }
+
+  .sec-risk-banner {
+    @apply rounded-lg p-4 my-4 flex items-center gap-4 border;
+  }
+
+  .sec-risk-critical {
+    @apply bg-red-500/10 border-red-500/30;
+  }
+
+  .sec-risk-high {
+    @apply bg-orange-500/10 border-orange-500/30;
+  }
+
+  .sec-risk-medium {
+    @apply bg-yellow-500/10 border-yellow-500/30;
+  }
+
+  .sec-risk-low {
+    @apply bg-blue-500/10 border-blue-500/30;
+  }
+
+  .sec-risk-pass {
+    @apply bg-green-500/10 border-green-500/30;
+  }
+
+  .sec-risk-inconclusive {
+    @apply bg-muted border-border;
+  }
+
+  .sec-risk-level {
+    @apply text-sm font-bold tracking-wider shrink-0;
+  }
+
+  .sec-risk-critical .sec-risk-level { @apply text-red-600; }
+  .dark .sec-risk-critical .sec-risk-level { @apply text-red-400; }
+  .sec-risk-high .sec-risk-level { @apply text-orange-600; }
+  .dark .sec-risk-high .sec-risk-level { @apply text-orange-400; }
+  .sec-risk-medium .sec-risk-level { @apply text-yellow-600; }
+  .dark .sec-risk-medium .sec-risk-level { @apply text-yellow-400; }
+  .sec-risk-low .sec-risk-level { @apply text-blue-600; }
+  .dark .sec-risk-low .sec-risk-level { @apply text-blue-400; }
+  .sec-risk-pass .sec-risk-level { @apply text-green-600; }
+  .dark .sec-risk-pass .sec-risk-level { @apply text-green-400; }
+
+  .sec-risk-detail {
+    @apply text-sm text-foreground/80;
+  }
+
+  .sec-table-wrap {
+    @apply my-3 rounded-lg overflow-hidden border border-border/50;
+  }
+
+  .sec-table {
+    @apply w-full text-sm border-collapse;
+  }
+
+  .sec-table th {
+    @apply text-left px-3 py-2 bg-muted/60 font-medium text-foreground/80 text-xs uppercase tracking-wider border-b border-border/40;
+  }
+
+  .sec-table td {
+    @apply px-3 py-2 text-foreground/85 border-b border-border/20;
+  }
+
+  .sec-table tr:last-child td {
+    @apply border-b-0;
+  }
+
+  .sec-table .sec-tbody-row:nth-child(even) {
+    @apply bg-muted/20;
+  }
+
+  .sec-finding {
+    @apply my-4 rounded-lg border overflow-hidden;
+  }
+
+  .sec-finding-critical {
+    @apply border-red-500/40 bg-red-500/5;
+  }
+
+  .sec-finding-high {
+    @apply border-orange-500/40 bg-orange-500/5;
+  }
+
+  .sec-finding-medium {
+    @apply border-yellow-500/40 bg-yellow-500/5;
+  }
+
+  .sec-finding-low {
+    @apply border-blue-500/40 bg-blue-500/5;
+  }
+
+  .sec-finding-info {
+    @apply border-border bg-muted/20;
+  }
+
+  .sec-finding-header {
+    @apply flex items-center gap-2.5 px-4 py-3 border-b border-border/30;
+  }
+
+  .sec-finding-num {
+    @apply text-xs font-mono font-bold text-muted-foreground bg-muted rounded px-1.5 py-0.5 shrink-0;
+  }
+
+  .sec-finding-title {
+    @apply text-sm font-semibold text-foreground;
+  }
+
+  .sec-finding-meta {
+    @apply flex items-center gap-2 px-4 py-2 flex-wrap;
+  }
+
+  .sec-severity-badge {
+    @apply text-[11px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-md;
+  }
+
+  .sec-sev-critical {
+    @apply bg-red-500/20 text-red-700;
+  }
+  .dark .sec-sev-critical {
+    @apply text-red-300;
+  }
+
+  .sec-sev-high {
+    @apply bg-orange-500/20 text-orange-700;
+  }
+  .dark .sec-sev-high {
+    @apply text-orange-300;
+  }
+
+  .sec-sev-medium {
+    @apply bg-yellow-500/20 text-yellow-700;
+  }
+  .dark .sec-sev-medium {
+    @apply text-yellow-300;
+  }
+
+  .sec-sev-low {
+    @apply bg-blue-500/20 text-blue-700;
+  }
+  .dark .sec-sev-low {
+    @apply text-blue-300;
+  }
+
+  .sec-sev-info {
+    @apply bg-muted text-muted-foreground;
+  }
+
+  .sec-owasp-tag {
+    @apply text-xs text-muted-foreground;
+  }
+
+  .sec-finding-location {
+    @apply px-4 py-1.5 text-xs text-foreground/70;
+  }
+
+  .sec-finding-desc {
+    @apply px-4 py-1 text-sm text-foreground/85 leading-relaxed;
+  }
+
+  .sec-finding-evidence {
+    @apply px-4 py-1.5 text-xs text-foreground/70;
+  }
+
+  .sec-remediation {
+    @apply mx-4 my-2 px-3 py-2.5 rounded-md bg-green-500/8 border border-green-500/20 text-sm text-foreground/85;
+  }
+  .dark .sec-remediation {
+    @apply bg-green-500/10 border-green-500/25;
+  }
+
+  .sec-pass-banner {
+    @apply my-3 px-4 py-3 rounded-lg bg-green-500/10 border border-green-500/30 text-sm text-foreground/85;
+  }
+
+  .sec-policy {
+    @apply my-3 px-4 py-3 rounded-lg bg-muted/50 border border-border/50 text-xs text-muted-foreground leading-relaxed;
+  }
+
+  .sec-blockquote {
+    @apply my-2 pl-3 border-l-2 border-primary/40 text-sm text-foreground/80 italic;
+  }
+
+  .sec-code {
+    @apply font-mono text-xs bg-muted px-1.5 py-0.5 rounded text-foreground/90;
+  }
+
+  .sec-link {
+    @apply text-primary underline underline-offset-2 decoration-primary/40;
+  }
+
+  .sec-codeblock {
+    @apply my-3 rounded-lg overflow-hidden bg-muted/80 border border-border/40;
+  }
+
+  .sec-codeblock pre {
+    @apply p-3 overflow-x-auto;
+  }
+
+  .sec-codeblock code {
+    @apply font-mono text-xs text-foreground/85 leading-relaxed whitespace-pre;
+  }
+
+  .sec-codeblock-sm {
+    @apply mx-4;
+  }
+
+  .sec-snapshot-label {
+    @apply px-4 py-1.5 text-xs font-medium text-muted-foreground;
+  }
+
+  .sec-list {
+    @apply my-2 space-y-1 pl-0;
+  }
+
+  .sec-list li {
+    @apply flex items-start gap-2 text-sm text-foreground/85 py-0.5;
+  }
+
+  .sec-list li::before {
+    content: "";
+    @apply w-1.5 h-1.5 rounded-full bg-muted-foreground/40 mt-2 shrink-0;
+  }
+
+  .sec-list-ok::before {
+    @apply bg-green-500/60 !important;
+  }
+
+  .sec-list-warn::before {
+    @apply bg-yellow-500/60 !important;
+  }
+
+  .sec-olist {
+    @apply my-2 pl-5 space-y-1 list-decimal;
+  }
+
+  .sec-olist li {
+    @apply text-sm text-foreground/85 py-0.5;
+  }
+
+  .sec-meta {
+    @apply my-2 text-sm text-foreground/80;
+  }
 }
