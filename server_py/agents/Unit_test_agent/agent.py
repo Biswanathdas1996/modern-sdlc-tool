@@ -1174,7 +1174,7 @@ Return ONLY the complete test file code, no explanations or markdown. The code m
         if not session["cloned"]:
             return {
                 "success": True,
-                "response": "I need a repository to work with first. Please **clone a repository** using the GitHub Agent, then I can generate unit tests for it.\n\nIn Global Chat, try: `clone https://github.com/owner/repo` first, then ask me to generate tests.",
+                "response": "I need a repository to work with first. Please go to the **Analyze Repository** page (Step 1 in the sidebar) and analyze a GitHub repository. Once that's done, come back here and I'll be able to generate unit tests for it.\n\nIf you've already analyzed a repo, try refreshing this page.",
                 "thinking_steps": thinking_steps,
             }
 

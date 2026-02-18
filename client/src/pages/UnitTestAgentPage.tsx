@@ -8,6 +8,7 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Bot, User, Send, FlaskConical, RefreshCw, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
+import { useSession } from "@/hooks/useSession";
 
 interface Message {
   id: string;
@@ -44,6 +45,10 @@ export default function UnitTestAgentPage() {
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { getSessionArtifact } = useSession();
+
+  const projectData = getSessionArtifact<{ repoUrl?: string }>("project");
+  const repoUrl = projectData?.repoUrl || "";
 
   useEffect(() => {
     document.title = "Unit Test Agent | DocuGen AI";
@@ -54,6 +59,7 @@ export default function UnitTestAgentPage() {
       const response = await apiRequest("POST", "/api/v1/unit-test-agent/chat", {
         prompt,
         session_id: sessionId,
+        repo_url: repoUrl,
       });
       return response.json();
     },

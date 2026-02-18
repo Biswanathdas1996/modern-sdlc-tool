@@ -1216,8 +1216,45 @@ async def chat_with_unit_test_agent(request: Request):
         body = await request.json()
         prompt = body.get("prompt")
         session_id = body.get("session_id", "default")
+        repo_url = body.get("repo_url")
         if not prompt:
             return JSONResponse(status_code=400, content={"success": False, "error": "Prompt is required"})
+
+        if repo_url and not unit_test_agent._get_session(session_id).get("cloned"):
+            import subprocess, re as _re, tempfile
+            match = _re.match(r'https://github\.com/([\w.-]+)/([\w.-]+?)(?:\.git)?/?$', repo_url)
+            if match:
+                repo_name = match.group(2)
+                clone_dir = os.path.join(tempfile.gettempdir(), "unit_test_repos", f"{session_id}_{repo_name}")
+                if not os.path.exists(clone_dir):
+                    os.makedirs(os.path.dirname(clone_dir), exist_ok=True)
+                    clone_env = os.environ.copy()
+                    github_token = clone_env.get("GITHUB_PERSONAL_ACCESS_TOKEN", "")
+                    if github_token:
+                        clone_env["GIT_ASKPASS"] = "echo"
+                        clone_env["GIT_TERMINAL_PROMPT"] = "0"
+                        header_value = f"Authorization: Bearer {github_token}"
+                        clone_env["GIT_CONFIG_COUNT"] = "1"
+                        clone_env["GIT_CONFIG_KEY_0"] = "http.extraHeader"
+                        clone_env["GIT_CONFIG_VALUE_0"] = header_value
+                    try:
+                        result = subprocess.run(
+                            ["git", "clone", "--depth", "1", repo_url, clone_dir],
+                            capture_output=True, text=True, timeout=120,
+                            env=clone_env
+                        )
+                        if result.returncode != 0:
+                            print(f"⚠️ Git clone failed (exit {result.returncode})")
+                    except subprocess.TimeoutExpired:
+                        print("⚠️ Git clone timed out after 120s")
+                    except Exception as clone_err:
+                        print(f"⚠️ Git clone error: {type(clone_err).__name__}")
+                if os.path.exists(clone_dir) and os.path.isdir(os.path.join(clone_dir, ".git")):
+                    unit_test_agent.set_repo(session_id, repo_url, clone_dir, repo_name)
+                elif os.path.exists(clone_dir):
+                    import shutil
+                    shutil.rmtree(clone_dir, ignore_errors=True)
+
         result = unit_test_agent.process_query(prompt, session_id)
         return JSONResponse(content={
             "success": result.get("success", False),
