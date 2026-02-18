@@ -31,6 +31,9 @@ from jira_service import (
 )
 from agents.jira_agent import jira_agent
 from agents.conversation_manager import conversation_manager
+from agents.Shannon_security_agent import shannon_security_agent
+from agents.Unit_test_agent import unit_test_agent
+from agents.Web_test_agent import web_test_agent
 from mongodb_client import (
     ingest_document, search_knowledge_base, delete_document_chunks,
     get_knowledge_stats, create_knowledge_document_in_mongo,
@@ -1186,6 +1189,83 @@ async def jira_agent_health():
             "active_conversations": active_conversations
         }
     }
+
+
+@app.post("/api/v1/security-agent/chat")
+async def chat_with_security_agent(request: Request):
+    try:
+        body = await request.json()
+        prompt = body.get("prompt")
+        session_id = body.get("session_id", "default")
+        if not prompt:
+            return JSONResponse(status_code=400, content={"success": False, "error": "Prompt is required"})
+        result = shannon_security_agent.process_query(prompt, session_id)
+        return JSONResponse(content={
+            "success": result.get("success", False),
+            "response": result.get("response", ""),
+            "thinking_steps": result.get("thinking_steps", []),
+            "session_id": session_id,
+        })
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
+
+@app.post("/api/v1/unit-test-agent/chat")
+async def chat_with_unit_test_agent(request: Request):
+    try:
+        body = await request.json()
+        prompt = body.get("prompt")
+        session_id = body.get("session_id", "default")
+        if not prompt:
+            return JSONResponse(status_code=400, content={"success": False, "error": "Prompt is required"})
+        result = unit_test_agent.process_query(prompt, session_id)
+        return JSONResponse(content={
+            "success": result.get("success", False),
+            "response": result.get("response", ""),
+            "thinking_steps": result.get("thinking_steps", []),
+            "task_id": result.get("task_id"),
+            "session_id": session_id,
+        })
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
+
+@app.get("/api/v1/unit-test-agent/task/{task_id}")
+async def get_unit_test_task_status(task_id: str):
+    try:
+        task = unit_test_agent.tasks.get(task_id)
+        if not task:
+            return JSONResponse(status_code=404, content={"error": "Task not found"})
+        return JSONResponse(content={
+            "task_id": task_id,
+            "status": task.get("status", "unknown"),
+            "progress": task.get("progress", ""),
+            "response": task.get("response"),
+            "success": task.get("success"),
+            "thinking_steps": task.get("thinking_steps", []),
+        })
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/api/v1/web-test-agent/chat")
+async def chat_with_web_test_agent(request: Request):
+    try:
+        body = await request.json()
+        prompt = body.get("prompt")
+        session_id = body.get("session_id")
+        clear_history = body.get("clear_history", False)
+        if not prompt:
+            return JSONResponse(status_code=400, content={"success": False, "error": "Prompt is required"})
+        result = web_test_agent.process_query(prompt, session_id, clear_history)
+        return JSONResponse(content={
+            "success": result.get("success", False),
+            "response": result.get("response", ""),
+            "thinking_steps": result.get("thinking_steps", []),
+            "session_id": session_id,
+        })
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
 
 @app.post("/api/jira/sync-subtask")

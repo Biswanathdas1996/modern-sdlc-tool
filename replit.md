@@ -115,6 +115,9 @@ The following features are disabled because PWC GenAI only supports text generat
 - `AnalyzePage` - Repository URL input and project listing
 - `DocumentationPage` - Generated docs with table of contents
 - `RequirementsPage` - Text/file/audio input with tabs
+- `SecurityAgentPage` - Shannon Security Agent chat interface for web security assessment
+- `UnitTestAgentPage` - Unit Test Agent chat with background task polling
+- `WebTestAgentPage` - Web Test Agent chat for web app test case generation
 - `BRDPage` - Business requirements with streaming generation
 - `TestCasesPage` - Test case viewing with filters
 - `TestDataPage` - Test data with JSON/table views
@@ -132,6 +135,10 @@ The following features are disabled because PWC GenAI only supports text generat
 - `GET /api/jira/stories` - Fetch existing stories from JIRA board
 - `POST /api/jira/find-related` - Semantic search for related JIRA stories
 - `GET /api/bpmn/current` - Get BPMN user journey diagrams for current documentation
+- `POST /api/v1/security-agent/chat` - Chat with Shannon Security Agent
+- `POST /api/v1/unit-test-agent/chat` - Chat with Unit Test Agent
+- `GET /api/v1/unit-test-agent/task/:taskId` - Poll background test generation task status
+- `POST /api/v1/web-test-agent/chat` - Chat with Web Test Agent
 - `POST /api/jira/sync-subtask` - Create a single story as a JIRA subtask
 - `POST /api/database-schema/connect` - Connect to external PostgreSQL and fetch schema
 - `GET /api/database-schema/current` - Get current database schema for project

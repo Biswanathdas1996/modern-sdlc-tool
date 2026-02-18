@@ -13,6 +13,9 @@ import {
   Library,
   Upload,
   Bot,
+  Shield,
+  FlaskConical,
+  Globe,
 } from "lucide-react";
 import {
   Sidebar,
@@ -311,39 +314,50 @@ export function AppSidebar({ currentProject, completedSteps = [] }: AppSidebarPr
 
         <SidebarGroup>
           <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
-            AI Agent
+            AI Agents
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  className={cn(
-                    "group",
-                    location === "/agent-chat" && "bg-sidebar-accent text-sidebar-accent-foreground"
-                  )}
-                >
-                  <Link href="/agent-chat" data-testid="link-agent-chat">
-                    <div className="flex items-center gap-3 w-full">
-                      <div className={cn(
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
-                        location === "/agent-chat" 
-                          ? "bg-primary border-primary text-primary-foreground"
-                          : "bg-muted border-border text-muted-foreground"
-                      )}>
-                        <Bot className="h-4 w-4" />
-                      </div>
-                      <div className="flex flex-col flex-1 min-w-0">
-                        <span className="text-sm font-medium truncate">Agent Chat</span>
-                        <span className="text-xs text-muted-foreground truncate">Interactive AI assistant</span>
-                      </div>
-                      {location === "/agent-chat" && (
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              {[
+                { path: "/agent-chat", icon: Bot, title: "JIRA Agent", description: "Interactive JIRA assistant", testId: "link-agent-chat" },
+                { path: "/agent-security", icon: Shield, title: "Security Agent", description: "Web security assessment", testId: "link-agent-security" },
+                { path: "/agent-unit-test", icon: FlaskConical, title: "Unit Test Agent", description: "Auto test generation", testId: "link-agent-unit-test" },
+                { path: "/agent-web-test", icon: Globe, title: "Web Test Agent", description: "Web app test cases", testId: "link-agent-web-test" },
+              ].map((agent) => {
+                const isActive = location === agent.path;
+                const Icon = agent.icon;
+                return (
+                  <SidebarMenuItem key={agent.path}>
+                    <SidebarMenuButton
+                      asChild
+                      className={cn(
+                        "group",
+                        isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
                       )}
-                    </div>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+                    >
+                      <Link href={agent.path} data-testid={agent.testId}>
+                        <div className="flex items-center gap-3 w-full">
+                          <div className={cn(
+                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
+                            isActive
+                              ? "bg-primary border-primary text-primary-foreground"
+                              : "bg-muted border-border text-muted-foreground"
+                          )}>
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <div className="flex flex-col flex-1 min-w-0">
+                            <span className="text-sm font-medium truncate">{agent.title}</span>
+                            <span className="text-xs text-muted-foreground truncate">{agent.description}</span>
+                          </div>
+                          {isActive && (
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </div>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
