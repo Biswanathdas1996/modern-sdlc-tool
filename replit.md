@@ -187,6 +187,15 @@ The following features are disabled because PWC GenAI only supports text generat
 - `DELETE /api/knowledge-base/:id` - Remove document from knowledge base
 - `POST /api/knowledge-base/search` - Semantic search across knowledge base
 
+### Session-Based localStorage Persistence
+- **Session Management**: Each workflow run creates a unique session ID that persists all generated artifacts
+- **Key Files**: `client/src/lib/localStorageCache.ts` (utilities), `client/src/hooks/useSession.ts` (React hook), `client/src/App.tsx` (SessionProvider)
+- **Session Artifacts**: project, documentation, analysis, featureRequest, brd, userStories, testCases, testData, bpmn, databaseSchema
+- **Auto-Create**: Session is automatically created when saving the first artifact (e.g., project data from AnalyzePage)
+- **Flow**: AnalyzePage saves project/docs → DocumentationPage saves docs/analysis/bpmn/schema → RequirementsPage starts session + saves featureRequest → BRDPage saves BRD → UserStoriesPage saves stories → TestCasesPage saves test cases → TestDataPage saves test data
+- **Backend Fallback**: All generation endpoints (BRD, user stories, test cases, test data) accept session data in request body and use it as fallback when MemStorage is empty (e.g., after server restart)
+- **Restored Models**: featureRequest, documentation, analysis, databaseSchema, BRD, testCases can all be restored from session data sent in API request bodies
+
 ## Development Guidelines
 
 ### Running the Application

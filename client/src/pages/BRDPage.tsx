@@ -36,6 +36,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useSession } from "@/hooks/useSession";
 import type { BRD, KnowledgeSource } from "@shared/schema";
 
 interface RelatedJiraStory {
@@ -69,6 +70,7 @@ export default function BRDPage() {
   const queryClient = useQueryClient();
   const contentRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const { saveSessionArtifact, getSessionArtifact } = useSession();
   
   // Related stories state
   const [relatedStoriesDialogOpen, setRelatedStoriesDialogOpen] = useState(false);
@@ -81,6 +83,9 @@ export default function BRDPage() {
     queryKey: ["/api/brd/current"],
   });
 
+  useEffect(() => {
+    if (brd) saveSessionArtifact("brd", brd);
+  }, [brd, saveSessionArtifact]);
 
   const regenerateMutation = useMutation({
     mutationFn: async () => {
@@ -88,9 +93,19 @@ export default function BRDPage() {
       setStreamingContent("");
       setStreamingKnowledgeSources([]);
 
+      const cachedDocumentation = getSessionArtifact("documentation");
+      const cachedFeatureRequest = getSessionArtifact("featureRequest");
+      const cachedAnalysis = getSessionArtifact("analysis");
+      const cachedDatabaseSchema = getSessionArtifact("databaseSchema");
       const response = await fetch("/api/brd/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documentation: cachedDocumentation,
+          featureRequest: cachedFeatureRequest,
+          analysis: cachedAnalysis,
+          databaseSchema: cachedDatabaseSchema,
+        }),
       });
 
       if (!response.ok) throw new Error("Failed to generate BRD");
@@ -143,7 +158,10 @@ export default function BRDPage() {
     mutationFn: async (parentKey?: string) => {
       const body: Record<string, any> = {};
       if (parentKey) body.parentJiraKey = parentKey;
-      if (brd) body.brdData = brd;
+      const cachedBrd = getSessionArtifact("brd");
+      if (cachedBrd) body.brdData = cachedBrd;
+      const cachedDocumentation = getSessionArtifact("documentation");
+      if (cachedDocumentation) body.documentation = cachedDocumentation;
       const response = await apiRequest("POST", "/api/user-stories/generate", body);
       return response.json();
     },

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { ArrowLeft, ArrowRight, Bookmark, RefreshCw, Clock, Layers, Tag, CheckCircle2, AlertCircle, Loader2, Wand2, Copy, Check, Upload, Pencil, Plus, X, GitBranch, Trash2 } from "lucide-react";
@@ -18,6 +18,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { WorkflowHeader } from "@/components/WorkflowHeader";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useSession } from "@/hooks/useSession";
 import type { BRD, UserStory } from "@shared/schema";
 
 const workflowSteps = [
@@ -57,6 +58,7 @@ export default function UserStoriesPage() {
   const [selectedParentKey, setSelectedParentKey] = useState<string | null>(null);
   const [creationMode, setCreationMode] = useState<"new" | "subtask">("new");
   const { toast } = useToast();
+  const { saveSessionArtifact, getSessionArtifact } = useSession();
 
   const { data: brd, isLoading: brdLoading } = useQuery<BRD>({
     queryKey: ["/api/brd/current"],
@@ -72,9 +74,22 @@ export default function UserStoriesPage() {
     enabled: !!brd?.id,
   });
 
+  useEffect(() => {
+    if (userStories && userStories.length > 0) saveSessionArtifact("userStories", userStories);
+  }, [userStories, saveSessionArtifact]);
+
+  useEffect(() => {
+    if (brd) saveSessionArtifact("brd", brd);
+  }, [brd, saveSessionArtifact]);
+
   const generateStoriesMutation = useMutation({
     mutationFn: async (parentKey?: string) => {
-      const body = parentKey ? { parentJiraKey: parentKey } : {};
+      const body: Record<string, any> = {};
+      if (parentKey) body.parentJiraKey = parentKey;
+      const cachedBrd = getSessionArtifact("brd");
+      if (cachedBrd) body.brdData = cachedBrd;
+      const cachedDocumentation = getSessionArtifact("documentation");
+      if (cachedDocumentation) body.documentation = cachedDocumentation;
       const response = await apiRequest("POST", "/api/user-stories/generate", body);
       return response.json();
     },
@@ -134,7 +149,12 @@ export default function UserStoriesPage() {
   const generateTestCasesMutation = useMutation({
     mutationFn: async () => {
       setIsGeneratingTests(true);
-      const response = await apiRequest("POST", "/api/test-cases/generate");
+      const body: Record<string, any> = {};
+      const cachedBrd = getSessionArtifact("brd");
+      if (cachedBrd) body.brdData = cachedBrd;
+      const cachedStories = getSessionArtifact("userStories");
+      if (cachedStories) body.userStories = cachedStories;
+      const response = await apiRequest("POST", "/api/test-cases/generate", body);
       return response.json();
     },
     onSuccess: () => {

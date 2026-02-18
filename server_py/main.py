@@ -467,7 +467,32 @@ async def get_current_brd():
 @app.post("/api/brd/generate")
 async def generate_brd_endpoint(request: Request):
     try:
+        body = {}
+        try:
+            body = await request.json() if request.headers.get("content-type") == "application/json" else {}
+        except Exception:
+            pass
+        
         feature_request = storage.get_current_feature_request()
+        if not feature_request and body.get("featureRequest"):
+            try:
+                from models import FeatureRequest as FRModel
+                fr_data = body["featureRequest"]
+                feature_request = FRModel(
+                    id=fr_data.get("id", "restored"),
+                    projectId=fr_data.get("projectId", "global"),
+                    title=fr_data.get("title", ""),
+                    description=fr_data.get("description", ""),
+                    inputType=fr_data.get("inputType", "text"),
+                    requestType=fr_data.get("requestType", "feature"),
+                    createdAt=fr_data.get("createdAt", datetime.now().isoformat()),
+                )
+                storage.feature_requests[feature_request.id] = feature_request
+                storage.current_feature_request_id = feature_request.id
+                print(f"Restored feature request from session: {feature_request.title}")
+            except Exception as restore_err:
+                print(f"Error restoring feature request from session: {restore_err}")
+        
         if not feature_request:
             raise HTTPException(status_code=400, detail="No feature request found")
         
@@ -477,6 +502,52 @@ async def generate_brd_endpoint(request: Request):
         analysis = storage.get_analysis(project_id) if projects else None
         documentation = storage.get_documentation(project_id) if projects else None
         database_schema = storage.get_database_schema(project_id) if projects else None
+        
+        if not analysis and body.get("analysis"):
+            try:
+                from models import RepoAnalysis as AnalysisModel
+                a_data = body["analysis"]
+                analysis = AnalysisModel(
+                    id=a_data.get("id", "restored"),
+                    projectId=a_data.get("projectId", project_id),
+                    repoUrl=a_data.get("repoUrl", ""),
+                    structure=a_data.get("structure", {}),
+                    technologies=a_data.get("technologies", []),
+                    summary=a_data.get("summary", ""),
+                    createdAt=a_data.get("createdAt", datetime.now().isoformat()),
+                )
+                print(f"Restored analysis from session data")
+            except Exception as restore_err:
+                print(f"Error restoring analysis from session: {restore_err}")
+        
+        if not database_schema and body.get("databaseSchema"):
+            try:
+                db_data = body["databaseSchema"]
+                from models import DatabaseSchema as DBSchemaModel
+                database_schema = DBSchemaModel(
+                    id=db_data.get("id", "restored"),
+                    projectId=db_data.get("projectId", project_id),
+                    connectionString=db_data.get("connectionString", ""),
+                    tables=db_data.get("tables", []),
+                    createdAt=db_data.get("createdAt", datetime.now().isoformat()),
+                )
+                print(f"Restored database schema from session data")
+            except Exception as restore_err:
+                print(f"Error restoring database schema from session: {restore_err}")
+        
+        if not documentation and body.get("documentation"):
+            try:
+                from models import Documentation as DocModel
+                doc_data = body["documentation"]
+                documentation = DocModel(
+                    id=doc_data.get("id", "restored"),
+                    projectId=doc_data.get("projectId", project_id),
+                    content=doc_data.get("content", ""),
+                    createdAt=doc_data.get("createdAt", datetime.now().isoformat()),
+                )
+                print(f"Restored documentation from session data ({len(documentation.content):,} chars)")
+            except Exception as restore_err:
+                print(f"Error restoring documentation from session: {restore_err}")
         
         knowledge_context = None
         knowledge_sources = []
@@ -552,9 +623,44 @@ async def get_test_cases():
 
 
 @app.post("/api/test-cases/generate")
-async def generate_test_cases_endpoint():
+async def generate_test_cases_endpoint(request: Request):
     try:
+        body = {}
+        try:
+            body = await request.json() if request.headers.get("content-type") == "application/json" else {}
+        except Exception:
+            pass
+        
         brd = storage.get_current_brd()
+        if not brd and body.get("brdData"):
+            try:
+                from models import BRD as BRDModel, BRDContent as BRDContentModel
+                brd_data = body["brdData"]
+                content = brd_data.get("content", {})
+                if isinstance(content, dict):
+                    brd_content = BRDContentModel(**content)
+                else:
+                    brd_content = content
+                now = datetime.now().isoformat()
+                brd = BRDModel(
+                    id=brd_data.get("id", "restored"),
+                    projectId=brd_data.get("projectId", ""),
+                    featureRequestId=brd_data.get("featureRequestId", ""),
+                    requestType=brd_data.get("requestType", "feature"),
+                    title=brd_data.get("title", ""),
+                    version=brd_data.get("version", "1.0"),
+                    status=brd_data.get("status", "draft"),
+                    content=brd_content,
+                    knowledgeSources=brd_data.get("knowledgeSources", []),
+                    createdAt=brd_data.get("createdAt", now),
+                    updatedAt=brd_data.get("updatedAt", now),
+                )
+                storage.brds[brd.id] = brd
+                storage.current_brd_id = brd.id
+                print(f"Restored BRD from session data: {brd.title}")
+            except Exception as restore_err:
+                print(f"Error restoring BRD from session: {restore_err}")
+        
         if not brd:
             raise HTTPException(status_code=400, detail="No BRD found. Please generate a BRD first.")
         
@@ -591,21 +697,52 @@ async def get_test_data():
 
 
 @app.post("/api/test-data/generate")
-async def generate_test_data_endpoint():
+async def generate_test_data_endpoint(request: Request):
     try:
+        body = {}
+        try:
+            body = await request.json() if request.headers.get("content-type") == "application/json" else {}
+        except Exception:
+            pass
+        
         brd = storage.get_current_brd()
         if not brd:
             raise HTTPException(status_code=400, detail="No BRD found. Please generate a BRD first.")
         
-        test_cases = storage.get_test_cases(brd.id)
-        if not test_cases:
+        test_cases_list = storage.get_test_cases(brd.id)
+        if not test_cases_list and body.get("testCases"):
+            try:
+                from models import TestCase as TCModel
+                for tc_data in body["testCases"]:
+                    tc = TCModel(
+                        id=tc_data.get("id", ""),
+                        brdId=tc_data.get("brdId", brd.id),
+                        requirementId=tc_data.get("requirementId", ""),
+                        title=tc_data.get("title", ""),
+                        description=tc_data.get("description", ""),
+                        type=tc_data.get("type", "unit"),
+                        priority=tc_data.get("priority", "medium"),
+                        category=tc_data.get("category", "happy_path"),
+                        preconditions=tc_data.get("preconditions", []),
+                        steps=tc_data.get("steps", []),
+                        expectedOutcome=tc_data.get("expectedOutcome", ""),
+                        codeSnippet=tc_data.get("codeSnippet"),
+                        createdAt=tc_data.get("createdAt", datetime.now().isoformat()),
+                    )
+                    storage.test_cases[tc.id] = tc
+                test_cases_list = list(storage.test_cases.values())
+                print(f"Restored {len(test_cases_list)} test cases from session data")
+            except Exception as restore_err:
+                print(f"Error restoring test cases from session: {restore_err}")
+        
+        if not test_cases_list:
             raise HTTPException(status_code=400, detail="No test cases found. Please generate test cases first.")
         
         projects = storage.get_all_projects()
         documentation = storage.get_documentation(projects[0].id) if projects else None
         
         test_data = await generate_test_data(
-            [tc.model_dump() for tc in test_cases],
+            [tc.model_dump() for tc in test_cases_list],
             brd.model_dump(),
             documentation.model_dump() if documentation else None
         )
@@ -675,6 +812,20 @@ async def generate_user_stories_endpoint(request: Request):
         project_id = projects[0].id if projects else "global"
         documentation = storage.get_documentation(project_id) if projects else None
         database_schema = storage.get_database_schema(project_id) if projects else None
+        
+        if not documentation and body.get("documentation"):
+            try:
+                from models import Documentation as DocModel
+                doc_data = body["documentation"]
+                documentation = DocModel(
+                    id=doc_data.get("id", "restored"),
+                    projectId=doc_data.get("projectId", project_id),
+                    content=doc_data.get("content", ""),
+                    createdAt=doc_data.get("createdAt", datetime.now().isoformat()),
+                )
+                print(f"Restored documentation from session data for user stories ({len(documentation.content):,} chars)")
+            except Exception as restore_err:
+                print(f"Error restoring documentation from session: {restore_err}")
         
         parent_context = None
         if parent_jira_key:

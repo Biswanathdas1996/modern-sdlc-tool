@@ -11,6 +11,7 @@ import { WorkflowHeader } from "@/components/WorkflowHeader";
 import { LoadingOverlay, LoadingSpinner } from "@/components/LoadingSpinner";
 import { EmptyState } from "@/components/EmptyState";
 import { apiRequest } from "@/lib/queryClient";
+import { useSession } from "@/hooks/useSession";
 import type { Project } from "@shared/schema";
 
 const workflowSteps = [
@@ -28,6 +29,7 @@ export default function AnalyzePage() {
   const [analyzingProjectId, setAnalyzingProjectId] = useState<string | null>(null);
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
+  const { saveSessionArtifact } = useSession();
 
   // Poll for projects to check status
   const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({
@@ -40,6 +42,7 @@ export default function AnalyzePage() {
     if (analyzingProjectId && projects) {
       const project = projects.find(p => p.id === analyzingProjectId);
       if (project && project.status === "completed") {
+        saveSessionArtifact("project", project);
         setAnalyzingProjectId(null);
         queryClient.invalidateQueries({ queryKey: ["/api/analysis/current"] });
         queryClient.invalidateQueries({ queryKey: ["/api/documentation/current"] });
@@ -48,7 +51,7 @@ export default function AnalyzePage() {
         setAnalyzingProjectId(null);
       }
     }
-  }, [projects, analyzingProjectId, navigate, queryClient]);
+  }, [projects, analyzingProjectId, navigate, queryClient, saveSessionArtifact]);
 
   const analyzeMutation = useMutation({
     mutationFn: async (url: string) => {
@@ -89,6 +92,7 @@ export default function AnalyzePage() {
   };
 
   const selectProject = (project: Project) => {
+    saveSessionArtifact("project", project);
     queryClient.setQueryData(["currentProject"], project);
     navigate("/documentation");
   };

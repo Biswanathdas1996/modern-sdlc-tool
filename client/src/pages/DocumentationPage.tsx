@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Link } from "wouter";
@@ -19,6 +19,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { cn } from "@/lib/utils";
 import type { Documentation, RepoAnalysis, BPMNDiagram, DatabaseSchemaInfo } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
+import { useSession } from "@/hooks/useSession";
 
 const workflowSteps = [
   { id: "analyze", label: "Analyze", completed: true, active: false },
@@ -42,6 +43,7 @@ export default function DocumentationPage() {
   const [activeSection, setActiveSection] = useState("overview");
   const [connectionString, setConnectionString] = useState("");
   const { toast } = useToast();
+  const { saveSessionArtifact } = useSession();
 
   const handleSectionSelect = (sectionId: string) => {
     setActiveSection(sectionId);
@@ -115,6 +117,22 @@ export default function DocumentationPage() {
       });
     },
   });
+
+  useEffect(() => {
+    if (documentation) saveSessionArtifact("documentation", documentation);
+  }, [documentation, saveSessionArtifact]);
+
+  useEffect(() => {
+    if (analysis) saveSessionArtifact("analysis", analysis);
+  }, [analysis, saveSessionArtifact]);
+
+  useEffect(() => {
+    if (bpmnDiagrams) saveSessionArtifact("bpmn", bpmnDiagrams);
+  }, [bpmnDiagrams, saveSessionArtifact]);
+
+  useEffect(() => {
+    if (databaseSchema) saveSessionArtifact("databaseSchema", databaseSchema);
+  }, [databaseSchema, saveSessionArtifact]);
 
   const isLoading = analysisLoading || docLoading;
 

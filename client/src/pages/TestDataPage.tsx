@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSession } from "@/hooks/useSession";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Database,
@@ -44,14 +45,22 @@ export default function TestDataPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const { saveSessionArtifact, getSessionArtifact } = useSession();
 
   const { data: testData, isLoading } = useQuery<TestData[]>({
     queryKey: ["/api/test-data"],
   });
 
+  useEffect(() => {
+    if (testData && testData.length > 0) saveSessionArtifact("testData", testData);
+  }, [testData, saveSessionArtifact]);
+
   const regenerateMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/test-data/generate");
+      const body: Record<string, any> = {};
+      const cachedTestCases = getSessionArtifact("testCases");
+      if (cachedTestCases) body.testCases = cachedTestCases;
+      const response = await apiRequest("POST", "/api/test-data/generate", body);
       return response.json();
     },
     onSuccess: () => {

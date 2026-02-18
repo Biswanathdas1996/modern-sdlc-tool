@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSession } from "@/hooks/useSession";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -54,14 +55,24 @@ export default function TestCasesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
+  const { saveSessionArtifact, getSessionArtifact } = useSession();
 
   const { data: testCases, isLoading } = useQuery<TestCase[]>({
     queryKey: ["/api/test-cases"],
   });
 
+  useEffect(() => {
+    if (testCases && testCases.length > 0) saveSessionArtifact("testCases", testCases);
+  }, [testCases, saveSessionArtifact]);
+
   const regenerateMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/test-cases/generate");
+      const body: Record<string, any> = {};
+      const cachedBrd = getSessionArtifact("brd");
+      if (cachedBrd) body.brdData = cachedBrd;
+      const cachedStories = getSessionArtifact("userStories");
+      if (cachedStories) body.userStories = cachedStories;
+      const response = await apiRequest("POST", "/api/test-cases/generate", body);
       return response.json();
     },
     onSuccess: () => {
@@ -71,7 +82,10 @@ export default function TestCasesPage() {
 
   const generateTestDataMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/test-data/generate");
+      const body: Record<string, any> = {};
+      const cachedTestCases = getSessionArtifact("testCases");
+      if (cachedTestCases) body.testCases = cachedTestCases;
+      const response = await apiRequest("POST", "/api/test-data/generate", body);
       return response.json();
     },
     onSuccess: () => {

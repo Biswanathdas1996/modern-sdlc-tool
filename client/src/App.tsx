@@ -8,6 +8,7 @@ import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/s
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AppSidebar } from "@/components/AppSidebar";
+import { SessionContext, useSessionProvider } from "@/hooks/useSession";
 import NotFound from "@/pages/not-found";
 import AnalyzePage from "@/pages/AnalyzePage";
 import DocumentationPage from "@/pages/DocumentationPage";
@@ -72,12 +73,23 @@ function AppLayout() {
   );
 }
 
+function SessionWrapper({ children }: { children: React.ReactNode }) {
+  const sessionValue = useSessionProvider();
+  return (
+    <SessionContext.Provider value={sessionValue}>
+      {children}
+    </SessionContext.Provider>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <TooltipProvider>
-          <AppLayout />
+          <SessionWrapper>
+            <AppLayout />
+          </SessionWrapper>
           <Toaster />
         </TooltipProvider>
       </ThemeProvider>

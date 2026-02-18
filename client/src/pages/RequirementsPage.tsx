@@ -13,6 +13,7 @@ import { WorkflowHeader } from "@/components/WorkflowHeader";
 import { LoadingOverlay } from "@/components/LoadingSpinner";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
+import { useSession } from "@/hooks/useSession";
 
 const workflowSteps = [
   { id: "analyze", label: "Analyze", completed: true, active: false },
@@ -60,9 +61,12 @@ export default function RequirementsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   const [isGeneratingBRD, setIsGeneratingBRD] = useState(false);
   const [generationStatus, setGenerationStatus] = useState("");
+
+  const { startSession, saveSessionArtifact, getSessionArtifact } = useSession();
 
   const submitMutation = useMutation({
     mutationFn: async (data: FormData) => {
@@ -74,14 +78,25 @@ export default function RequirementsPage() {
       });
       if (!response.ok) throw new Error("Failed to submit requirements");
       const requirements = await response.json();
+      saveSessionArtifact("featureRequest", requirements);
 
       // Step 2: Generate BRD (with streaming)
       setIsGeneratingBRD(true);
       setGenerationStatus("Generating BRD...");
       
+      const cachedDocumentation = getSessionArtifact("documentation");
+      const cachedFeatureRequest = getSessionArtifact("featureRequest");
+      const cachedAnalysis = getSessionArtifact("analysis");
+      const cachedDatabaseSchema = getSessionArtifact("databaseSchema");
       const brdResponse = await fetch("/api/brd/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documentation: cachedDocumentation,
+          featureRequest: cachedFeatureRequest,
+          analysis: cachedAnalysis,
+          databaseSchema: cachedDatabaseSchema,
+        }),
       });
       
       if (!brdResponse.ok) throw new Error("Failed to generate BRD");
@@ -181,11 +196,16 @@ export default function RequirementsPage() {
   };
 
   const handleSubmit = () => {
+    const sessionId = startSession({ featureTitle: title, requestType });
+    setCurrentSessionId(sessionId);
+    saveSessionArtifact("featureRequest", { title, description, inputType, requestType });
+
     const formData = new FormData();
     formData.append("title", title);
     formData.append("description", description);
     formData.append("inputType", inputType);
     formData.append("requestType", requestType);
+    formData.append("sessionId", sessionId);
 
     if (uploadedFile) {
       formData.append("file", uploadedFile);
