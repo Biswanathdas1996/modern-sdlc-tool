@@ -43,6 +43,14 @@ export default function DocumentationPage() {
   const [connectionString, setConnectionString] = useState("");
   const { toast } = useToast();
 
+  const handleSectionSelect = (sectionId: string) => {
+    setActiveSection(sectionId);
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   const { data: analysis, isLoading: analysisLoading } = useQuery<RepoAnalysis>({
     queryKey: ["/api/analysis/current"],
   });
@@ -232,7 +240,7 @@ export default function DocumentationPage() {
                     key={item.id}
                     item={item}
                     activeSection={activeSection}
-                    onSelect={setActiveSection}
+                    onSelect={handleSectionSelect}
                   />
                 ))}
               </nav>
