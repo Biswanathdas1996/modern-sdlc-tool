@@ -50,25 +50,6 @@ interface ThinkingStep {
   tool_name?: string;
 }
 
-function escapeHtml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function formatMarkdown(content: string): string {
-  const escaped = escapeHtml(content);
-  return escaped
-    .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code class="bg-muted px-1 py-0.5 rounded text-sm">$1</code>')
-    .replace(/^- (.+)$/gm, '<li>$1</li>')
-    .replace(/(<li>.+<\/li>\n?)+/g, '<ul class="list-disc pl-6 my-2">$&</ul>')
-    .replace(/\n\n/g, '<br/><br/>')
-    .replace(/\n/g, '<br/>');
-}
 
 function parseProgressSteps(progress: string, thinkingSteps: ThinkingStep[]): ProgressStep[] {
   const steps: ProgressStep[] = [
@@ -520,39 +501,178 @@ export default function CodeGenerationPage() {
           )}
 
           {result && (
-            <Card data-testid="card-result">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    {resultSuccess ? (
-                      <CheckCircle2 className="h-5 w-5 text-success" />
-                    ) : (
-                      <AlertCircle className="h-5 w-5 text-destructive" />
+            <div className="space-y-4" data-testid="card-result">
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      {resultSuccess ? (
+                        <CheckCircle2 className="h-5 w-5 text-success" />
+                      ) : (
+                        <AlertCircle className="h-5 w-5 text-destructive" />
+                      )}
+                      {resultSuccess ? "Code Generation Complete" : "Code Generation Failed"}
+                    </CardTitle>
+                    {resultSuccess && (
+                      <div className="flex items-center gap-2">
+                        <Button onClick={() => setShowPushDialog(true)} data-testid="button-push-github">
+                          <GitBranch className="h-4 w-4 mr-2" />
+                          Push to GitHub
+                        </Button>
+                        <Button variant="outline" onClick={handleGenerate} data-testid="button-regenerate">
+                          <Wand2 className="h-4 w-4 mr-2" />
+                          Regenerate
+                        </Button>
+                      </div>
                     )}
-                    {resultSuccess ? "Code Generation Complete" : "Code Generation Failed"}
-                  </CardTitle>
-                  {resultSuccess && (
-                    <div className="flex items-center gap-2">
-                      <Button onClick={() => setShowPushDialog(true)} data-testid="button-push-github">
-                        <GitBranch className="h-4 w-4 mr-2" />
-                        Push to GitHub
-                      </Button>
-                      <Button variant="outline" onClick={handleGenerate} data-testid="button-regenerate">
-                        <Wand2 className="h-4 w-4 mr-2" />
-                        Regenerate
-                      </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {resultMeta && (
+                    <div className="grid grid-cols-3 gap-3" data-testid="result-stats">
+                      <div className="flex items-center gap-2.5 rounded-md border border-border bg-muted/30 px-3 py-2.5">
+                        <FolderGit2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs text-muted-foreground">Repository</p>
+                          <p className="text-sm font-medium truncate">{resultMeta.repo_name || "Unknown"}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2.5 rounded-md border border-border bg-muted/30 px-3 py-2.5">
+                        <Layers className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs text-muted-foreground">Language</p>
+                          <p className="text-sm font-medium capitalize">{resultMeta.language || "Unknown"}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2.5 rounded-md border border-border bg-muted/30 px-3 py-2.5">
+                        <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs text-muted-foreground">Duration</p>
+                          <p className="text-sm font-medium">{resultMeta.elapsed}s</p>
+                        </div>
+                      </div>
                     </div>
                   )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div
-                  className="prose-docs text-sm"
-                  dangerouslySetInnerHTML={{ __html: formatMarkdown(result) }}
-                  data-testid="text-result"
-                />
-              </CardContent>
-            </Card>
+                  {!resultSuccess && !generatedChanges.length && (
+                    <p className="text-sm text-muted-foreground mt-2" data-testid="text-result">{result}</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {(() => {
+                const created = generatedChanges.filter(c => c.success && c.action === "create");
+                const modified = generatedChanges.filter(c => c.success && c.action === "modify");
+                const failed = generatedChanges.filter(c => !c.success);
+
+                return (
+                  <>
+                    {created.length > 0 && (
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center gap-2">
+                            <FilePlus className="h-4 w-4 text-success" />
+                            New Files Created
+                            <Badge variant="secondary" className="ml-1">{created.length}</Badge>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <div className="divide-y divide-border">
+                            {created.map((change, idx) => (
+                              <div key={idx} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0" data-testid={`row-created-${idx}`}>
+                                <FileCode className="h-4 w-4 text-success shrink-0 mt-0.5" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-mono font-medium truncate">{change.file_path}</p>
+                                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{change.description}</p>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {change.story_refs.map(ref => (
+                                    <Badge key={ref} variant="outline" className="text-xs">{ref}</Badge>
+                                  ))}
+                                  {change.lines && (
+                                    <span className="text-xs text-muted-foreground">{change.lines} lines</span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {modified.length > 0 && (
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center gap-2">
+                            <FilePen className="h-4 w-4 text-primary" />
+                            Files Modified
+                            <Badge variant="secondary" className="ml-1">{modified.length}</Badge>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <div className="divide-y divide-border">
+                            {modified.map((change, idx) => (
+                              <div key={idx} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0" data-testid={`row-modified-${idx}`}>
+                                <FileCode className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-mono font-medium truncate">{change.file_path}</p>
+                                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{change.description}</p>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {change.story_refs.map(ref => (
+                                    <Badge key={ref} variant="outline" className="text-xs">{ref}</Badge>
+                                  ))}
+                                  {change.lines && (
+                                    <span className="text-xs text-muted-foreground">{change.lines} lines</span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {failed.length > 0 && (
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center gap-2">
+                            <XCircle className="h-4 w-4 text-destructive" />
+                            Failed
+                            <Badge variant="destructive" className="ml-1">{failed.length}</Badge>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <div className="divide-y divide-border">
+                            {failed.map((change, idx) => (
+                              <div key={idx} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0" data-testid={`row-failed-${idx}`}>
+                                <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-mono font-medium truncate">{change.file_path}</p>
+                                  <p className="text-xs text-destructive mt-0.5">{change.error || "Unknown error"}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {resultSuccess && generatedChanges.length > 0 && (
+                      <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 px-4 py-3">
+                        <GitBranch className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <p className="text-sm text-muted-foreground flex-1">
+                          Ready to push. Create a new branch with these changes and open a pull request on GitHub.
+                        </p>
+                        <Button size="sm" onClick={() => setShowPushDialog(true)} data-testid="button-push-github-bottom">
+                          <GitBranch className="h-3.5 w-3.5 mr-1.5" />
+                          Push to GitHub
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
           )}
 
           {pushResult && (
