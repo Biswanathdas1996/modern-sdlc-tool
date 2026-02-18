@@ -497,7 +497,15 @@ async def generate_brd_endpoint(request: Request):
         except Exception as kb_error:
             print(f"Knowledge base search error: {kb_error}")
         
-        print(f"Generating BRD with context: Documentation={documentation is not None}, Analysis={analysis is not None}, DB Schema={database_schema is not None}, Knowledge Base={knowledge_context is not None} ({len(knowledge_sources)} chunks)")
+        doc_size = len(documentation.content) if documentation and documentation.content else 0
+        kb_size = len(knowledge_context) if knowledge_context else 0
+        feature_desc_size = len(feature_request.description) if feature_request.description else 0
+        print(f"📋 BRD Generation Context:")
+        print(f"  - Feature Request: '{feature_request.title}' ({feature_desc_size} chars)")
+        print(f"  - Documentation: {'YES' if documentation else 'NO'} ({doc_size:,} chars)")
+        print(f"  - Analysis: {'YES' if analysis else 'NO'}")
+        print(f"  - DB Schema: {'YES' if database_schema else 'NO'}")
+        print(f"  - Knowledge Base: {'YES' if knowledge_context else 'NO'} ({len(knowledge_sources)} chunks, {kb_size:,} chars)")
         
         async def generate():
             try:
