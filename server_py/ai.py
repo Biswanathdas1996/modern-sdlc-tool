@@ -65,6 +65,27 @@ def build_prompt(system_message: str, user_message: str) -> str:
     return f"System: {system_message}\n\nUser: {user_message}"
 
 
+def _fix_invalid_escapes(text: str) -> str:
+    valid_escapes = set('"\\/bfnrtu')
+    result = []
+    i = 0
+    while i < len(text):
+        if text[i] == '\\' and i + 1 < len(text):
+            next_char = text[i + 1]
+            if next_char in valid_escapes:
+                result.append(text[i])
+                result.append(next_char)
+                i += 2
+            else:
+                result.append('\\\\')
+                result.append(next_char)
+                i += 2
+        else:
+            result.append(text[i])
+            i += 1
+    return ''.join(result)
+
+
 def parse_json_response(text: str) -> Any:
     cleaned = text.strip()
     if cleaned.startswith("```json"):
@@ -74,24 +95,40 @@ def parse_json_response(text: str) -> Any:
     if cleaned.endswith("```"):
         cleaned = cleaned[:-3]
 
+    stripped = cleaned.strip()
+
     try:
-        return json.loads(cleaned.strip())
+        return json.loads(stripped)
     except json.JSONDecodeError as first_error:
-        print("First JSON parse failed, attempting regex extraction...")
+        print("First JSON parse failed, attempting escape fix...")
+        
+        try:
+            fixed = _fix_invalid_escapes(stripped)
+            return json.loads(fixed)
+        except json.JSONDecodeError:
+            pass
+        
+        print("Escape fix failed, attempting regex extraction...")
         
         object_match = re.search(r'\{[\s\S]*\}', text)
         if object_match:
             try:
                 return json.loads(object_match.group(0))
-            except:
-                pass
+            except json.JSONDecodeError:
+                try:
+                    return json.loads(_fix_invalid_escapes(object_match.group(0)))
+                except:
+                    pass
         
         array_match = re.search(r'\[[\s\S]*\]', text)
         if array_match:
             try:
                 return json.loads(array_match.group(0))
-            except:
-                pass
+            except json.JSONDecodeError:
+                try:
+                    return json.loads(_fix_invalid_escapes(array_match.group(0)))
+                except:
+                    pass
         
         raise ValueError(f"Failed to parse JSON from response. Original error: {first_error}. Response preview: {text[:200]}...")
 
