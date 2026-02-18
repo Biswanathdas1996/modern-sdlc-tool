@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
-import { Bot, User, Send, FlaskConical, RefreshCw, MessageSquare } from "lucide-react";
+import { User, Send, FlaskConical, RefreshCw, MessageSquare, CheckCircle2, Circle, Loader2, AlertCircle, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useSession } from "@/hooks/useSession";
@@ -19,12 +19,20 @@ interface Message {
   task_id?: string;
 }
 
+interface ProgressStep {
+  label: string;
+  detail: string;
+  status: "pending" | "active" | "done" | "error";
+  timestamp?: Date;
+}
+
 function generateSessionId(): string {
   return crypto.randomUUID();
 }
 
 function formatMarkdown(content: string): string {
   return content
+    .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm, '<h2>$1</h2>')
     .replace(/^# (.+)$/gm, '<h1>$1</h1>')
@@ -38,11 +46,194 @@ function formatMarkdown(content: string): string {
     .replace(/\n/g, '<br/>');
 }
 
+function parseProgressFromPoll(progress: string, thinkingSteps: Array<{ type: string; content: string; tool_name?: string }>): ProgressStep[] {
+  const steps: ProgressStep[] = [
+    { label: "Cloning Repository", detail: "", status: "pending" },
+    { label: "Scanning Existing Tests", detail: "", status: "pending" },
+    { label: "Analyzing Test Patterns", detail: "", status: "pending" },
+    { label: "Collecting Source Files", detail: "", status: "pending" },
+    { label: "Identifying Coverage Gaps", detail: "", status: "pending" },
+    { label: "Installing Dependencies", detail: "", status: "pending" },
+    { label: "Generating Tests", detail: "", status: "pending" },
+    { label: "Validating & Auto-Fixing", detail: "", status: "pending" },
+  ];
+
+  const stepContents = thinkingSteps.map(s => s.content.toLowerCase());
+  const progressLower = progress.toLowerCase();
+
+  const hasContent = (keywords: string[]) => stepContents.some(c => keywords.some(k => c.includes(k)));
+
+  if (hasContent(["cloning", "cloned", "linked to repo"])) {
+    steps[0].status = "done";
+    const cloneStep = thinkingSteps.find(s => s.content.toLowerCase().includes("linked to repo") || s.content.toLowerCase().includes("cloned"));
+    if (cloneStep) steps[0].detail = cloneStep.content;
+  }
+
+  if (hasContent(["existing test", "found"]) && hasContent(["test file"])) {
+    steps[0].status = "done";
+    steps[1].status = "done";
+    const testFound = thinkingSteps.find(s => /found \d+ existing test/i.test(s.content));
+    if (testFound) steps[1].detail = testFound.content;
+  }
+
+  if (hasContent(["analyzing", "test patterns", "pattern"])) {
+    steps[0].status = "done";
+    steps[1].status = "done";
+    steps[2].status = "done";
+  }
+
+  if (hasContent(["source files", "collecting source"])) {
+    steps.slice(0, 3).forEach(s => { if (s.status === "pending") s.status = "done"; });
+    steps[3].status = "done";
+    const srcStep = thinkingSteps.find(s => /found \d+ source/i.test(s.content));
+    if (srcStep) steps[3].detail = srcStep.content;
+  }
+
+  if (hasContent(["coverage gap", "modules to process", "testable"])) {
+    steps.slice(0, 4).forEach(s => { if (s.status === "pending") s.status = "done"; });
+    steps[4].status = "done";
+    const gapStep = thinkingSteps.find(s => /identified \d+ modules/i.test(s.content));
+    if (gapStep) steps[4].detail = gapStep.content;
+  }
+
+  if (hasContent(["installing", "dependencies", "npm install", "pip install"])) {
+    steps.slice(0, 5).forEach(s => { if (s.status === "pending") s.status = "done"; });
+    steps[5].status = "done";
+  }
+
+  if (progressLower.includes("generating") || progressLower.includes("tests [")) {
+    steps.slice(0, 6).forEach(s => { if (s.status === "pending") s.status = "done"; });
+    steps[6].status = "active";
+    steps[6].detail = progress;
+  }
+
+  if (progressLower.includes("validating") || progressLower.includes("fixing")) {
+    steps.slice(0, 7).forEach(s => { if (s.status === "pending") s.status = "done"; });
+    steps[7].status = "active";
+    steps[7].detail = progress;
+  }
+
+  if (progressLower === "complete" || progressLower === "error") {
+    steps.forEach(s => { s.status = "done"; });
+  }
+
+  let lastDone = -1;
+  for (let i = steps.length - 1; i >= 0; i--) {
+    if (steps[i].status === "done" || steps[i].status === "active") {
+      lastDone = i;
+      break;
+    }
+  }
+  if (lastDone >= 0 && lastDone < steps.length - 1) {
+    const nextPending = steps.findIndex((s, i) => i > lastDone && s.status === "pending");
+    if (nextPending >= 0 && !steps.some(s => s.status === "active")) {
+      steps[nextPending].status = "active";
+    }
+  }
+
+  return steps;
+}
+
+function ProgressTracker({ steps, thinkingSteps, isExpanded, onToggle }: {
+  steps: ProgressStep[];
+  thinkingSteps: Array<{ type: string; content: string; tool_name?: string }>;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const activeStep = steps.find(s => s.status === "active");
+  const completedCount = steps.filter(s => s.status === "done").length;
+
+  return (
+    <div className="rounded-xl bg-gradient-to-br from-card to-muted/30 border border-border/50 shadow-sm overflow-visible" data-testid="progress-tracker">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onToggle}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onToggle(); }}
+        className="w-full flex items-center justify-between gap-3 px-5 py-3 cursor-pointer hover-elevate rounded-xl"
+        data-testid="button-toggle-progress"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
+          <span className="text-sm font-medium truncate">
+            {activeStep ? activeStep.label : "Processing..."}
+            {activeStep?.detail && (
+              <span className="text-muted-foreground font-normal ml-2">
+                — {activeStep.detail}
+              </span>
+            )}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-xs text-muted-foreground">{completedCount}/{steps.length} steps</span>
+          {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+        </div>
+      </div>
+
+      {isExpanded && (
+        <div className="px-5 pb-4 space-y-1.5">
+          <div className="w-full bg-muted rounded-full h-1.5 mb-3">
+            <div
+              className="bg-primary h-1.5 rounded-full transition-all duration-500"
+              style={{ width: `${(completedCount / steps.length) * 100}%` }}
+            />
+          </div>
+
+          {steps.map((step, i) => (
+            <div key={i} className="flex items-start gap-2.5 py-1" data-testid={`progress-step-${i}`}>
+              <div className="mt-0.5">
+                {step.status === "done" && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+                {step.status === "active" && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+                {step.status === "pending" && <Circle className="h-4 w-4 text-muted-foreground/40" />}
+                {step.status === "error" && <AlertCircle className="h-4 w-4 text-destructive" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className={cn(
+                  "text-sm",
+                  step.status === "done" && "text-foreground",
+                  step.status === "active" && "text-foreground font-medium",
+                  step.status === "pending" && "text-muted-foreground",
+                  step.status === "error" && "text-destructive",
+                )}>
+                  {step.label}
+                </span>
+                {step.detail && step.status !== "pending" && (
+                  <p className="text-xs text-muted-foreground mt-0.5 truncate">{step.detail}</p>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {thinkingSteps.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-border/30">
+              <p className="text-xs text-muted-foreground mb-1.5 font-medium">Recent Activity</p>
+              <div className="space-y-1 max-h-32 overflow-y-auto">
+                {thinkingSteps.slice(-5).map((step, i) => (
+                  <div key={i} className="flex items-start gap-1.5">
+                    <Badge variant="outline" className="text-[10px] shrink-0 mt-0.5">
+                      {step.tool_name || step.type}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground truncate">{step.content}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function UnitTestAgentPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sessionId, setSessionId] = useState(() => generateSessionId());
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [progressSteps, setProgressSteps] = useState<ProgressStep[]>([]);
+  const [latestThinkingSteps, setLatestThinkingSteps] = useState<Array<{ type: string; content: string; tool_name?: string }>>([]);
+  const [progressExpanded, setProgressExpanded] = useState(true);
+  const lastStepCountRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { getSessionArtifact } = useSession();
@@ -64,6 +255,50 @@ export default function UnitTestAgentPage() {
 
   useEffect(() => {
     document.title = "Unit Test Agent | DocuGen AI";
+  }, []);
+
+  const progressMessageId = useRef<string | null>(null);
+
+  const addProgressUpdate = useCallback((progress: string, thinkingSteps: Array<{ type: string; content: string; tool_name?: string }>) => {
+    const parsed = parseProgressFromPoll(progress, thinkingSteps);
+    setProgressSteps(parsed);
+    setLatestThinkingSteps(thinkingSteps);
+
+    if (thinkingSteps.length > lastStepCountRef.current && thinkingSteps.length > 0) {
+      const newSteps = thinkingSteps.slice(lastStepCountRef.current);
+      lastStepCountRef.current = thinkingSteps.length;
+
+      const significantUpdates = newSteps
+        .filter(step => step.content && step.content.length > 10)
+        .filter(step => /found \d+|identified \d+|generating|validating|fixing|passed|failed|error|installed|cloned|linked|scanning|analyzing|collecting/i.test(step.content))
+        .map(step => step.content);
+
+      if (significantUpdates.length > 0) {
+        setMessages(prev => {
+          const msgId = progressMessageId.current;
+          if (msgId) {
+            return prev.map(m => {
+              if (m.id === msgId) {
+                const existingLines = m.content.split("\n").filter(Boolean);
+                const newLines = significantUpdates.filter(u => !existingLines.includes(u));
+                if (newLines.length === 0) return m;
+                return { ...m, content: [...existingLines, ...newLines].join("\n"), timestamp: new Date() };
+              }
+              return m;
+            });
+          } else {
+            const newId = crypto.randomUUID();
+            progressMessageId.current = newId;
+            return [...prev, {
+              id: newId,
+              role: "assistant" as const,
+              content: significantUpdates.join("\n"),
+              timestamp: new Date(),
+            }];
+          }
+        });
+      }
+    }
   }, []);
 
   const chatMutation = useMutation({
@@ -90,6 +325,11 @@ export default function UnitTestAgentPage() {
       setMessages((prev) => [...prev, assistantMessage]);
       if (data.task_id) {
         setActiveTaskId(data.task_id);
+        setProgressSteps([]);
+        setLatestThinkingSteps([]);
+        lastStepCountRef.current = 0;
+        progressMessageId.current = null;
+        setProgressExpanded(true);
       }
     },
     onError: (error: Error) => {
@@ -109,8 +349,13 @@ export default function UnitTestAgentPage() {
       return response.json();
     },
     onSuccess: (data) => {
+      if (data.progress || data.thinking_steps?.length) {
+        addProgressUpdate(data.progress || "", data.thinking_steps || []);
+      }
+
       if ((data.status === "completed" || data.status === "failed") && data.response) {
         setActiveTaskId(null);
+        setProgressSteps(prev => prev.map(s => ({ ...s, status: "done" as const })));
         const resultMessage: Message = {
           id: crypto.randomUUID(),
           role: "assistant",
@@ -121,6 +366,9 @@ export default function UnitTestAgentPage() {
         setMessages((prev) => [...prev, resultMessage]);
       } else if (data.status === "failed" || data.status === "error") {
         setActiveTaskId(null);
+        setProgressSteps(prev => prev.map(s =>
+          s.status === "active" ? { ...s, status: "error" as const } : s
+        ));
         const errorMsg: Message = {
           id: crypto.randomUUID(),
           role: "assistant",
@@ -161,13 +409,13 @@ export default function UnitTestAgentPage() {
         return;
       }
       pollTaskMutation.mutate(activeTaskId);
-    }, 5000);
+    }, 3000);
     return () => clearInterval(interval);
   }, [activeTaskId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, progressSteps]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,6 +442,10 @@ export default function UnitTestAgentPage() {
     setSessionId(generateSessionId());
     setMessages([]);
     setActiveTaskId(null);
+    setProgressSteps([]);
+    setLatestThinkingSteps([]);
+    lastStepCountRef.current = 0;
+    progressMessageId.current = null;
   };
 
   return (
@@ -214,8 +466,8 @@ export default function UnitTestAgentPage() {
           <div className="flex items-center gap-2">
             {activeTaskId && (
               <Badge variant="secondary" className="text-xs" data-testid="badge-task-running">
-                <LoadingSpinner size="sm" />
-                <span className="ml-1">Generating tests...</span>
+                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                <span>Generating tests...</span>
               </Badge>
             )}
             <Badge variant="outline" className="font-mono text-xs" data-testid="badge-session-id">
@@ -239,7 +491,7 @@ export default function UnitTestAgentPage() {
           </CardHeader>
           <CardContent className="flex-1 min-h-0 flex flex-col p-0 overflow-hidden">
             <div className="flex-1 min-h-0 overflow-y-auto p-4" data-testid="container-messages">
-              {messages.length === 0 ? (
+              {messages.length === 0 && !chatMutation.isPending ? (
                 <div className="h-full flex flex-col items-center justify-center text-center py-12">
                   <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted mb-4">
                     <FlaskConical className="h-8 w-8 text-muted-foreground" />
@@ -294,27 +546,61 @@ export default function UnitTestAgentPage() {
                             <div className="prose-chat text-sm" dangerouslySetInnerHTML={{ __html: formatMarkdown(message.content) }} />
                           )}
                         </div>
-                        {message.thinking_steps && message.thinking_steps.length > 0 && (
+                        {message.thinking_steps && message.thinking_steps.length > 0 && !activeTaskId && (
                           <div className="mt-1 flex flex-wrap gap-1">
-                            {message.thinking_steps.map((step, i) => (
+                            {message.thinking_steps.slice(0, 5).map((step, i) => (
                               <Badge key={i} variant="outline" className="text-xs" data-testid={`badge-step-${index}-${i}`}>
                                 {step.tool_name || step.type}: {step.content.slice(0, 50)}
                               </Badge>
                             ))}
+                            {message.thinking_steps.length > 5 && (
+                              <Badge variant="outline" className="text-xs">
+                                +{message.thinking_steps.length - 5} more
+                              </Badge>
+                            )}
                           </div>
                         )}
                         <span className="text-xs text-muted-foreground mt-1">{message.timestamp.toLocaleTimeString()}</span>
                       </div>
                     </div>
                   ))}
+
+                  {activeTaskId && progressSteps.length > 0 && (
+                    <div className="flex gap-3" data-testid="progress-container">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
+                        <FlaskConical className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 max-w-[80%]">
+                        <ProgressTracker
+                          steps={progressSteps}
+                          thinkingSteps={latestThinkingSteps}
+                          isExpanded={progressExpanded}
+                          onToggle={() => setProgressExpanded(!progressExpanded)}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   {chatMutation.isPending && (
                     <div className="flex gap-3" data-testid="loading-indicator">
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
                         <FlaskConical className="h-4 w-4" />
                       </div>
-                      <div className="flex items-center gap-2 rounded-lg bg-muted px-4 py-2">
-                        <LoadingSpinner size="sm" />
-                        <span className="text-sm text-muted-foreground">Processing...</span>
+                      <div className="flex items-center gap-2 rounded-xl bg-gradient-to-br from-card to-muted/30 border border-border/50 px-5 py-3 shadow-sm">
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        <span className="text-sm text-muted-foreground">Connecting to agent...</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTaskId && progressSteps.length === 0 && !chatMutation.isPending && (
+                    <div className="flex gap-3" data-testid="waiting-indicator">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
+                        <FlaskConical className="h-4 w-4" />
+                      </div>
+                      <div className="flex items-center gap-2 rounded-xl bg-gradient-to-br from-card to-muted/30 border border-border/50 px-5 py-3 shadow-sm">
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        <span className="text-sm text-muted-foreground">Starting test generation pipeline...</span>
                       </div>
                     </div>
                   )}
@@ -333,10 +619,10 @@ export default function UnitTestAgentPage() {
                   placeholder="Ask about unit tests or generate tests... (Press Enter to send)"
                   className="resize-none"
                   rows={2}
-                  disabled={chatMutation.isPending}
+                  disabled={chatMutation.isPending || !!activeTaskId}
                   data-testid="input-chat-message"
                 />
-                <Button type="submit" disabled={!input.trim() || chatMutation.isPending} data-testid="button-send-message">
+                <Button type="submit" disabled={!input.trim() || chatMutation.isPending || !!activeTaskId} data-testid="button-send-message">
                   <Send className="h-4 w-4" />
                 </Button>
               </form>
