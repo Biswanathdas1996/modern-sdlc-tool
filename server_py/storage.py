@@ -221,12 +221,15 @@ class MemStorage:
 
     def create_test_data(self, data: dict) -> TestData:
         id = str(uuid.uuid4())
+        valid_types = {"valid", "invalid", "edge", "boundary"}
+        raw_type = str(data.get("dataType", "valid")).lower().strip()
+        data_type = raw_type if raw_type in valid_types else "valid"
         td = TestData(
             id=id,
             testCaseId=data["testCaseId"],
             name=data.get("name", ""),
             description=data.get("description", ""),
-            dataType=data.get("dataType", "valid"),
+            dataType=data_type,
             data=data.get("data", {}),
             createdAt=datetime.utcnow().isoformat()
         )

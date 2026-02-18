@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useSession } from "@/hooks/useSession";
+import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -55,6 +56,7 @@ export default function TestCasesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const { saveSessionArtifact, getSessionArtifact } = useSession();
 
   const { data: testCases, isLoading } = useQuery<TestCase[]>({
@@ -91,6 +93,13 @@ export default function TestCasesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/test-data"] });
       navigate("/test-data");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error generating test data",
+        description: error?.message || "Please try again",
+        variant: "destructive",
+      });
     },
   });
 

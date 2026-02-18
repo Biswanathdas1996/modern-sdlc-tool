@@ -124,6 +124,10 @@ class StorageManager:
         return self.test_data.get_all()
         
     def create_test_data(self, data: dict) -> TestData:
+        valid_types = {"valid", "invalid", "edge", "boundary"}
+        raw_type = str(data.get("dataType", "valid")).lower().strip()
+        if raw_type not in valid_types:
+            data = {**data, "dataType": "valid"}
         return self.test_data.create(data)
         
     def create_test_data_batch(self, data_list: list):
