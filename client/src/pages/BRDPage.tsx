@@ -15,10 +15,7 @@ import {
   FileText,
   Link2,
   Bookmark,
-  Tag,
-  Clock,
   Users,
-  Layers,
   Loader2,
   GitBranch,
   Plus,
@@ -39,7 +36,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import type { BRD, UserStory, KnowledgeSource } from "@shared/schema";
+import type { BRD, KnowledgeSource } from "@shared/schema";
 
 interface RelatedJiraStory {
   story: {
@@ -84,15 +81,6 @@ export default function BRDPage() {
     queryKey: ["/api/brd/current"],
   });
 
-  const { data: userStories, isLoading: storiesLoading } = useQuery<UserStory[]>({
-    queryKey: ["/api/user-stories", brd?.id],
-    queryFn: async () => {
-      const response = await fetch(`/api/user-stories/${brd?.id}`);
-      if (!response.ok) throw new Error("Failed to fetch user stories");
-      return response.json();
-    },
-    enabled: !!brd?.id,
-  });
 
   const regenerateMutation = useMutation({
     mutationFn: async () => {
@@ -166,6 +154,7 @@ export default function BRDPage() {
         title: "User Stories Generated",
         description: "User stories have been successfully generated from the BRD.",
       });
+      navigate("/user-stories");
     },
   });
 
@@ -797,166 +786,28 @@ export default function BRDPage() {
             </CardContent>
           </Card>
 
-          {/* User Stories Section */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between gap-4 flex-wrap">
-                <CardTitle className="flex items-center gap-2">
-                  <Bookmark className="h-5 w-5 text-primary" />
-                  User Stories
-                </CardTitle>
-                <Button
-                  onClick={checkRelatedStories}
-                  disabled={generateStoriesMutation.isPending || isCheckingRelated || !brd}
-                  size="sm"
-                  data-testid="button-generate-user-stories"
-                >
-                  {generateStoriesMutation.isPending || isCheckingRelated ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      {isCheckingRelated ? "Checking JIRA..." : "Generating..."}
-                    </>
-                  ) : userStories && userStories.length > 0 ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Regenerate Stories
-                    </>
-                  ) : (
-                    <>
-                      <Bookmark className="h-4 w-4 mr-2" />
-                      Generate User Stories
-                    </>
-                  )}
-                </Button>
-              </div>
-              <CardDescription>
-                JIRA-style user stories generated from the BRD and repository documentation
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {storiesLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <LoadingSpinner size="md" />
-                </div>
-              ) : userStories && userStories.length > 0 ? (
-                <div className="space-y-4">
-                  {userStories.map((story) => (
-                    <div
-                      key={story.id}
-                      className="p-4 rounded-md border bg-card hover-elevate"
-                      data-testid={`user-story-${story.storyKey}`}
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-3 flex-wrap">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Badge variant="outline" className="font-mono text-xs">
-                            {story.storyKey}
-                          </Badge>
-                          <Badge
-                            variant={
-                              story.priority === "highest" || story.priority === "high"
-                                ? "destructive"
-                                : story.priority === "medium"
-                                ? "default"
-                                : "secondary"
-                            }
-                          >
-                            {story.priority}
-                          </Badge>
-                          {story.storyPoints && (
-                            <Badge variant="outline" className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {story.storyPoints} pts
-                            </Badge>
-                          )}
-                        </div>
-                        {story.epic && (
-                          <Badge variant="secondary" className="flex items-center gap-1">
-                            <Layers className="h-3 w-3" />
-                            {story.epic}
-                          </Badge>
-                        )}
-                      </div>
-                      
-                      <h4 className="font-medium text-foreground mb-2">{story.title}</h4>
-                      
-                      <div className="p-3 rounded bg-muted/50 mb-3 text-sm">
-                        <p className="text-muted-foreground">
-                          <span className="font-medium text-foreground">As a</span> {story.asA},{" "}
-                          <span className="font-medium text-foreground">I want</span> {story.iWant},{" "}
-                          <span className="font-medium text-foreground">so that</span> {story.soThat}
-                        </p>
-                      </div>
-
-                      {story.description && (
-                        <p className="text-sm text-muted-foreground mb-3">{story.description}</p>
-                      )}
-
-                      {story.acceptanceCriteria.length > 0 && (
-                        <div className="mb-3">
-                          <p className="text-xs font-medium text-muted-foreground mb-1">
-                            Acceptance Criteria:
-                          </p>
-                          <ul className="space-y-1">
-                            {story.acceptanceCriteria.map((criteria, i) => (
-                              <li key={i} className="flex items-start gap-2 text-sm">
-                                <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
-                                <span className="text-foreground">{criteria}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                      {story.technicalNotes && (
-                        <div className="p-2 rounded bg-accent/10 border border-accent/20 mb-3">
-                          <p className="text-xs font-medium text-accent mb-1">Technical Notes:</p>
-                          <p className="text-sm text-foreground">{story.technicalNotes}</p>
-                        </div>
-                      )}
-
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {story.labels.map((label, i) => (
-                          <Badge key={i} variant="outline" className="text-xs flex items-center gap-1">
-                            <Tag className="h-3 w-3" />
-                            {label}
-                          </Badge>
-                        ))}
-                        {story.relatedRequirementId && (
-                          <Badge variant="outline" className="text-xs">
-                            {story.relatedRequirementId}
-                          </Badge>
-                        )}
-                      </div>
-
-                      {story.dependencies.length > 0 && (
-                        <div className="mt-3 pt-3 border-t">
-                          <p className="text-xs text-muted-foreground">
-                            <span className="font-medium">Dependencies:</span>{" "}
-                            {story.dependencies.join(", ")}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <EmptyState
-                  icon="default"
-                  title="No User Stories Yet"
-                  description="Generate JIRA-style user stories from your BRD to break down the requirements into actionable development tasks."
-                />
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Navigation */}
+          {/* Generate User Stories Action */}
           <div className="flex justify-between gap-3 pt-4">
             <Button variant="outline" onClick={() => navigate("/requirements")}>
               Back
             </Button>
-            <Button onClick={() => navigate("/test-cases")} data-testid="button-next-test-cases">
-              Generate Test Cases
-              <ArrowRight className="ml-2 h-4 w-4" />
+            <Button
+              onClick={checkRelatedStories}
+              disabled={generateStoriesMutation.isPending || isCheckingRelated || !brd}
+              data-testid="button-generate-user-stories"
+            >
+              {generateStoriesMutation.isPending || isCheckingRelated ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {isCheckingRelated ? "Checking JIRA..." : "Generating User Stories..."}
+                </>
+              ) : (
+                <>
+                  <Bookmark className="h-4 w-4 mr-2" />
+                  Generate User Stories
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </>
+              )}
             </Button>
           </div>
         </div>
