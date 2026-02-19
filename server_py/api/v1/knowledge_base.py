@@ -122,21 +122,76 @@ async def upload_knowledge_document(file: UploadFile = File(...)):
 
 @router.delete("/{id}")
 async def delete_knowledge_document(id: str):
-    """Delete a knowledge document."""
+    """Delete a knowledge document completely from MongoDB cluster.
+    
+    This endpoint ensures complete removal of:
+    - All text chunks from the knowledge_chunks collection (search index)
+    - The document record from knowledge_documents collection
+    - All associated data from the MongoDB cluster
+    """
     try:
         kb_service = get_kb_service()
-        kb_service.delete_document_chunks(id)
         
-        deleted = kb_service.delete_knowledge_document(id)
-        if not deleted:
+        # Perform complete deletion with verification
+        result = kb_service.delete_knowledge_document_complete(id)
+        
+        if not result["success"]:
             raise HTTPException(status_code=404, detail="Document not found")
         
-        return success_response(message="Document deleted successfully")
+        log_info(f"Document deletion completed: {result['chunksDeleted']} chunks + 1 document removed", "api")
+        
+        return success_response(
+            message=f"Document deleted successfully. Removed {result['chunksDeleted']} chunks and 1 document from MongoDB cluster.",
+            data=result
+        )
     except HTTPException:
         raise
     except Exception as e:
         log_error("Error deleting knowledge document", "api", e)
         raise internal_error("Failed to delete knowledge document")
+
+
+@router.post("/cleanup-orphaned")
+async def cleanup_orphaned_chunks():
+    """Clean up orphaned chunks from MongoDB cluster.
+    
+    Removes chunks that have no corresponding document record.
+    This can happen if document records were deleted but chunks weren't,
+    or if uploads partially failed.
+    """
+    try:
+        kb_service = get_kb_service()
+        deleted_count = kb_service.cleanup_orphaned_chunks()
+        
+        return success_response(
+            message=f"Cleanup completed. Removed {deleted_count} orphaned chunks from MongoDB cluster.",
+            data={"orphanedChunksDeleted": deleted_count}
+        )
+    except Exception as e:
+        log_error("Error cleaning up orphaned chunks", "api", e)
+        raise internal_error("Failed to cleanup orphaned chunks")
+
+
+@router.get("/verify-deletion/{id}")
+async def verify_document_deletion(id: str):
+    """Verify that a document is completely deleted from MongoDB cluster.
+    
+    Checks both the document record and all associated chunks to ensure
+    complete removal from the MongoDB cluster.
+    """
+    try:
+        kb_service = get_kb_service()
+        result = kb_service.verify_document_deletion(id)
+        
+        if result["isCompletelyDeleted"]:
+            message = f"Document {id} is completely deleted from MongoDB cluster"
+        else:
+            message = f"Document {id} still has data in MongoDB: {result['remainingChunks']} chunks, document exists: {result['documentExists']}"
+        
+        return success_response(message=message, data=result)
+    except Exception as e:
+        log_error("Error verifying document deletion", "api", e)
+        raise internal_error("Failed to verify document deletion")
 
 
 @router.post("/search")

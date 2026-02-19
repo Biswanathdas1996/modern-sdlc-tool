@@ -21,8 +21,8 @@ class AIService:
     async def call_genai(
         self, 
         prompt: str, 
-        temperature: float = 0.7, 
-        max_tokens: int = 4096
+        temperature: float = 0.2, 
+        max_tokens: int = 6096
     ) -> str:
         """Call PwC GenAI API using centralized utility."""
         log_info(f"Calling PwC GenAI (prompt length: {len(prompt)} chars)", "ai")
@@ -289,23 +289,37 @@ Total Files Analyzed: {len(file_contents)}
         knowledge_context: Optional[str],
         on_chunk: Optional[Callable[[str], None]] = None
     ) -> Dict[str, Any]:
-        """Generate Business Requirements Document."""
+        """Generate Business Requirements Document with comprehensive context."""
+        from core.logging import log_info, log_warning
+        
         documentation_context = ""
         knowledge_base_context = ""
         database_schema_context = ""
+        
+        # Log context availability for debugging
+        log_info(f"BRD Generation Context - KB: {bool(knowledge_context)}, Docs: {bool(documentation)}, DB: {bool(database_schema)}, Analysis: {bool(analysis)}", "ai_service")
 
+        # PRIORITY 1: Knowledge Base Context (Retrieved specifically for this feature request)
         if knowledge_context:
+            context_size = len(knowledge_context)
+            log_info(f"Using Knowledge Base context ({context_size} chars) retrieved for: {feature_request.get('title', 'N/A')}", "ai_service")
             knowledge_base_context = f"""
-=== KNOWLEDGE BASE (Relevant Documents) ===
-The following information was retrieved from uploaded documents in the knowledge base.
-Use this context to inform your BRD generation with domain-specific knowledge.
+=== KNOWLEDGE BASE (Retrieved Documents - PRIMARY CONTEXT) ===
+IMPORTANT: The following information was specifically retrieved from uploaded documents based on this feature request.
+This is domain-specific knowledge that should guide your BRD generation.
+Length: {context_size} characters
 
 {knowledge_context}
 
 === END KNOWLEDGE BASE ===
 """
+        else:
+            log_warning("No Knowledge Base context available for BRD generation", "ai_service")
 
+        # PRIORITY 2: Database Schema Context
         if database_schema:
+            table_count = len(database_schema.get("tables", []))
+            log_info(f"Using Database Schema with {table_count} tables", "ai_service")
             table_descriptions = []
             for table in database_schema.get("tables", []):
                 columns = []
@@ -323,13 +337,18 @@ Use this context to inform your BRD generation with domain-specific knowledge.
             database_schema_context = f"""
 === CONNECTED DATABASE SCHEMA ===
 Database: {database_schema.get('databaseName', '')}
-Tables: {len(database_schema.get('tables', []))}
+Tables: {table_count}
 
 {chr(10).join(table_descriptions)}
 === END DATABASE SCHEMA ===
 """
+        else:
+            log_info("No Database Schema available", "ai_service")
 
+        # PRIORITY 3: Technical Documentation Context
         if documentation:
+            doc_title = documentation.get('title', 'N/A')
+            log_info(f"Using Technical Documentation: {doc_title}", "ai_service")
             documentation_context = f"""
 === TECHNICAL DOCUMENTATION (Generated from Repository Analysis) ===
 Project: {documentation.get('title', '')}
@@ -337,17 +356,21 @@ Project: {documentation.get('title', '')}
 === END OF DOCUMENTATION ===
 """
         elif analysis:
+            log_info("Using Repository Analysis (fallback from documentation)", "ai_service")
             documentation_context = f"""
-Repository Context (from analysis):
+=== REPOSITORY CONTEXT (from analysis) ===
 - Architecture: {analysis.get('architecture', '')}
 - Tech Stack: {json.dumps(analysis.get('techStack', {}))}
 - Existing Features: {', '.join([f.get('name', '') for f in analysis.get('features', [])])}
 - Testing Framework: {analysis.get('testingFramework', 'Not specified')}
+=== END REPOSITORY CONTEXT ===
 """
+        else:
+            log_warning("No Documentation or Analysis context available", "ai_service")
 
         system_prompt = prompt_loader.get_prompt("ai_service.yml", "generate_brd_system").format(
-            has_database_schema='AND the connected DATABASE SCHEMA' if database_schema else '',
-            database_schema_note='5. Reference the database tables and their relationships when specifying data requirements' if database_schema else ''
+            database_schema_note=' AND the connected DATABASE SCHEMA' if database_schema else '',
+            database_schema_requirement='5. Reference the database tables and their relationships when specifying data requirements' if database_schema else ''
         )
 
         user_prompt = prompt_loader.get_prompt("ai_service.yml", "generate_brd_user").format(
@@ -366,6 +389,9 @@ Repository Context (from analysis):
             on_chunk(response_text)
 
         brd_data = parse_json_response(response_text)
+        
+        from datetime import datetime
+        timestamp = datetime.utcnow().isoformat()
 
         return {
             "projectId": feature_request.get("projectId", "global"),
@@ -376,6 +402,8 @@ Repository Context (from analysis):
             "status": brd_data.get("status", "draft"),
             "sourceDocumentation": brd_data.get("sourceDocumentation"),
             "content": brd_data.get("content", {}),
+            "createdAt": timestamp,
+            "updatedAt": timestamp,
         }
 
     async def generate_test_cases(self, brd: Dict[str, Any], analysis: Optional[Dict[str, Any]], documentation: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:

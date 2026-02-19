@@ -202,7 +202,7 @@ class WebTestAgent:
         )
 
         try:
-            result = self.ai_service.call_genai(prompt, temperature=0.3, max_tokens=4096)
+            result = self.ai_service.call_genai(prompt, temperature=0.3, max_tokens=6096)
             json_match = re.search(r'\[.*\]', result, re.DOTALL)
             if json_match:
                 features = json.loads(json_match.group(0))

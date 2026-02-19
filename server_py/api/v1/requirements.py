@@ -101,19 +101,42 @@ async def generate_brd_endpoint(request: GenerateBRDRequest):
         knowledge_context = None
         knowledge_sources = []
         try:
-            search_query = f"{feature_request.title} {feature_request.description}"
+            # Construct focused search query based on feature request
+            # Prioritize title and description, include request type for context
+            request_type_context = {
+                'feature': 'new feature functionality component',
+                'bug': 'bug fix error issue problem',
+                'enhancement': 'enhancement improvement optimization'
+            }.get(feature_request.requestType, '')
+            
+            # Build comprehensive search query focused on user's request
+            search_query = f"{feature_request.title} {feature_request.description} {request_type_context}"
+            
+            log_info(f"KB Search Query: {search_query[:150]}...", "requirements")
+            
+            # Retrieve relevant knowledge chunks (limit to top 5 most relevant)
             kb_results = get_kb_service().search_knowledge_base("global", search_query, 5)
+            
             if kb_results:
+                log_info(f"Retrieved {len(kb_results)} knowledge chunks with avg score: {sum(r.get('score', 0) for r in kb_results) / len(kb_results):.3f}", "requirements")
+                
+                # Format knowledge context with clear source attribution
                 knowledge_context = "\n\n---\n\n".join([
-                    f"[Source: {r['filename']}]\n{r['content']}" for r in kb_results
+                    f"[Source: {r['filename']} | Relevance: {r.get('score', 0):.2f}]\n{r['content']}" 
+                    for r in kb_results
                 ])
+                
                 knowledge_sources = [
                     {
                         "filename": r["filename"],
-                        "chunkPreview": r["content"][:200] + ("..." if len(r["content"]) > 200 else "")
+                        "chunkPreview": r["content"][:200] + ("..." if len(r["content"]) > 200 else ""),
+                        "relevanceScore": r.get("score", 0)
                     }
                     for r in kb_results
                 ]
+            else:
+                log_info("No relevant knowledge base content found for this feature request", "requirements")
+                
         except Exception as kb_error:
             log_error("Knowledge base search error", "requirements", kb_error)
 

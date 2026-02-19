@@ -46,12 +46,71 @@ class JiraService:
         extract(adf)
         return " ".join(text_parts)
     
+    async def get_project_issue_types(self) -> Dict[str, str]:
+        """Fetch available issue types for the project."""
+        auth_header = self._get_auth_header()
+        jira_base_url = f"https://{self.settings.jira_instance_url}/rest/api/3"
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{jira_base_url}/issue/createmeta",
+                params={
+                    "projectKeys": self.settings.jira_project_key,
+                    "expand": "projects.issuetypes"
+                },
+                headers={
+                    "Authorization": auth_header,
+                    "Accept": "application/json"
+                }
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                issue_types = {}
+                if data.get("projects"):
+                    for issue_type in data["projects"][0].get("issuetypes", []):
+                        name = issue_type.get("name", "")
+                        issue_types[name.lower()] = issue_type.get("id")
+                
+                log_info(f"Available issue types: {', '.join(issue_types.keys())}", "jira")
+                return issue_types
+            else:
+                log_error(f"Failed to fetch issue types: {response.text}", "jira")
+                return {}
+    
     async def sync_stories_to_jira(self, user_stories: List[Any], storage) -> Dict[str, Any]:
         """Sync user stories to JIRA."""
         auth_header = self._get_auth_header()
         jira_base_url = (
             f"https://{self.settings.jira_instance_url}/rest/api/3"
         )
+        
+        # Fetch available issue types for this project
+        issue_types = await self.get_project_issue_types()
+        
+        # Determine which issue type to use for stories and subtasks
+        story_type_id = None
+        subtask_type_id = None
+        
+        # Try to find appropriate issue types (in order of preference)
+        for story_name in ["story", "user story", "task"]:
+            if story_name in issue_types:
+                story_type_id = issue_types[story_name]
+                log_info(f"Using issue type '{story_name}' for stories", "jira")
+                break
+        
+        for subtask_name in ["sub-task", "subtask", "sub task"]:
+            if subtask_name in issue_types:
+                subtask_type_id = issue_types[subtask_name]
+                log_info(f"Using issue type '{subtask_name}' for subtasks", "jira")
+                break
+        
+        if not story_type_id:
+            log_error("No suitable story issue type found in JIRA project", "jira")
+            return {
+                "message": f"Error: No suitable issue type found. Available types: {', '.join(issue_types.keys())}",
+                "results": []
+            }
         
         results = []
         
@@ -60,14 +119,24 @@ class JiraService:
                 try:
                     description = self._build_story_description(story)
                     is_subtask = bool(story.parentJiraKey)
-                    issue_type_name = "Sub-task" if is_subtask else "Story"
+                    
+                    # Use ID instead of name for better compatibility
+                    issue_type_id = subtask_type_id if is_subtask else story_type_id
+                    
+                    if is_subtask and not subtask_type_id:
+                        log_error(f"Cannot create subtask {story.storyKey}: No subtask type available", "jira")
+                        results.append({
+                            "storyKey": story.storyKey,
+                            "error": "No subtask issue type available"
+                        })
+                        continue
                     
                     issue_data = {
                         "fields": {
                             "project": {"key": self.settings.jira_project_key},
                             "summary": story.title,
                             "description": description,
-                            "issuetype": {"name": issue_type_name},
+                            "issuetype": {"id": issue_type_id},
                             "labels": story.labels or []
                         }
                     }
@@ -295,6 +364,20 @@ class JiraService:
         auth_header = self._get_auth_header()
         jira_base_url = f"https://{self.settings.jira_instance_url}/rest/api/3"
         
+        # Fetch available issue types to find the subtask type
+        issue_types = await self.get_project_issue_types()
+        
+        subtask_type_id = None
+        for subtask_name in ["sub-task", "subtask", "sub task"]:
+            if subtask_name in issue_types:
+                subtask_type_id = issue_types[subtask_name]
+                break
+        
+        if not subtask_type_id:
+            error_msg = f"No subtask issue type found. Available types: {', '.join(issue_types.keys())}"
+            log_error(error_msg, "jira")
+            raise Exception(error_msg)
+        
         description = self._build_story_description(story)
         
         issue_data = {
@@ -302,7 +385,7 @@ class JiraService:
                 "project": {"key": self.settings.jira_project_key},
                 "summary": story.title,
                 "description": description,
-                "issuetype": {"name": "Sub-task"},
+                "issuetype": {"id": subtask_type_id},
                 "parent": {"key": parent_key},
                 "labels": story.labels or []
             }

@@ -6,10 +6,10 @@ automatic continuation for long responses, and consistent error handling.
 
 Usage:
     # Async call
-    response = await call_pwc_genai_async(prompt, temperature=0.7, max_tokens=4096)
+    response = await call_pwc_genai_async(prompt, temperature=0.2, max_tokens=6096)
     
     # Sync call
-    response = call_pwc_genai_sync(prompt, temperature=0.7, max_tokens=4096)
+    response = call_pwc_genai_sync(prompt, temperature=0.2, max_tokens=6096)
     
     # Build formatted prompt
     prompt = build_pwc_prompt(system_message="You are a helpful assistant", 
@@ -56,8 +56,8 @@ _config = PWCLLMConfig()
 
 def _build_request_body(
     prompt: str,
-    temperature: float = 0.7,
-    max_tokens: int = 4096,
+    temperature: float = 0.2,
+    max_tokens: int = 6096,
     model: Optional[str] = None
 ) -> Dict[str, Any]:
     """Build the request body for PwC GenAI API."""
@@ -114,8 +114,8 @@ def _get_finish_reason(result: Dict[str, Any]) -> Optional[str]:
 
 async def call_pwc_genai_async(
     prompt: str,
-    temperature: float = 0.7,
-    max_tokens: int = 4096,
+    temperature: float = 0.2,
+    max_tokens: int = 6096,
     model: Optional[str] = None,
     timeout: int = None,
     enable_continuation: bool = False,
@@ -190,8 +190,8 @@ async def call_pwc_genai_async(
 
 def call_pwc_genai_sync(
     prompt: str,
-    temperature: float = 0.7,
-    max_tokens: int = 4096,
+    temperature: float = 0.2,
+    max_tokens: int = 6096,
     model: Optional[str] = None,
     timeout: int = None,
     enable_continuation: bool = True,

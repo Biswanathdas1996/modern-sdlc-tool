@@ -126,13 +126,26 @@ generate_bpmn_diagram_user: |
 generate_brd_system: |
   You are a senior business analyst creating a Business Requirements Document (BRD).
 
-  IMPORTANT: You are generating this BRD based on the TECHNICAL DOCUMENTATION that was generated from analyzing the repository{database_schema_note}.
-  Your BRD must:
-  1. Reference the existing components, APIs, and features from the documentation
-  2. Align technical considerations with the documented architecture and tech stack
-  3. Consider existing data models and dependencies
-  4. Build upon the documented features rather than reinventing them
+  CRITICAL CONTEXT USAGE REQUIREMENTS:
+  You are generating this BRD based on THREE key sources that MUST ALL be considered:
+  1. KNOWLEDGE BASE (Uploaded Documents) - Domain-specific information retrieved based on the user's feature request
+  2. TECHNICAL DOCUMENTATION - Generated from repository analysis
+  3. DATABASE SCHEMA - Current database structure and relationships{database_schema_note}
+
+  Your BRD MUST:
+  1. **PRIMARY**: Use the KNOWLEDGE BASE context that was specifically retrieved for this feature request - this is the most relevant domain information
+  2. Reference existing components, APIs, and features from the TECHNICAL DOCUMENTATION
+  3. Align technical considerations with the documented architecture and tech stack
+  4. Consider existing data models and dependencies from the DATABASE SCHEMA
+  5. Build upon documented features rather than reinventing them
+  6. When the KNOWLEDGE BASE provides specific requirements, standards, or business rules, incorporate them as primary guidance
   {database_schema_requirement}
+
+  CONTEXT INTEGRATION:
+  - If KNOWLEDGE BASE context mentions specific business processes, rules, or standards → Include them in functional requirements
+  - If TECHNICAL DOCUMENTATION shows existing patterns → Align new requirements with those patterns
+  - If DATABASE SCHEMA shows existing tables/relationships → Reference them in data requirements
+  - When contexts conflict, prioritize: KNOWLEDGE BASE > TECHNICAL DOCUMENTATION > Assumptions
 
   Return a JSON object with this structure:
   {{
@@ -172,13 +185,22 @@ generate_brd_system: |
 generate_brd_user: |
   Generate a comprehensive Business Requirements Document for:
 
-  Feature Request: {feature_title}
+  === FEATURE REQUEST (User's Requirement) ===
+  Feature: {feature_title}
   Description: {feature_description}
   Request Type: {request_type}
+  === END FEATURE REQUEST ===
 
+  {knowledge_base_context}
   {documentation_context}
   {database_schema_context}
-  {knowledge_base_context}
+
+  INSTRUCTIONS:
+  1. Carefully review the KNOWLEDGE BASE section - this contains domain-specific information retrieved SPECIFICALLY for this feature request
+  2. Use the TECHNICAL DOCUMENTATION to understand the existing system architecture and components
+  3. Reference the DATABASE SCHEMA when specifying data requirements and relationships
+  4. Ensure all functional requirements are grounded in the retrieved KNOWLEDGE BASE context
+  5. Create requirements that integrate seamlessly with the existing system while meeting the feature request needs
 
 generate_test_cases_system: |
   You are a QA engineer creating comprehensive test cases from a Business Requirements Document.

@@ -38,7 +38,7 @@ class JiraAgent:
         """Initialize the JIRA agent with LangChain components."""
         self.jira_service = JiraService()
         self.ai_service = AIService()
-        self.llm = PwCGenAILLM(temperature=0.2, max_tokens=4096)
+        self.llm = PwCGenAILLM(temperature=0.2, max_tokens=6096)
         
         self.context = TicketToolsContext()
         

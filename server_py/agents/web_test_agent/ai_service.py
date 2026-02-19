@@ -10,7 +10,7 @@ class AIService:
     def call_genai(
         self,
         prompt: str,
-        temperature: float = 0.7,
+        temperature: float = 0.2,
         max_tokens: int = 8192
     ) -> str:
         """Call PwC GenAI using centralized utility with continuation support."""

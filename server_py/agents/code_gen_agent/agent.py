@@ -247,7 +247,7 @@ class CodeGenAgent:
 
             import asyncio
             loop = asyncio.new_event_loop()
-            plan_text = loop.run_until_complete(call_pwc_genai_async(plan_prompt, temperature=0.3, max_tokens=4096))
+            plan_text = loop.run_until_complete(call_pwc_genai_async(plan_prompt, temperature=0.3, max_tokens=6096))
 
             try:
                 change_plan = parse_json_response(plan_text)
@@ -342,7 +342,7 @@ class CodeGenAgent:
                     )
 
                 try:
-                    generated_code = loop.run_until_complete(call_pwc_genai_async(code_prompt, temperature=0.2, max_tokens=4096))
+                    generated_code = loop.run_until_complete(call_pwc_genai_async(code_prompt, temperature=0.2, max_tokens=6096))
 
                     generated_code = generated_code.strip()
                     if generated_code.startswith("```"):

@@ -738,7 +738,7 @@ class ShannonSecurityAgent:
             comments_json=json.dumps(web_ctx.get('comments', []), indent=2)
         )
 
-        llm_response = self.ai_service.call_genai(prompt, temperature=0.2, max_tokens=4096)
+        llm_response = self.ai_service.call_genai(prompt, temperature=0.2, max_tokens=6096)
 
         if "NO ADDITIONAL FINDINGS" in llm_response.upper():
             return []
@@ -764,7 +764,7 @@ class ShannonSecurityAgent:
         )
 
         try:
-            return self.ai_service.call_genai(prompt, temperature=0.5, max_tokens=4096)
+            return self.ai_service.call_genai(prompt, temperature=0.5, max_tokens=6096)
         except Exception as e:
             return f"Error processing question: {str(e)}"
 

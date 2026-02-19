@@ -11,8 +11,8 @@ from core.logging import log_info
 class PwCGenAILLM(LLM):
     """Custom LangChain LLM wrapper for PwC GenAI using centralized utility."""
     
-    temperature: float = 0.7
-    max_tokens: int = 4096
+    temperature: float = 0.2
+    max_tokens: int = 6096
     
     class Config:
         arbitrary_types_allowed = True
