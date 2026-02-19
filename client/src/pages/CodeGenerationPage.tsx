@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { ArrowLeft, ArrowRight, Code2, Wand2, GitBranch, Loader2, CheckCircle2, Circle, AlertCircle, ExternalLink, FileCode, FilePlus, FilePen, ChevronDown, ChevronRight, Copy, Check, Clock, FolderGit2, Layers, XCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Code2, Wand2, GitBranch, Loader2, CheckCircle2, Circle, AlertCircle, ExternalLink, FileCode, FilePlus, FilePen, ChevronDown, ChevronRight, Copy, Check, Clock, FolderGit2, Layers, XCircle, RefreshCw, Maximize2 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -157,6 +158,8 @@ export default function CodeGenerationPage() {
 
   const currentProject = projects && projects.length > 0 ? projects[0] : null;
 
+  const [promptDialogOpen, setPromptDialogOpen] = useState(false);
+
   const fetchCopilotPrompt = useCallback(async () => {
     if (copilotPrompt || isLoadingPrompt) return;
     setIsLoadingPrompt(true);
@@ -177,6 +180,20 @@ export default function CodeGenerationPage() {
       setIsLoadingPrompt(false);
     }
   }, [copilotPrompt, isLoadingPrompt, getSessionArtifact, saveSessionArtifact]);
+
+  const regenerateCopilotPrompt = useCallback(async () => {
+    setIsLoadingPrompt(true);
+    try {
+      const response = await apiRequest("POST", "/api/copilot-prompt/generate");
+      const data = await response.json();
+      setCopilotPrompt(data.prompt);
+      saveSessionArtifact("copilotPrompt", data.prompt);
+    } catch (err) {
+      console.error("Failed to regenerate copilot prompt:", err);
+    } finally {
+      setIsLoadingPrompt(false);
+    }
+  }, [saveSessionArtifact]);
 
   useEffect(() => {
     if (userStories && userStories.length > 0 && !copilotPrompt) {
@@ -391,20 +408,50 @@ export default function CodeGenerationPage() {
                     </Badge>
                   )}
                   {copilotPrompt && (
-                    <Button variant="outline" size="sm" onClick={handleCopyPrompt} data-testid="button-copy-prompt">
-                      {copied ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
-                      {copied ? "Copied" : "Copy"}
-                    </Button>
+                    <>
+                      <Button variant="outline" size="sm" onClick={regenerateCopilotPrompt} disabled={isLoadingPrompt} data-testid="button-regenerate-prompt">
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                        Regenerate
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => setPromptDialogOpen(true)} data-testid="button-view-prompt">
+                        <Maximize2 className="h-3 w-3 mr-1" />
+                        View Full
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={handleCopyPrompt} data-testid="button-copy-prompt">
+                        {copied ? <Check className="h-3 w-3 mr-1" /> : <Copy className="h-3 w-3 mr-1" />}
+                        {copied ? "Copied" : "Copy"}
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               {copilotPrompt ? (
-                <div className="bg-muted rounded-md p-3 max-h-48 overflow-y-auto">
-                  <pre className="text-xs whitespace-pre-wrap font-mono text-muted-foreground" data-testid="text-copilot-prompt">
-                    {copilotPrompt.length > 500 ? copilotPrompt.slice(0, 500) + "..." : copilotPrompt}
-                  </pre>
+                <div className="bg-muted rounded-md p-4 max-h-48 overflow-y-auto">
+                  <div className="text-sm text-foreground" data-testid="text-copilot-prompt">
+                    <ReactMarkdown
+                      components={{
+                        h1: ({ children }) => <h1 className="text-base font-bold mb-2">{children}</h1>,
+                        h2: ({ children }) => <h2 className="text-sm font-semibold mt-3 mb-1">{children}</h2>,
+                        h3: ({ children }) => <h3 className="text-sm font-semibold mt-2 mb-1">{children}</h3>,
+                        p: ({ children }) => <p className="text-sm leading-relaxed mb-2">{children}</p>,
+                        ul: ({ children }) => <ul className="space-y-1 mb-2 pl-1">{children}</ul>,
+                        ol: ({ children }) => <ol className="space-y-1 mb-2 pl-1 list-decimal list-inside">{children}</ol>,
+                        li: ({ children }) => <li className="text-sm flex gap-1.5"><span className="text-muted-foreground shrink-0">-</span><span>{children}</span></li>,
+                        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                        code: ({ className, children }) => {
+                          if (className?.includes('language-')) {
+                            return <div className="rounded bg-background border p-2 my-2 overflow-x-auto"><pre className="text-xs font-mono whitespace-pre-wrap">{children}</pre></div>;
+                          }
+                          return <code className="px-1 py-0.5 rounded bg-background text-xs font-mono">{children}</code>;
+                        },
+                        pre: ({ children }) => <>{children}</>,
+                      }}
+                    >
+                      {copilotPrompt.length > 800 ? copilotPrompt.slice(0, 800) + "\n\n*Click \"View Full\" to see the complete prompt...*" : copilotPrompt}
+                    </ReactMarkdown>
+                  </div>
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
@@ -413,6 +460,63 @@ export default function CodeGenerationPage() {
               )}
             </CardContent>
           </Card>
+
+          <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
+            <DialogContent className="max-w-4xl max-h-[80vh]">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Wand2 className="h-5 w-5 text-primary" />
+                  VS Code Copilot Prompt
+                </DialogTitle>
+                <DialogDescription>
+                  Copy this prompt and paste it into VS Code Copilot to implement the features
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex items-center justify-between gap-2 py-2 border-b">
+                <span className="text-sm text-muted-foreground">Generated prompt ready</span>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={regenerateCopilotPrompt} disabled={isLoadingPrompt} data-testid="button-dialog-regenerate">
+                    {isLoadingPrompt ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Regenerating...</> : <><RefreshCw className="h-4 w-4 mr-2" />Regenerate</>}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleCopyPrompt} data-testid="button-dialog-copy">
+                    {copied ? <><Check className="h-4 w-4 mr-2 text-success" />Copied!</> : <><Copy className="h-4 w-4 mr-2" />Copy to Clipboard</>}
+                  </Button>
+                </div>
+              </div>
+              <ScrollArea className="h-[60vh] rounded-md border">
+                <div className="p-5">
+                  {copilotPrompt ? (
+                    <ReactMarkdown
+                      components={{
+                        h1: ({ children }) => <h1 className="text-xl font-bold text-foreground border-b pb-2 mb-4">{children}</h1>,
+                        h2: ({ children }) => <h2 className="text-lg font-semibold text-foreground mt-6 mb-3">{children}</h2>,
+                        h3: ({ children }) => <h3 className="text-base font-semibold text-foreground mt-4 mb-2">{children}</h3>,
+                        p: ({ children }) => <p className="text-sm text-foreground leading-relaxed mb-3">{children}</p>,
+                        ul: ({ children }) => <ul className="space-y-1.5 mb-3 pl-1">{children}</ul>,
+                        ol: ({ children }) => <ol className="space-y-1.5 mb-3 pl-1 list-decimal list-inside">{children}</ol>,
+                        li: ({ children }) => <li className="text-sm text-foreground flex gap-2"><span className="text-muted-foreground mt-0.5 shrink-0">-</span><span>{children}</span></li>,
+                        strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+                        em: ({ children }) => <em className="italic text-muted-foreground">{children}</em>,
+                        code: ({ className, children }) => {
+                          if (className?.includes('language-')) {
+                            return <div className="rounded-md bg-muted border overflow-x-auto my-3"><pre className="p-4 text-xs font-mono text-foreground whitespace-pre-wrap">{children}</pre></div>;
+                          }
+                          return <code className="px-1.5 py-0.5 rounded bg-muted text-xs font-mono text-foreground">{children}</code>;
+                        },
+                        pre: ({ children }) => <>{children}</>,
+                        hr: () => <hr className="my-4 border-border" />,
+                        blockquote: ({ children }) => <blockquote className="border-l-2 border-primary pl-4 my-3 text-sm text-muted-foreground italic">{children}</blockquote>,
+                      }}
+                    >
+                      {copilotPrompt}
+                    </ReactMarkdown>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Loading...</p>
+                  )}
+                </div>
+              </ScrollArea>
+            </DialogContent>
+          </Dialog>
 
           {!result && !isGenerating && (
             <Card data-testid="card-generate-action">
