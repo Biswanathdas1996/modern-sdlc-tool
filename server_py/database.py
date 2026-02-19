@@ -6,7 +6,8 @@ import psycopg2.extras
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
+NEON_DATABASE_URL = os.environ.get("NEON_DATABASE_URL", "")
+DATABASE_URL = NEON_DATABASE_URL or os.environ.get("DATABASE_URL", "")
 
 ALL_FEATURES = [
     {"key": "analyze", "label": "Analyze Repository", "category": "prerequisite"},
