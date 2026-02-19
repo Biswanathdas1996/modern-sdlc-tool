@@ -86,7 +86,7 @@ export default function LoginPage() {
       </div>
 
       <div className="flex-1 flex items-center justify-center bg-background p-6">
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-[400px]">
           <div className="flex flex-col items-center mb-8 lg:hidden">
             <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary mb-4">
               <Sparkles className="h-7 w-7 text-primary-foreground" />
@@ -95,28 +95,29 @@ export default function LoginPage() {
             <p className="text-sm text-muted-foreground mt-1">Intelligent SDLC Platform</p>
           </div>
 
-          <div className="hidden lg:block mb-8">
-            <h2 className="text-2xl font-bold" data-testid="text-app-title">Welcome back</h2>
-            <p className="text-sm text-muted-foreground mt-1">Sign in to your account to continue</p>
+          <div className="hidden lg:block mb-10">
+            <h2 className="text-3xl font-bold tracking-tight" data-testid="text-app-title">Welcome back</h2>
+            <p className="text-muted-foreground mt-2">Sign in to your account to continue</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email address</Label>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-1.5">
+              <Label htmlFor="email" className="text-sm font-medium">Email address</Label>
               <Input
                 id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@docugen.ai"
+                placeholder="you@company.com"
                 autoComplete="email"
                 autoFocus
+                className="h-11"
                 data-testid="input-email"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="password" className="text-sm font-medium">Password</Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -125,25 +126,26 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   autoComplete="current-password"
-                  className="pr-10"
+                  className="pr-10 h-11"
                   data-testid="input-password"
                 />
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="absolute right-0 top-0 h-full"
+                  className="absolute right-1 top-1/2 -translate-y-1/2"
                   onClick={() => setShowPassword(!showPassword)}
                   tabIndex={-1}
                   data-testid="button-toggle-password"
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
                 </Button>
               </div>
             </div>
 
             <Button
               type="submit"
+              size="lg"
               className="w-full"
               disabled={isSubmitting || !email.trim() || !password}
               data-testid="button-login"
@@ -154,15 +156,18 @@ export default function LoginPage() {
                   Signing in...
                 </>
               ) : (
-                <>
-                  <LogIn className="h-4 w-4 mr-2" />
-                  Sign In
-                </>
+                "Sign In"
               )}
             </Button>
           </form>
 
-          <p className="text-xs text-muted-foreground text-center mt-8">
+          <div className="flex items-center gap-3 mt-8">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground">Need access?</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+
+          <p className="text-xs text-muted-foreground text-center mt-4">
             Contact your administrator for account access
           </p>
         </div>
