@@ -352,44 +352,47 @@ export default function UserStoriesPage() {
                     Copy this prompt and paste it into VS Code Copilot to implement the features
                   </DialogDescription>
                 </DialogHeader>
-                <div className="flex justify-end gap-2 mb-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => generatePromptMutation.mutate()}
-                    disabled={generatePromptMutation.isPending}
-                    data-testid="button-regenerate-prompt"
-                  >
-                    {generatePromptMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Regenerating...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Regenerate
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={copyToClipboard}
-                    data-testid="button-copy-prompt"
-                  >
-                    {copied ? (
-                      <>
-                        <Check className="h-4 w-4 mr-2 text-success" />
-                        Copied!
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-4 w-4 mr-2" />
-                        Copy to Clipboard
-                      </>
-                    )}
-                  </Button>
+                <div className="flex items-center justify-between gap-2 py-2 border-b">
+                  <span className="text-sm text-muted-foreground">Generated prompt ready</span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => generatePromptMutation.mutate()}
+                      disabled={generatePromptMutation.isPending}
+                      data-testid="button-regenerate-prompt"
+                    >
+                      {generatePromptMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Regenerating...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Regenerate
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={copyToClipboard}
+                      data-testid="button-copy-prompt"
+                    >
+                      {copied ? (
+                        <>
+                          <Check className="h-4 w-4 mr-2 text-success" />
+                          Copied!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-4 w-4 mr-2" />
+                          Copy to Clipboard
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
                 <ScrollArea className="h-[60vh] rounded-md border">
                   <div className="p-5 space-y-4">
