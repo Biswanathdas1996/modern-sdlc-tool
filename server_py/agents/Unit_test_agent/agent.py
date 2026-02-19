@@ -12,6 +12,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional, List, Tuple
 from .ai_service import ai_service
+from ..prompts import prompt_loader
 
 # Configure logger with proper formatting
 logger = logging.getLogger(__name__)
@@ -282,31 +283,10 @@ class UnitTestAgent:
         # Prepare config file contents for LLM
         config_text = "\n\n".join([f"### {name}\n```\n{content}\n```" for name, content in config_files.items()])
         
-        prompt = f"""Analyze this project's configuration to determine the tech stack and test file placement strategy.
-
-{structure_info}
-
-Configuration files:
-{config_text}
-
-Analyze and return ONLY a JSON object with these fields:
-{{
-  "framework": "react" | "next.js" | "vue" | "angular" | "node.js" | "express" | "fastapi" | "django" | "flask" | null,
-  "test_framework": "jest" | "vitest" | "react-testing-library" | "pytest" | "unittest" | null,
-  "test_location": "next-to-source" | "separate-dir" | "mirror-structure",
-  "import_style": "relative" | "absolute" | "alias",
-  "path_alias": "@" | "~" | null (if using path aliases like @/components),
-  "is_react": boolean,
-  "is_nextjs": boolean,
-  "is_vue": boolean,
-  "is_angular": boolean,
-  "has_src_dir": boolean,
-  "reasoning": "brief explanation"
-}}
-
-Guidelines:
-- "next-to-source": place test files next to source files (common in React/Next.js)
-- "separate-dir": place in dedicated tests directory (common in Python)
+        prompt = prompt_loader.get_prompt("unit_test_agent.yml", "tech_stack_detection").format(
+            structure_info=structure_info,
+            config_text=config_text
+        )
 - "mirror-structure": mirror source structure in __tests__ directory
 - For React/Next.js apps with src directory, prefer "next-to-source"
 - Check package.json dependencies for framework detection
@@ -525,21 +505,10 @@ Return ONLY the JSON, no markdown or explanations."""
 
         samples_text = "\n\n".join(sample_tests)
 
-        prompt = f"""You are a senior {language} test engineer. Analyze these existing test files and extract the testing patterns, conventions, and style used in this project.
-
-{samples_text}
-
-Provide a concise style guide covering:
-1. Test framework and assertion library used
-2. Naming conventions (test function/method names, describe blocks)
-3. Import/require patterns
-4. Setup/teardown patterns (fixtures, beforeEach, setUp, etc.)
-5. Mocking approach (what library, how mocks are created)
-6. File organization (grouping, nesting, describe blocks)
-7. Any custom utilities or helpers used
-8. Code style (indentation, quotes, semicolons for JS/TS)
-
-Return ONLY the style guide as plain text, no markdown headers. Be concise and specific."""
+        prompt = prompt_loader.get_prompt("unit_test_agent.yml", "test_pattern_analysis").format(
+            language=language,
+            samples_text=samples_text
+        )
 
         try:
             logger.info("Calling AI service to analyze test patterns...")
@@ -613,26 +582,10 @@ Return ONLY the style guide as plain text, no markdown headers. Be concise and s
 
         file_list = "\n".join(file_summaries)
 
-        prompt = f"""You are a senior software engineer analyzing a {language} codebase for test coverage gaps.
-
-Given these source files (with their current test coverage status), identify the modules that need tests.
-
-PRIORITIZATION RULES:
-1. Files marked [NO TESTS] should be HIGH priority - they have zero test coverage
-2. Files marked [HAS TESTS] should be MEDIUM priority - they may need additional coverage for untested functions
-3. Skip configuration files, entry points (main.py, index.js, app.py), migration files, and auto-generated code
-4. Focus on files with business logic, utility functions, services, and core functionality
-
-Source files:
-{file_list}
-
-Return a JSON array of objects, each with:
-- "file": the file path
-- "priority": "high", "medium", or "low"
-- "reason": one-line explanation
-- "mode": "new" if [NO TESTS], "augment" if [HAS TESTS]
-
-Return ONLY the JSON array, no other text. Limit to the top 10 most important files."""
+        prompt = prompt_loader.get_prompt("unit_test_agent.yml", "test_gap_identification").format(
+            language=language,
+            file_list=file_list
+        )
 
         try:
             result = ai_service.call_genai(prompt, temperature=0.1, max_tokens=2000)
@@ -1082,34 +1035,13 @@ React-specific:
         error_output: str,
         language: str,
     ) -> Dict[str, Any]:
-        prompt = f"""You are a senior {language} developer. A test file has some passing tests and some failing tests.
-Your task: REMOVE the failing tests and KEEP ONLY the passing tests. Return a valid, runnable test file.
-
-SOURCE FILE ({filepath}):
-```{language}
-{source_content[:4000]}
-```
-
-CURRENT TEST CODE (has some failing tests):
-```{language}
-{test_code[:6000]}
-```
-
-TEST ERROR OUTPUT (shows which tests fail and why):
-```
-{error_output[:3000]}
-```
-
-RULES:
-1. Carefully read the error output to identify EXACTLY which test functions/cases FAIL
-2. REMOVE every failing test function/case entirely
-3. KEEP all passing tests exactly as they are - do not modify them
-4. KEEP all necessary imports, setup, and teardown that the passing tests need
-5. If ALL tests are failing, return ONLY the imports and an empty test class/describe block with a single trivial test that just asserts true
-6. The result must be a complete, runnable test file
-7. Do NOT add new tests - only keep existing passing ones
-
-Return ONLY the complete test file code with only passing tests. No explanations, no markdown fences."""
+        prompt = prompt_loader.get_prompt("unit_test_agent.yml", "remove_failing_tests").format(
+            language=language,
+            filepath=filepath,
+            source_content=source_content[:4000],
+            test_code=test_code[:6000],
+            error_output=error_output[:3000]
+        )
 
         try:
             cleaned_code = ai_service.call_genai(prompt, temperature=0.1, max_tokens=8192)
@@ -1356,92 +1288,23 @@ IMPORTANT: This is a Create React App (CRA) project using react-scripts.
 - Use act() for state updates and async operations
 """
 
-        prompt = f"""You are a senior {language} developer fixing failing unit tests. This is fix attempt {attempt}/{MAX_FIX_ATTEMPTS}.
-
-🎯 **YOUR TASK:** Analyze the TEST EXECUTION ERROR OUTPUT below and fix the FAILING TEST CODE to make it pass.
-
-**CRITICAL:** You have access to three pieces of information:
-1. The SOURCE FILE (what the tests are testing)
-2. The FAILING TEST CODE (the generated test that's broken)
-3. The TEST EXECUTION ERROR OUTPUT (the console output showing exactly what's wrong)
-
-Your job is to READ THE ERROR OUTPUT carefully, identify what's broken in the test code, and fix it.
-
-SOURCE FILE ({filepath}):
-```{language}
-{source_content[:6000]}
-```
-
-❌ FAILING TEST CODE (THIS IS WHAT YOU NEED TO FIX):
-```{language}
-{test_code[:6000]}
-```
-
-🚨 TEST EXECUTION ERROR OUTPUT (THIS TELLS YOU WHAT'S WRONG):
-```
-{error_output[:3000]}
-```
-
-{f"PROJECT DEPENDENCIES:{deps_context[:1500]}" if deps_context else ""}
-{cra_note}
-
-📋 **STEP-BY-STEP FIXING PROCESS:**
-
-Step 1: READ the "TEST EXECUTION ERROR OUTPUT" above - this shows EXACTLY what failed
-Step 2: IDENTIFY the root cause (import error? mock issue? wrong assertion? wrong function signature?)
-Step 3: LOCATE the broken code in the "FAILING TEST CODE"
-Step 4: FIX the specific issue (update import path, fix mock, correct assertion, etc.)
-Step 5: VERIFY your fix addresses the error message
-Step 6: Return the COMPLETE fixed test file
-
-⚠️ The error output is your guide - use it to pinpoint exactly what needs fixing!
-
-DEBUG CHECKLIST - Fix these common errors:
-
-1. **ImportError/ModuleNotFoundError**: 
-   - Verify import paths match the actual file structure  
-   - Mock modules that aren't available in test environment
-   - For React: ensure test file can import component correctly
-
-2. **AttributeError** (function/class doesn't exist):
-   - Re-check the source file - test ONLY what actually exists
-   - Don't assume methods/properties that aren't in source
-   - Remove tests for non-existent functionality
-
-3. **TypeError** (wrong arguments):  
-   - Match EXACT function signature from source
-   - Check for default parameters, optional args, *args, **kwargs
-   - Verify you're passing correct number and type of arguments
-
-4. **AssertionError** (wrong expected values):
-   - Re-analyze source code logic carefully
-   - Use realistic test data that matches actual behavior
-   - Don't guess return values - deduce from source code
-
-5. **Cannot find module** (JS/TS):
-   - Fix relative import path from test file to source file
-   - Use correct path separators and extensions
-
-6. **Mock issues**:
-   {self._get_mocking_guidance(language)}
-   - Mock external dependencies BEFORE they're imported/used
-   - For Python: use unittest.mock.patch or pytest-mock
-   - For JS/TS: use jest.mock() at top level
-
-🎯 **ERROR ANALYSIS - This test has a {error_type} error:**
-{self._get_error_specific_guidance(error_type, filepath, language, repo_path)}
-
-FIX STRATEGY FOR ATTEMPT {attempt}:
-{"- Be aggressive: If a test is too complex to fix reliably, REMOVE it" if attempt >= 2 else "- Fix each error systematically"}
-{"- Focus ONLY on tests that will definitely pass" if attempt >= 2 else "- Attempt to fix all tests"}
-{"- It's better to have 3 passing tests than 10 failing tests" if attempt >= 3 else ""}
-
-OUTPUT REQUIREMENTS:
-- Return the COMPLETE fixed test file
-- Every test MUST pass when run
-- Remove any test that you cannot fix with 100% confidence
-- NO explanations, NO markdown fences - just the code
-"""
+        prompt = prompt_loader.get_prompt("unit_test_agent.yml", "fix_failing_tests").format(
+            language=language,
+            attempt=attempt,
+            max_attempts=MAX_FIX_ATTEMPTS,
+            filepath=filepath,
+            source_content=source_content[:6000],
+            test_code=test_code[:6000],
+            error_output=error_output[:3000],
+            deps_context_section=f"PROJECT DEPENDENCIES:{deps_context[:1500]}" if deps_context else "",
+            cra_note=cra_note,
+            mocking_guidance=self._get_mocking_guidance(language),
+            error_type=error_type,
+            error_specific_guidance=self._get_error_specific_guidance(error_type, filepath, language, repo_path),
+            fix_strategy_note="- Be aggressive: If a test is too complex to fix reliably, REMOVE it" if attempt >= 2 else "- Fix each error systematically",
+            focus_note="- Focus ONLY on tests that will definitely pass" if attempt >= 2 else "- Attempt to fix all tests",
+            better_less_note="- It's better to have 3 passing tests than 10 failing tests" if attempt >= 3 else ""
+        )
 
         try:
             logger.info("Calling AI service to fix failing tests...")
@@ -1519,99 +1382,28 @@ IMPORT GUIDELINES FOR THIS PROJECT:
 {cra_section}"""
 
         if mode == "augment" and existing_test_content:
-            prompt = f"""You are a senior {language} developer improving test coverage.
-
-This source file already has tests. Your job is to INCREASE COVERAGE by adding ONLY NEW test cases that are NOT already covered.
-
-Source file: {filepath}
-```{language}
-{content[:8000]}
-```
-
-Existing test file:
-```{language}
-{existing_test_content[:6000]}
-```
-{style_section}{deps_section}{imports_section}{import_section}
-CRITICAL RULES:
-1. Analyze the existing tests carefully - understand what is ALREADY tested
-2. Identify functions, methods, branches, and edge cases that are NOT covered
-3. Generate ONLY the new test functions/methods that need to be ADDED
-4. DO NOT duplicate any existing test - no overlapping test names or scenarios
-5. Follow the EXACT same coding style, naming conventions, and patterns as the existing tests
-6. Follow the import guidelines above - use correct import paths based on project structure
-7. Focus on: untested functions, missing edge cases, error paths, boundary conditions
-8. MOCK all external dependencies (database, API calls, file I/O, network) - do NOT rely on real connections
-9. Make sure every test can run independently without any external service
-
-Return the COMPLETE UPDATED test file that includes both the existing tests AND the new tests integrated together.
-The code must be ready to save to a file and run. Return ONLY the code, no explanations or markdown."""
+            prompt = prompt_loader.get_prompt("unit_test_agent.yml", "generate_unit_tests_augment").format(
+                language=language,
+                filepath=filepath,
+                content=content[:8000],
+                existing_test_content=existing_test_content[:6000],
+                style_section=style_section,
+                deps_section=deps_section,
+                imports_section=imports_section,
+                import_section=import_section
+            )
 
         else:
-            prompt = f"""You are a senior {language} developer writing comprehensive unit tests that MUST PASS on first run.
-
-Analyze this source file and generate thorough unit tests using {config['framework']}.
-
-File: {filepath}
-```{language}
-{content[:8000]}
-```
-{style_section}{deps_section}{imports_section}{import_section}
-
-CRITICAL REQUIREMENTS (tests MUST pass validation):
-1. ✅ Write tests ONLY for functions/classes that ACTUALLY EXIST in the source file above
-2. ✅ Match function signatures EXACTLY - check parameter names, count, and default values
-3. ✅ MOCK ALL external dependencies (API calls, database, file I/O, network requests) - tests MUST run without any external service
-4. ✅ For JavaScript/TypeScript: Place ALL jest.mock() calls at the TOP of the file, BEFORE any imports
-5. ✅ For imports: Use RELATIVE paths (e.g., './Component' or '../utils/helper') - verify the path is correct for where the test file will be located
-6. ✅ Add descriptive test names that explain what is being tested
-7. ✅ Group related tests in test classes/describe blocks where appropriate
-8. ✅ Include positive tests (happy path), negative tests (error cases), and edge cases
-9. ✅ Every test must be self-contained and deterministic - no reliance on external state
-10. ✅ Follow {config['framework']} best practices and conventions
-
-🚨 COMMON MISTAKES TO AVOID (90% of test failures come from these):
-
-**1. IMPORT ERRORS (40-50% of failures):**
-❌ Wrong: import {{ Component }} from '/absolute/path'  (absolute paths fail)
-❌ Wrong: import {{ Component }} from 'Component'  (missing ./ or ../)
-✅ Correct: import {{ Component }} from './Component'  (relative path)
-✅ Correct: import {{ Component }} from '../components/Component'  (relative with directory)
-
-**2. MOCK ERRORS (20-30% of failures):**
-❌ Wrong order:
-```javascript
-import axios from 'axios';  // ❌ import before mock
-jest.mock('axios');  // ❌ too late!
-```
-✅ Correct order:
-```javascript
-jest.mock('axios');  // ✅ mock FIRST
-jest.mock('../services/api');  // ✅ before imports
-import axios from 'axios';  // ✅ then import
-```
-
-**3. TESTING NON-EXISTENT CODE (15-20% of failures):**
-❌ Testing: APIService.getUser(id)  when source only has fetchUser(id)
-❌ Testing: Component.handleSubmit()  when source has no such method
-✅ Only test what you see in the source code above!
-
-**4. ASYNC HANDLING (10-15% of failures):**
-❌ Wrong: it('fetches data', () => {{ fetchData(); expect(...) }})  // missing async/await
-✅ Correct: it('fetches data', async () => {{ await fetchData(); expect(...) }})
-
-**5. WRONG FUNCTION SIGNATURES (10% of failures):**
-❌ Testing: calculate(a, b, c)  when function only takes (a, b)
-✅ Match the EXACT number and names of parameters from source
-
-PRE-FLIGHT CHECKLIST (before generating each test):
-☑️ Does this function/class exist in the source file? (scroll up and verify!)
-☑️ Does my import path account for the test file location?
-☑️ Are all mocks defined at the TOP of the file?
-☑️ Am I testing behavior that can be determined from the source code?
-☑️ Have I mocked all external dependencies (API, database, localStorage, etc.)?
-
-Return ONLY the complete test file code, no explanations or markdown. The code must be ready to save to a file and run."""
+            prompt = prompt_loader.get_prompt("unit_test_agent.yml", "generate_unit_tests_new").format(
+                language=language,
+                framework=config['framework'],
+                filepath=filepath,
+                content=content[:8000],
+                style_section=style_section,
+                deps_section=deps_section,
+                imports_section=imports_section,
+                import_section=import_section
+            )
 
         try:
             test_code = ai_service.call_genai(prompt, temperature=0.1, max_tokens=8192)

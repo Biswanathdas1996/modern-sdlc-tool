@@ -53,27 +53,11 @@ async def search_knowledge_base_tool(query: str, project_id: str = "default", li
         sources_list = "\n- ".join(sources)
         
         # Use LLM to synthesize and format the information
-        synthesis_prompt = f"""You are a helpful assistant that synthesizes information from a knowledge base.
-
-User Query: {query}
-
-Retrieved Information from Knowledge Base:
-{combined_content}
-
-Sources:
-- {sources_list}
-
-Your task:
-1. Analyze the retrieved information
-2. Extract the most relevant parts that answer the user's query
-3. Format it in a clear, well-structured way suitable for a JIRA ticket description
-4. Use proper Markdown formatting with headers (##, ###), bullet points, and numbered lists
-5. Create logical sections (e.g., Overview, Steps, Requirements, Details)
-6. Be concise but comprehensive - focus on what's relevant to "{query}"
-7. DO NOT include meta-information about sources or scores
-8. Format it professionally and make it ready to use directly
-
-prepare a detailed professionally formated response"""
+        synthesis_prompt = prompt_loader.get_prompt("tools.yml", "knowledge_base_synthesis").format(
+            query=query,
+            combined_content=combined_content,
+            sources_list=sources_list
+        )
 
         log_info(f"🤖 Using LLM to synthesize {len(results)} knowledge base results", "kb_tool")
         

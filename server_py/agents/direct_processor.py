@@ -7,6 +7,7 @@ from core.logging import log_error, log_info
 from core.database import get_db
 from services.knowledge_base_service import KnowledgeBaseService
 from .utils import ActionType
+from .prompts import prompt_loader
 from .tools import (
     TicketToolsContext,
     search_tickets_tool,
@@ -84,14 +85,10 @@ async def _enrich_with_context(
                     for ticket in jira_tickets[:20]  # Limit to recent 20
                 ])
                 
-                relevance_prompt = f"""Given this user query: "{user_prompt}"
-
-And these existing JIRA tickets:
-{tickets_summary}
-
-List the 3-5 most relevant ticket keys that relate to this query.
-Respond with ONLY ticket keys separated by commas (e.g., PROJ-123, PROJ-456).
-If none are relevant, respond with 'NONE'."""
+                relevance_prompt = prompt_loader.get_prompt("direct_processor.yml", "relevance_check").format(
+                    user_prompt=user_prompt,
+                    tickets_summary=tickets_summary
+                )
                 
                 relevant_keys = await ai_service.call_genai(
                     prompt=relevance_prompt,
@@ -267,30 +264,12 @@ async def _process_create_ticket(
                 context_info = f"\n\nContext: {context_info}"
         
         # Use AI to extract ticket details with full conversation context and memory
-        extract_prompt = f"""Extract ticket details from this entire conversation. Use ALL messages for context.
-
-Full Conversation History:
-{conversation_history}
-
-Current Message: "{user_prompt}"
-
-Already Collected: {json.dumps(conversation_ctx.collected_data)}
-{context_info}
-
-Rules:
-- Analyze the ENTIRE conversation to understand what the user wants
-- Extract information mentioned in ANY previous message
-- Combine details from different messages
-- If user said "that bug I mentioned" or "the issue from earlier", look back in history
-- Use context to enhance descriptions but don't fabricate details
-
-Extract (if mentioned anywhere in conversation):
-- summary: brief title
-- description: detailed description  
-- issue_type: Bug/Story/Task/Epic
-- priority: Critical/High/Medium/Low
-
-Return ONLY JSON. If nothing found, return {{}}."""
+        extract_prompt = prompt_loader.get_prompt("direct_processor.yml", "extract_conversation_ticket_data").format(
+            conversation_history=conversation_history,
+            user_prompt=user_prompt,
+            collected_data=json.dumps(conversation_ctx.collected_data),
+            context_info=context_info
+        )
         
         try:
             extracted = await ai_service.call_genai(
@@ -329,27 +308,11 @@ Return ONLY JSON. If nothing found, return {{}}."""
             summary_text = conversation_ctx.collected_data.get('summary', '')
             issue_type = conversation_ctx.collected_data.get('issue_type', 'Story')
             
-            enhance_prompt = f"""You are a Business Analyst creating a JIRA {issue_type}.
-
-**Ticket Summary:** {summary_text}
-
-**Relevant Knowledge Base Content:**
-{kb_content}
-
-**Task:** Generate a comprehensive, detailed description for this {issue_type} by:
-1. Incorporating relevant information from the knowledge base
-2. Adding acceptance criteria if applicable
-3. Including technical context from the KB documents
-4. Structuring the description professionally
-
-**Format the description with:**
-- Overview/Background section
-- Detailed requirements or steps to reproduce (for bugs)
-- Acceptance criteria (if Story/Task)
-- Technical notes from KB (if relevant)
-- Any dependencies or related items
-
-Return ONLY the enhanced description text, formatted with markdown."""
+            enhance_prompt = prompt_loader.get_prompt("direct_processor.yml", "enhance_description").format(
+                issue_type=issue_type,
+                summary_text=summary_text,
+                kb_content=kb_content
+            )
             
             enhanced_description = await ai_service.call_genai(
                 prompt=enhance_prompt,
@@ -706,16 +669,9 @@ async def _process_issue_report(
     
     # First time processing - extract issue description and search
     # Use AI to extract what the issue is about
-    extract_prompt = f"""Extract the key issue or problem from this description for JIRA search.
-
-User said: "{user_prompt}"
-
-Extract:
-1. A brief search query (2-5 words) to find related JIRA tickets
-2. A summary of the issue for potential ticket creation
-
-Return JSON only:
-{{"search_query": "...", "issue_summary": "..."}}"""
+    extract_prompt = prompt_loader.get_prompt("direct_processor.yml", "extract_search_query").format(
+        user_prompt=user_prompt
+    )
 
     try:
         extracted = await ai_service.call_genai(
@@ -830,24 +786,12 @@ async def _process_update_ticket(
             log_error(f"Error fetching ticket details: {e}", "direct_processor")
     
     # Use AI to extract update details with full conversation context
-    extract_prompt = f"""Extract update details from the current request and conversation history.
-
-Conversation History:
-{conversation_history}
-
-Current Request: "{user_prompt}"
-
-Already Collected Data: {json.dumps(conversation_ctx.collected_data)}
-{ticket_context}
-Analyze the ENTIRE conversation to extract any of these fields to update:
-- ticket_key: the ticket ID
-- status: new status (To Do, In Progress, Done, etc.)
-- priority: new priority
-- comment: comment to add (combine information from conversation if needed)
-- summary: updated summary
-- description: updated description
-
-Return ONLY a JSON object, no other text:"""
+    extract_prompt = prompt_loader.get_prompt("direct_processor.yml", "extract_update_details").format(
+        conversation_history=conversation_history,
+        user_prompt=user_prompt,
+        collected_data=json.dumps(conversation_ctx.collected_data),
+        ticket_context=ticket_context
+    )
     
     try:
         extracted = await ai_service.call_genai(
@@ -957,21 +901,13 @@ async def _process_search_tickets(
         if has_previous_context:
             history_context = f"\n\nConversation History:\n{conversation_history}"
         
-        analysis_prompt = f"""Analyze these JIRA tickets for: "{user_prompt}"
-
-Tickets:
-{tickets_summary}
-{context_info}
-{history_context}
-
-Provide a concise summary:
-- Count and overview
-- Key tickets with status
-- Notable patterns
-- Brief actionable insights
-{"- Reference to previous conversation context if relevant" if has_previous_context else ""}
-
-Be direct and professional. Avoid verbosity."""
+        analysis_prompt = prompt_loader.get_prompt("direct_processor.yml", "analyze_search_results").format(
+            user_prompt=user_prompt,
+            tickets_summary=tickets_summary,
+            context_info=context_info,
+            history_context=history_context,
+            history_note='- Reference to previous conversation context if relevant' if has_previous_context else ''
+        )
         
         response = await ai_service.call_genai(
             prompt=analysis_prompt,
@@ -1085,17 +1021,10 @@ async def _process_without_conversation(
             
             if context.last_search_results:
                 tickets_summary = format_tickets_for_agent(context.last_search_results)
-                analysis_prompt = f"""You are a JIRA assistant. A user asked: "{user_prompt}"
-
-Here are the JIRA tickets found:
-
-{tickets_summary}
-
-Provide a concise summary including:
-1. Number of tickets found
-2. Key ticket IDs and summaries
-3. Status information
-4. Any relevant patterns"""
+                analysis_prompt = prompt_loader.get_prompt("direct_processor.yml", "search_analysis").format(
+                    user_prompt=user_prompt,
+                    tickets_summary=tickets_summary
+                )
                 
                 response = await ai_service.call_genai(
                     prompt=analysis_prompt,
@@ -1114,16 +1043,9 @@ Provide a concise summary including:
             }
         
         elif action == ActionType.CREATE:
-            extract_prompt = f"""Extract ticket details from this request:
-"{user_prompt}"
-
-Return a JSON object with:
-- summary: brief ticket title
-- description: detailed description
-- issue_type: Story, Bug, or Task
-- priority: Low, Medium, High, or Critical
-
-JSON only, no other text:"""
+            extract_prompt = prompt_loader.get_prompt("direct_processor.yml", "extract_simple_ticket_data").format(
+                user_prompt=user_prompt
+            )
             
             extracted = await ai_service.call_genai(
                 prompt=extract_prompt,
@@ -1154,15 +1076,10 @@ JSON only, no other text:"""
                 }
         
         elif action == ActionType.UPDATE and ticket_key:
-            extract_prompt = f"""Extract update details from this request for ticket {ticket_key}:
-"{user_prompt}"
-
-Return a JSON object with any of these fields to update:
-- status: new status (To Do, In Progress, Done, etc.)
-- priority: new priority
-- comment: comment to add
-
-JSON only, no other text:"""
+            extract_prompt = prompt_loader.get_prompt("direct_processor.yml", "extract_simple_update_details").format(
+                ticket_key=ticket_key,
+                user_prompt=user_prompt
+            )
             
             extracted = await ai_service.call_genai(
                 prompt=extract_prompt,

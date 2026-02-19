@@ -8,6 +8,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from .ai_service import ai_service
 from .tools.web_scraper import scrape_webpage
+from ..prompts import prompt_loader
 
 env_path = Path(__file__).parent.parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
@@ -196,22 +197,9 @@ class WebTestAgent:
     def _extract_features(self, page_data: Dict[str, Any]) -> List[Dict[str, str]]:
         page_summary = self._build_page_summary(page_data)
 
-        prompt = f"""You are a QA analyst. Analyze this webpage structure and extract ALL user-facing features.
-
-PAGE DATA:
-{page_summary}
-
-Return a JSON array of features. Each feature should have:
-- "id": Feature ID like F001, F002, etc.
-- "name": Short feature name
-- "description": What the feature does
-- "category": One of: Navigation, Form, Authentication, Display, Interactive, Data, Media, Accessibility
-- "elements": Relevant HTML elements involved
-
-Return ONLY the JSON array, no other text. Example:
-[
-  {{"id": "F001", "name": "User Login Form", "description": "Allows users to log in with email and password", "category": "Authentication", "elements": ["email input", "password input", "submit button"]}}
-]"""
+        prompt = prompt_loader.get_prompt("web_test_agent.yml", "extract_features").format(
+            page_summary=page_summary
+        )
 
         try:
             result = self.ai_service.call_genai(prompt, temperature=0.3, max_tokens=4096)
@@ -257,163 +245,49 @@ Return ONLY the JSON array, no other text. Example:
                 "section_num": 1,
                 "heading": "## 1. Executive Summary",
                 "thinking": "Generating Executive Summary...",
-                "prompt": f"""You are a senior QA Lead. Based on the following webpage analysis, generate ONLY the Executive Summary section.
-
-{base_context}
-
-Generate a Markdown section titled "## 1. Executive Summary".
-
-Write a professional 3-5 sentence summary that covers:
-- What application/page was analyzed
-- The scope of testing (what types of tests were produced)
-- Key findings about the page structure and testability
-- Overall test coverage approach
-
-Be specific to this page's actual content and features.
-Return ONLY this section, nothing else.""",
+                "prompt": prompt_loader.get_prompt("web_test_agent.yml", "executive_summary").format(base_context=base_context),
             },
             {
                 "name": "Feature Inventory",
                 "section_num": 2,
                 "heading": "## 2. Feature Inventory",
                 "thinking": "Generating Feature Inventory table...",
-                "prompt": f"""You are a senior QA Lead. Based on the following webpage analysis, generate ONLY the Feature Inventory section.
-
-{base_context}
-
-Generate a Markdown section titled "## 2. Feature Inventory" with ALL features in a proper Markdown table:
-
-| Feature ID | Feature Name | Category | Description | Priority |
-|------------|-------------|----------|-------------|----------|
-| F001 | ... | ... | ... | High/Medium/Low |
-
-Include every identified feature. Assign priority based on user impact (authentication/forms = High, display = Medium, minor UI = Low).
-Use clean Markdown formatting. Return ONLY this section, nothing else.""",
+                "prompt": prompt_loader.get_prompt("web_test_agent.yml", "feature_inventory").format(base_context=base_context),
             },
             {
                 "name": "Manual Test Cases",
                 "section_num": 3,
                 "heading": "## 3. Manual Test Cases",
                 "thinking": "Generating Manual Test Cases for each feature...",
-                "prompt": f"""You are a senior QA Lead. Based on the following webpage analysis, generate ONLY the Manual Test Cases section.
-
-{base_context}
-
-Generate a Markdown section titled "## 3. Manual Test Cases".
-
-For EACH feature, create a sub-section with test cases in table format:
-
-### 3.X [Feature Name]
-
-| Field | Details |
-|-------|---------|
-| **Test Case ID** | TC001 |
-| **Title** | [What is being tested] |
-| **Priority** | High / Medium / Low |
-| **Preconditions** | [Setup required] |
-| **Test Steps** | 1. Step one 2. Step two 3. Step three |
-| **Expected Result** | [What should happen] |
-| **Type** | Positive / Negative / Edge Case |
-
-Include at least 2-3 test cases per feature (positive, negative, and edge case).
-Test steps must be specific and actionable using real page elements.
-Return ONLY this section, nothing else.""",
+                "prompt": prompt_loader.get_prompt("web_test_agent.yml", "manual_test_cases").format(base_context=base_context),
             },
             {
                 "name": "Automated Test Cases",
                 "section_num": 4,
                 "heading": "## 4. Automated Test Cases",
                 "thinking": "Generating Automated Test Cases...",
-                "prompt": f"""You are a senior QA Lead. Based on the following webpage analysis, generate ONLY the Automated Test Cases section.
-
-{base_context}
-
-Generate a Markdown section titled "## 4. Automated Test Cases".
-
-For each feature, write structured automated test case descriptions:
-
-For each test case include:
-- Test Case ID (ATC-001, ATC-002, etc.)
-- Feature being tested
-- Test objective
-- Preconditions
-- Test steps (numbered)
-- Expected result
-- Test data required
-- Automation feasibility notes
-
-Group test cases by feature. Cover positive, negative, and boundary scenarios.
-Use real element selectors and page structure details in the steps.
-Return ONLY this section, nothing else.""",
+                "prompt": prompt_loader.get_prompt("web_test_agent.yml", "automated_test_cases").format(base_context=base_context),
             },
             {
                 "name": "Automated Test Matrix",
                 "section_num": 5,
                 "heading": "## 5. Automated Test Matrix",
                 "thinking": "Generating Automated Test Matrix summary...",
-                "prompt": f"""You are a senior QA Lead. Based on the following webpage analysis, generate ONLY the Automated Test Matrix section.
-
-{base_context}
-
-Generate a Markdown section titled "## 5. Automated Test Matrix".
-
-Present a summary matrix of all automated tests in a Markdown table:
-
-| Test ID | Feature | Test Type | Action | Expected Assertion | Test Data |
-|---------|---------|-----------|--------|-------------------|-----------|
-| AT001 | ... | Functional/UI/Boundary | ... | ... | ... |
-
-Cover all features with appropriate automated tests. Include functional, UI validation, and boundary test types.
-Use real selectors and element names from the page structure.
-Return ONLY this section, nothing else.""",
+                "prompt": prompt_loader.get_prompt("web_test_agent.yml", "automated_test_matrix").format(base_context=base_context),
             },
             {
                 "name": "Selenium Test Script",
                 "section_num": 6,
                 "heading": "## 6. Selenium Test Script (Python)",
                 "thinking": "Generating Selenium test script (Python)...",
-                "prompt": f"""You are a senior QA automation engineer. Based on the following webpage analysis, generate ONLY a Selenium test script.
-
-{base_context}
-
-Generate a Markdown section titled "## 6. Selenium Test Script (Python)".
-
-Write a clean, production-ready Selenium test script using pytest and Page Object Model pattern.
-Wrap the entire script in a single ```python code block. Include:
-- All necessary imports (selenium, pytest, WebDriverWait, expected_conditions)
-- A Page Object class with locators based on actual page elements
-- A test class with descriptive test method names
-- Proper WebDriverWait usage for dynamic elements
-- setUp/tearDown with Chrome WebDriver
-- Clear docstrings
-- Tests for ALL identified features
-
-Use real selectors from the page structure (IDs, names, CSS selectors) where possible.
-Return ONLY this section, nothing else.""",
+                "prompt": prompt_loader.get_prompt("web_test_agent.yml", "selenium_script").format(base_context=base_context),
             },
             {
                 "name": "Playwright Test Script",
                 "section_num": 7,
                 "heading": "## 7. Playwright Test Script (JavaScript)",
                 "thinking": "Generating Playwright test script (JavaScript)...",
-                "prompt": f"""You are a senior QA automation engineer. Based on the following webpage analysis, generate ONLY a Playwright test script.
-
-{base_context}
-
-Generate a Markdown section titled "## 7. Playwright Test Script (JavaScript)".
-
-Write a clean Playwright test script in JavaScript.
-Wrap the entire script in a single ```javascript code block. Include:
-- Proper test.describe blocks grouping related tests
-- beforeEach hook to navigate to the page
-- afterEach hook for cleanup
-- Descriptive test names matching features
-- Proper assertions (expect) and modern selectors (getByRole, getByLabel, getByText)
-- Tests for ALL identified features
-- Error handling and edge case tests
-
-Use real selectors from the page structure where possible.
-Return ONLY this section, nothing else.""",
+                "prompt": prompt_loader.get_prompt("web_test_agent.yml", "playwright_script").format(base_context=base_context),
             },
         ]
 
@@ -476,28 +350,13 @@ Return ONLY this section, nothing else.""",
             for f in session["features"]:
                 features_text += f"- {f.get('id', '')}: {f.get('name', '')} — {f.get('description', '')}\n"
 
-        prompt = f"""You are a senior QA engineer. The user has already analyzed a webpage and you generated test cases.
-
-URL: {session.get('url', 'N/A')}
-Page Title: {session.get('page_data', {}).get('title', 'N/A')}
-
-IDENTIFIED FEATURES:
-{features_text}
-
-CONVERSATION HISTORY:
-{history_text}
-
-USER'S FOLLOW-UP:
-{query}
-
-Respond helpfully. If they ask for:
-- More test cases for a specific feature: generate them
-- A different testing framework: generate appropriate scripts
-- Clarification: explain the test cases
-- Modification: update the test cases as requested
-- API tests, performance tests, etc.: generate those
-
-Use well-formatted Markdown. Be thorough and specific."""
+        prompt = prompt_loader.get_prompt("web_test_agent.yml", "followup_response").format(
+            url=session.get('url', 'N/A'),
+            page_title=session.get('page_data', {}).get('title', 'N/A'),
+            features_text=features_text,
+            history_text=history_text,
+            query=query
+        )
 
         try:
             result = self.ai_service.call_genai(prompt, temperature=0.4, max_tokens=8192)

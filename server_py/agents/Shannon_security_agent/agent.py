@@ -15,6 +15,7 @@ from .tools.dir_enum import enumerate_directories
 from .tools.injection_tester import test_form_injections
 from .tools.method_tester import test_http_methods
 from .tools.cve_lookup import lookup_cves
+from ..prompts import prompt_loader
 
 env_path = Path(__file__).parent.parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
@@ -726,43 +727,16 @@ class ShannonSecurityAgent:
 
         owasp_checklist = get_owasp_checklist()
 
-        prompt = f"""You are Shannon, an expert security analyst reviewing ACTUAL reconnaissance data.
-
-## CRITICAL RULES
-1. ONLY report vulnerabilities DIRECTLY evidenced by the data below.
-2. If a data category is empty, do NOT report findings about it.
-3. Every finding MUST cite specific evidence from the recon data.
-4. Do NOT report: missing headers, TLS issues, CORS, server version — those are already handled.
-5. Focus on: application-level logic issues, authentication concerns, information disclosure in comments/meta, insecure form patterns.
-
-## Target: {url}
-
-## Forms ({len(all_forms)} found)
-{json.dumps(all_forms[:10], indent=2)}
-
-## Cookies
-{json.dumps(web_ctx.get('cookies', []), indent=2)}
-
-## API Endpoints ({len(all_api_endpoints)} found)
-{json.dumps(all_api_endpoints[:20], indent=2)}
-
-## Technologies
-{json.dumps(web_ctx.get('technologies', []), indent=2)}
-
-## HTML Comments
-{json.dumps(web_ctx.get('comments', []), indent=2)}
-
-For each finding use EXACTLY this format:
-
-### FINDING: [Title]
-**Severity:** [Critical/High/Medium/Low/Informational]
-**OWASP:** [e.g., A03:2021 - Injection]
-**Location:** [Specific location]
-**Description:** [Issue description]
-**Evidence:** [EXACT data that proves this]
-**Recommendation:** [Fix]
-
-If no additional findings, respond: NO ADDITIONAL FINDINGS"""
+        prompt = prompt_loader.get_prompt("shannon_security_agent.yml", "llm_analyze").format(
+            url=url,
+            num_forms=len(all_forms),
+            forms_json=json.dumps(all_forms[:10], indent=2),
+            cookies_json=json.dumps(web_ctx.get('cookies', []), indent=2),
+            num_endpoints=len(all_api_endpoints),
+            endpoints_json=json.dumps(all_api_endpoints[:20], indent=2),
+            technologies_json=json.dumps(web_ctx.get('technologies', []), indent=2),
+            comments_json=json.dumps(web_ctx.get('comments', []), indent=2)
+        )
 
         llm_response = self.ai_service.call_genai(prompt, temperature=0.2, max_tokens=4096)
 
@@ -783,16 +757,11 @@ If no additional findings, respond: NO ADDITIONAL FINDINGS"""
             for i, f in enumerate(session["findings"], 1):
                 findings_text += f"\n{i}. {f.get('title', '')} ({f.get('severity', '')}): {f.get('description', '')}\n   Evidence: {f.get('evidence', 'N/A')}\n"
 
-        prompt = f"""You are Shannon, an expert AI security analyst. The user completed a deep security assessment and asks a follow-up.
-
-Target URL: {session.get('url', 'N/A')}
-
-Findings:
-{findings_text}
-
-User Question: {query}
-
-Answer based only on the findings above. Do not introduce new speculative vulnerabilities."""
+        prompt = prompt_loader.get_prompt("shannon_security_agent.yml", "followup_findings").format(
+            url=session.get('url', 'N/A'),
+            findings_text=findings_text,
+            query=query
+        )
 
         try:
             return self.ai_service.call_genai(prompt, temperature=0.5, max_tokens=4096)
@@ -800,25 +769,9 @@ Answer based only on the findings above. Do not introduce new speculative vulner
             return f"Error processing question: {str(e)}"
 
     def _ask_llm_general(self, query: str) -> str:
-        prompt = f"""You are Shannon, an AI security assessment agent inspired by the Shannon pentesting framework.
-
-Your capabilities include deep scanning:
-- Full site crawling (discovers all pages)
-- Sensitive path discovery (.env, .git, /admin, API docs)
-- Active injection testing (XSS, SQL injection payloads on forms)
-- HTTP method probing (PUT, DELETE, TRACE)
-- TLS/HTTPS verification
-- Technology CVE lookup
-- OWASP Top 10 analysis
-
-User message: {query}
-
-Respond helpfully. If no URL provided, ask for one."""
-
-        try:
-            return self.ai_service.call_genai(prompt, temperature=0.7, max_tokens=2048)
-        except Exception as e:
-            return f"Error: {str(e)}"
+        prompt = prompt_loader.get_prompt("shannon_security_agent.yml", "general_response").format(
+            query=query
+        )
 
     def clear_session(self, session_id: str) -> Dict[str, Any]:
         if session_id in self.sessions:

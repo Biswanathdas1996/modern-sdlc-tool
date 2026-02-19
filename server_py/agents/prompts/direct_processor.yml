@@ -1,0 +1,173 @@
+# Direct Processor Prompts
+# These prompts are used by the direct processor for JIRA ticket operations
+
+relevance_check: |
+  Given this user query: "{user_prompt}"
+
+  And these existing JIRA tickets:
+  {tickets_summary}
+
+  List the 3-5 most relevant ticket keys that relate to this query.
+  Respond with ONLY ticket keys separated by commas (e.g., PROJ-123, PROJ-456).
+  If none are relevant, respond with 'NONE'.
+
+extract_ticket_data: |
+  Extract ticket details from this entire conversation. Use ALL messages for context.
+
+  Full Conversation History:
+  {conversation_history}
+
+  Current Message: "{user_prompt}"
+
+  Already Collected: {collected_data_json}
+  {context_info}
+
+  Rules:
+  - Analyze the ENTIRE conversation to understand what the user wants
+  - Extract information mentioned in ANY previous message
+  - Combine details from different messages
+  - If user said "that bug I mentioned" or "the issue from earlier", look back in history
+  - Use context to enhance descriptions but don't fabricate details
+
+  Extract (if mentioned anywhere in conversation):
+  - summary: brief title
+  - description: detailed description  
+  - issue_type: Bug/Story/Task/Epic
+  - priority: Critical/High/Medium/Low
+
+  Return ONLY JSON. If nothing found, return {{}}.
+
+enhance_description: |
+  You are a Business Analyst creating a JIRA {issue_type}.
+
+  **Ticket Summary:** {summary_text}
+
+  **Relevant Knowledge Base Content:**
+  {kb_content}
+
+  **Task:** Generate a comprehensive, detailed description for this {issue_type} by:
+  1. Incorporating relevant information from the knowledge base
+  2. Adding acceptance criteria if applicable
+  3. Including technical context from the KB documents
+  4. Structuring the description professionally
+
+  **Format the description with:**
+  - Overview/Background section
+  - Detailed requirements or steps to reproduce (for bugs)
+  - Acceptance criteria (if Story/Task)
+  - Technical notes from KB (if relevant)
+  - Any dependencies or related items
+
+  Return ONLY the enhanced description text, formatted with markdown.
+
+search_analysis: |
+  You are a JIRA assistant. A user asked: "{user_prompt}"
+
+  Here are the JIRA tickets found:
+
+  {tickets_summary}
+
+  Provide a concise summary including:
+  1. Number of tickets found
+  2. Key ticket IDs and summaries
+  3. Status information
+  4. Any relevant patterns
+
+extract_conversation_ticket_data: |
+  Extract ticket details from this entire conversation. Use ALL messages for context.
+
+  Full Conversation History:
+  {conversation_history}
+
+  Current Message: "{user_prompt}"
+
+  Already Collected: {collected_data}
+  {context_info}
+
+  Rules:
+  - Analyze the ENTIRE conversation to understand what the user wants
+  - Extract information mentioned in ANY previous message
+  - Combine details from different messages
+  - If user said "that bug I mentioned" or "the issue from earlier", look back in history
+  - Use context to enhance descriptions but don't fabricate details
+
+  Extract (if mentioned anywhere in conversation):
+  - summary: brief title
+  - description: detailed description  
+  - issue_type: Bug/Story/Task/Epic
+  - priority: Critical/High/Medium/Low
+
+  Return ONLY JSON. If nothing found, return {{}}.
+
+extract_search_query: |
+  Extract the key issue or problem from this description for JIRA search.
+
+  User said: "{user_prompt}"
+
+  Extract:
+  1. A brief search query (2-5 words) to find related JIRA tickets
+  2. A summary of the issue for potential ticket creation
+
+  Return JSON only:
+  {{"search_query": "...", "issue_summary": "..."}}
+
+extract_update_details: |
+  Extract update details from the current request and conversation history.
+
+  Conversation History:
+  {conversation_history}
+
+  Current Request: "{user_prompt}"
+
+  Already Collected Data: {collected_data}
+  {ticket_context}
+  
+  Analyze the ENTIRE conversation to extract any of these fields to update:
+  - ticket_key: the ticket ID
+  - status: new status (To Do, In Progress, Done, etc.)
+  - priority: new priority
+  - comment: comment to add (combine information from conversation if needed)
+  - summary: updated summary
+  - description: updated description
+
+  Return ONLY a JSON object, no other text:
+
+analyze_search_results: |
+  Analyze these JIRA tickets for: "{user_prompt}"
+
+  Tickets:
+  {tickets_summary}
+  {context_info}
+  {history_context}
+
+  Provide a concise summary:
+  - Count and overview
+  - Key tickets with status
+  - Notable patterns
+  - Brief actionable insights
+  {history_note}
+
+  Be direct and professional. Avoid verbosity.
+
+extract_simple_ticket_data: |
+  Extract ticket details from this request:
+  "{user_prompt}"
+
+  Return a JSON object with:
+  - summary: brief ticket title
+  - description: detailed description
+  - issue_type: Story, Bug, or Task
+  - priority: Low, Medium, High, or Critical
+
+  JSON only, no other text:
+
+extract_simple_update_details: |
+  Extract update details from this request for ticket {ticket_key}:
+  "{user_prompt}"
+
+  Return a JSON object with any of these fields to update:
+  - status: new status (To Do, In Progress, Done, etc.)
+  - priority: new priority
+  - comment: comment to add
+
+  JSON only, no other text:

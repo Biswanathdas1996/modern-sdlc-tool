@@ -3,6 +3,7 @@ import re
 import json
 import httpx
 from typing import Optional, Dict, Any, List, Callable
+from agents.prompts import prompt_loader
 
 GENAI_ENDPOINT = os.environ.get("PWC_GENAI_ENDPOINT_URL", "")
 API_KEY = os.environ.get("PWC_GENAI_API_KEY", "")
@@ -387,39 +388,10 @@ Total Files Analyzed: {len(file_contents)}
 async def analyze_repository(repo_url: str, project_id: str) -> Dict[str, Any]:
     repo_context = await fetch_repo_contents(repo_url)
 
-    system_prompt = """You are a senior software architect analyzing GitHub repositories. Carefully examine ALL provided file contents, directory structure, and code to generate an ACCURATE and DETAILED analysis.
-
-IMPORTANT INSTRUCTIONS:
-1. Read EVERY file content provided - each file reveals important details
-2. Extract EXACT feature names, component names, and function names from the actual code
-3. Identify the REAL purpose from the code logic, not generic descriptions
-4. List ACTUAL dependencies from package.json or similar config files
-5. Describe the SPECIFIC architecture based on the directory structure and imports
-6. Do NOT make up features that don't exist in the code
-7. Do NOT use generic descriptions - be specific to THIS repository
-
-Return your analysis as a JSON object with this exact structure:
-{
-  "summary": "Specific description of what this application does based on the actual code",
-  "architecture": "Detailed description of the architectural patterns observed in the code structure",
-  "features": [
-    {
-      "name": "Actual feature name from the code",
-      "description": "What this feature does based on examining the code",
-      "files": ["actual/file/paths.tsx", "from/the/repo.ts"]
-    }
-  ],
-  "techStack": {
-    "languages": ["languages from package.json/actual files"],
-    "frameworks": ["exact framework names and versions from dependencies"],
-    "databases": ["databases if referenced in code"],
-    "tools": ["actual tools found in config files"]
-  },
-  "testingFramework": "Testing framework from devDependencies if any",
-  "codePatterns": ["patterns actually observed in the code like hooks, components, services, etc"]
-}"""
-
-    user_prompt = f"Analyze this repository carefully. Read all file contents and provide an accurate analysis:\n\n{repo_context}"
+    system_prompt = prompt_loader.get_prompt("ai_service.yml", "analyze_repository_system")
+    user_prompt = prompt_loader.get_prompt("ai_service.yml", "analyze_repository_user").format(
+        repo_context=repo_context
+    )
     
     prompt = build_prompt(system_prompt, user_prompt)
     response_text = await call_pwc_genai(prompt)
@@ -440,45 +412,14 @@ async def generate_documentation(analysis: Dict[str, Any], project: Dict[str, An
     except Exception as err:
         print(f"Failed to fetch repo for documentation: {err}")
 
-    system_prompt = """You are a technical writer creating ACCURATE and DETAILED documentation for a software project. You have access to the ACTUAL SOURCE CODE files. Read them carefully and generate documentation that EXACTLY matches what the code does.
+    system_prompt = prompt_loader.get_prompt("ai_service.yml", "generate_documentation_system")
 
-CRITICAL INSTRUCTIONS:
-1. READ the actual file contents provided - they contain the real implementation
-2. Extract EXACT component names, function names, and features from the code
-3. Document what each file ACTUALLY does based on its code
-4. Include REAL dependencies from package.json
-5. Do NOT invent features that don't exist in the code
-6. Do NOT use placeholder or example content - everything must come from the actual code
-7. If you see a component like "CardOnboarding" in the code, document "CardOnboarding" - not a generic name
-
-Return a JSON object with this structure:
-{
-  "title": "Project Name - Technical Documentation",
-  "content": "Full markdown overview based on actual code",
-  "sections": [
-    {"title": "Overview", "content": "Description based on README and actual code purpose"},
-    {"title": "Architecture", "content": "Architecture based on actual file structure and imports"},
-    {"title": "Features", "content": "Features extracted from actual components and functions in the code"},
-    {"title": "Components", "content": "List of actual React/UI components found in the code with their purposes"},
-    {"title": "Technology Stack", "content": "Technologies from package.json dependencies"},
-    {"title": "API/Services", "content": "Any API endpoints or services found in the code"},
-    {"title": "Getting Started", "content": "Based on package.json scripts and README"},
-    {"title": "Project Structure", "content": "Actual file structure from the repository"}
-  ]
-}"""
-
-    user_prompt = f"""Generate accurate technical documentation by reading the ACTUAL SOURCE CODE below.
-
-Project Name: {project['name']}
-Repository URL: {project['repoUrl']}
-
-=== ACTUAL SOURCE CODE FILES ===
-{repo_context}
-
-=== ANALYSIS SUMMARY (for reference) ===
-- Summary: {analysis.get('summary', '')}
-- Tech Stack: {json.dumps(analysis.get('techStack', {}), indent=2)}
-- Features Found: {json.dumps(analysis.get('features', []), indent=2)}"""
+    user_prompt = prompt_loader.get_prompt("ai_service.yml", "generate_documentation_user").format(
+        repo_context=repo_context,
+        project_name=project['name'],
+        features_list=json.dumps(analysis.get('features', []), indent=2),
+        tech_stack=json.dumps(analysis.get('techStack', {}), indent=2)
+    )
 
     prompt = build_prompt(system_prompt, user_prompt)
     raw_content = await call_pwc_genai(prompt)
@@ -502,48 +443,14 @@ Repository URL: {project['repoUrl']}
 
 
 async def generate_bpmn_diagram(documentation: Dict[str, Any], analysis: Dict[str, Any]) -> Dict[str, Any]:
-    system_prompt = """You are an expert at creating professional BPMN-style business flow diagrams using Mermaid.js flowchart syntax.
-
-Create a SINGLE comprehensive flowchart that shows the ENTIRE business flow of the application from start to finish.
-
-STRICT MERMAID SYNTAX RULES - FOLLOW EXACTLY:
-1. Start with exactly: flowchart TD
-2. Node definitions - NEVER use parentheses, quotes, or special chars in labels:
-   - Start/End terminals: A([Start]) or Z([End])
-   - Process boxes: B[Process Name]
-   - Decision diamonds: C{Is Valid}
-   - Database/Storage: D[(Database)]
-3. Subgraph syntax:
-   - subgraph SubgraphID[Display Name]
-   - end
-4. Arrow connections:
-   - Simple: A --> B
-   - With label: A -->|Yes| B
-5. Keep labels SHORT: 2-4 words maximum, no special characters
-6. Use simple alphanumeric IDs: A, B, C1, C2, etc.
-
-Return JSON:
-{
-  "diagrams": [
-    {
-      "featureName": "Complete Business Flow",
-      "description": "End-to-end business process showing the complete user journey",
-      "mermaidCode": "flowchart TD\\n    subgraph Init[Getting Started]\\n        A([Start]) --> B[Load Data]\\n    end"
-    }
-  ]
-}"""
+    system_prompt = prompt_loader.get_prompt("ai_service.yml", "generate_bpmn_diagram_system")
 
     sections_text = "\n\n".join([f"## {s.get('title', '')}\n{s.get('content', '')}" for s in documentation.get("sections", [])])
-    user_prompt = f"""Generate a SINGLE comprehensive BPMN-style diagram showing the COMPLETE business flow of this application.
-
-=== APPLICATION OVERVIEW ===
-Title: {documentation.get('title', '')}
-{sections_text}
-
-=== ALL FEATURES ===
-{json.dumps(analysis.get('features', []), indent=2)}
-
-Create ONE comprehensive diagram that shows how a user progresses through the entire application workflow, from initial entry through all stages to final outputs. Use subgraphs to organize the flow by major stages/features."""
+    user_prompt = prompt_loader.get_prompt("ai_service.yml", "generate_bpmn_diagram_user").format(
+        documentation_title=documentation.get('title', ''),
+        sections_text=sections_text,
+        features_json=json.dumps(analysis.get('features', []), indent=2)
+    )
 
     prompt = build_prompt(system_prompt, user_prompt)
     raw_content = await call_pwc_genai(prompt)
@@ -628,60 +535,19 @@ Repository Context (from analysis):
 - Testing Framework: {analysis.get('testingFramework', 'Not specified')}
 """
 
-    system_prompt = f"""You are a senior business analyst creating a Business Requirements Document (BRD).
+    system_prompt = prompt_loader.get_prompt("ai_service.yml", "generate_brd_system").format(
+        has_database_schema='AND the connected DATABASE SCHEMA' if database_schema else '',
+        database_schema_note='5. Reference the database tables and their relationships when specifying data requirements' if database_schema else ''
+    )
 
-IMPORTANT: You are generating this BRD based on the TECHNICAL DOCUMENTATION that was generated from analyzing the repository{' AND the connected DATABASE SCHEMA' if database_schema else ''}.
-Your BRD must:
-1. Reference the existing components, APIs, and features from the documentation
-2. Align technical considerations with the documented architecture and tech stack
-3. Consider existing data models and dependencies
-4. Build upon the documented features rather than reinventing them
-{'5. Reference the database tables and their relationships when specifying data requirements' if database_schema else ''}
-
-Return a JSON object with this structure:
-{{
-  "title": "BRD title",
-  "version": "1.0",
-  "status": "draft",
-  "sourceDocumentation": "Title of the source documentation this BRD is based on",
-  "content": {{
-    "overview": "Executive summary",
-    "objectives": ["List of business objectives"],
-    "scope": {{"inScope": ["What's included"], "outOfScope": ["What's excluded"]}},
-    "existingSystemContext": {{
-      "relevantComponents": ["List existing components"],
-      "relevantAPIs": ["List existing APIs"],
-      "dataModelsAffected": ["List data models"]
-    }},
-    "functionalRequirements": [
-      {{
-        "id": "FR-001",
-        "title": "Requirement title",
-        "description": "Detailed description",
-        "priority": "high|medium|low",
-        "acceptanceCriteria": ["List of criteria"],
-        "relatedComponents": ["Existing components this affects"]
-      }}
-    ],
-    "nonFunctionalRequirements": [
-      {{"id": "NFR-001", "category": "Performance", "description": "Description"}}
-    ],
-    "technicalConsiderations": ["List of technical considerations"],
-    "dependencies": ["List of dependencies"],
-    "assumptions": ["List of assumptions"],
-    "risks": [{{"description": "Risk description", "mitigation": "Mitigation strategy"}}]
-  }}
-}}"""
-
-    user_prompt = f"""Generate a comprehensive Business Requirements Document for:
-
-Feature Request: {feature_request.get('title', '')}
-Description: {feature_request.get('description', '')}
-Request Type: {feature_request.get('requestType', 'feature')}
-
-{documentation_context}
-{database_schema_context}
-{knowledge_base_context}"""
+    user_prompt = prompt_loader.get_prompt("ai_service.yml", "generate_brd_user").format(
+        feature_title=feature_request.get('title', ''),
+        feature_description=feature_request.get('description', ''),
+        request_type=feature_request.get('requestType', 'feature'),
+        documentation_context=documentation_context,
+        database_schema_context=database_schema_context,
+        knowledge_base_context=knowledge_base_context
+    )
 
     prompt = build_prompt(system_prompt, user_prompt)
     response_text = await call_pwc_genai(prompt)
@@ -704,41 +570,15 @@ Request Type: {feature_request.get('requestType', 'feature')}
 
 
 async def generate_test_cases(brd: Dict[str, Any], analysis: Optional[Dict[str, Any]], documentation: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    system_prompt = """You are a QA engineer creating comprehensive test cases from a Business Requirements Document.
-
-Generate test cases for each functional requirement. For each requirement, create test cases in these categories:
-1. happy_path - Normal successful flow
-2. edge_case - Boundary conditions and unusual but valid inputs
-3. negative - Invalid inputs and error handling
-4. e2e - End-to-end user journey tests
-
-Return a JSON array of test cases:
-[
-  {
-    "requirementId": "FR-001",
-    "title": "Test case title",
-    "description": "What this test verifies",
-    "category": "happy_path|edge_case|negative|e2e",
-    "type": "unit|integration|e2e|acceptance",
-    "priority": "critical|high|medium|low",
-    "preconditions": ["List of preconditions"],
-    "steps": [{"step": 1, "action": "What to do", "expectedResult": "What should happen"}],
-    "expectedOutcome": "Final expected result",
-    "codeSnippet": "Optional code example"
-  }
-]"""
+    system_prompt = prompt_loader.get_prompt("ai_service.yml", "generate_test_cases_system")
 
     brd_content = brd.get("content", {})
-    user_prompt = f"""Generate test cases for this BRD:
-
-Title: {brd.get('title', '')}
-Overview: {brd_content.get('overview', '')}
-
-Functional Requirements:
-{json.dumps(brd_content.get('functionalRequirements', []), indent=2)}
-
-Non-Functional Requirements:
-{json.dumps(brd_content.get('nonFunctionalRequirements', []), indent=2)}"""
+    user_prompt = prompt_loader.get_prompt("ai_service.yml", "generate_test_cases_user").format(
+        brd_title=brd.get('title', ''),
+        brd_overview=brd_content.get('overview', ''),
+        functional_requirements_json=json.dumps(brd_content.get('functionalRequirements', []), indent=2),
+        non_functional_requirements_json=json.dumps(brd_content.get('nonFunctionalRequirements', []), indent=2)
+    )
 
     prompt = build_prompt(system_prompt, user_prompt)
     response_text = await call_pwc_genai(prompt)
@@ -749,26 +589,7 @@ Non-Functional Requirements:
 
 
 async def generate_test_data(test_cases: List[Dict[str, Any]], brd: Dict[str, Any], documentation: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    system_prompt = """You are a test data engineer creating realistic test data for test cases.
-
-Generate test data sets for each test case. Include:
-1. valid - Normal valid data
-2. invalid - Invalid data for negative testing
-3. edge - Edge case data (min/max values, empty strings, etc.)
-4. boundary - Boundary condition data
-
-IMPORTANT: Return ONLY a valid JSON array. Do NOT include any text before or after the JSON. Do NOT use markdown code fences. Ensure all string values are properly escaped (no unescaped quotes, newlines, or special characters inside strings).
-
-Return format:
-[
-  {
-    "testCaseId": "test case id",
-    "name": "Test data name",
-    "description": "What this data tests",
-    "dataType": "valid|invalid|edge|boundary",
-    "data": {"field1": "value1", "field2": "value2"}
-  }
-]"""
+    system_prompt = prompt_loader.get_prompt("ai_service.yml", "generate_test_data_system")
 
     tc_summaries = []
     for tc in test_cases:
@@ -781,13 +602,9 @@ Return format:
             "expectedOutcome": tc.get("expectedOutcome", "")
         })
 
-    user_prompt = f"""Generate test data for these test cases:
-
-{json.dumps(tc_summaries, indent=2)}
-
-BRD Context:
-Title: {brd.get('title', '')}
-Overview: {brd.get('content', {}).get('overview', '')}"""
+    user_prompt = prompt_loader.get_prompt("ai_service.yml", "generate_test_data_user").format(
+        test_cases_json=json.dumps(tc_summaries, indent=2)
+    )
 
     prompt = build_prompt(system_prompt, user_prompt)
     
@@ -819,33 +636,7 @@ async def generate_user_stories(
     parent_context: Optional[str],
     knowledge_context: Optional[str]
 ) -> List[Dict[str, Any]]:
-    system_prompt = """You are a product owner creating JIRA-style user stories from a Business Requirements Document.
-
-Generate user stories following this format:
-- As a [role], I want [feature], so that [benefit]
-- Include detailed acceptance criteria
-- Add story points estimate (1, 2, 3, 5, 8, 13)
-- Include relevant labels
-
-Return a JSON array of user stories:
-[
-  {
-    "storyKey": "US-001",
-    "title": "User story title",
-    "description": "Detailed description",
-    "asA": "role",
-    "iWant": "feature",
-    "soThat": "benefit",
-    "acceptanceCriteria": ["AC1", "AC2"],
-    "priority": "highest|high|medium|low|lowest",
-    "storyPoints": 5,
-    "labels": ["label1", "label2"],
-    "epic": "Epic name if applicable",
-    "relatedRequirementId": "FR-001",
-    "technicalNotes": "Implementation notes",
-    "dependencies": ["Other story dependencies"]
-  }
-]"""
+    system_prompt = prompt_loader.get_prompt("ai_service.yml", "generate_user_stories_system")
 
     brd_content = brd.get("content", {})
     context_parts = []
@@ -856,16 +647,13 @@ Return a JSON array of user stories:
     if database_schema:
         context_parts.append(f"Database Schema: {database_schema.get('databaseName', '')} with {len(database_schema.get('tables', []))} tables")
 
-    user_prompt = f"""Generate user stories for this BRD:
-
-Title: {brd.get('title', '')}
-Overview: {brd_content.get('overview', '')}
-Request Type: {brd.get('requestType', 'feature')}
-
-Functional Requirements:
-{json.dumps(brd_content.get('functionalRequirements', []), indent=2)}
-
-{chr(10).join(context_parts)}"""
+    user_prompt = prompt_loader.get_prompt("ai_service.yml", "generate_user_stories_user").format(
+        brd_title=brd.get('title', ''),
+        brd_overview=brd_content.get('overview', ''),
+        request_type=brd.get('requestType', 'feature'),
+        functional_requirements_json=json.dumps(brd_content.get('functionalRequirements', []), indent=2),
+        context_parts=chr(10).join(context_parts)
+    )
 
     prompt = build_prompt(system_prompt, user_prompt)
     response_text = await call_pwc_genai(prompt)
@@ -882,50 +670,7 @@ async def generate_copilot_prompt(
     database_schema: Optional[Dict[str, Any]],
     feature_request: Optional[Dict[str, Any]] = None
 ) -> str:
-    system_prompt = """You are an expert prompt engineer creating a highly detailed, implementation-ready VS Code Copilot prompt. The prompt you generate will be used by a developer to implement specific user stories in an existing codebase.
-
-Your generated prompt MUST include ALL of the following sections with rich detail:
-
-## 1. PROJECT CONTEXT
-- Repository name, description, and purpose
-- Full architecture overview (frontend, backend, API design, data flow)
-- Complete tech stack with versions where available
-- Existing code patterns and conventions the developer must follow
-
-## 2. REPOSITORY STRUCTURE
-- Directory layout and file organization
-- Key files and their responsibilities
-- Module boundaries and dependencies
-
-## 3. TASK BREAKDOWN (Most Important Section)
-For EACH user story, create an elaborate implementation task that includes:
-- **What to build**: Detailed functional description
-- **Where to implement**: Exact files to create or modify, with file paths
-- **How to implement**: Step-by-step implementation approach
-- **Data models**: Any new or modified data structures/schemas needed
-- **API endpoints**: New routes, request/response schemas, HTTP methods
-- **UI components**: Frontend components to create or modify
-- **Business logic**: Core logic, validation rules, edge cases to handle
-- **Integration points**: How this connects to existing code
-- **Acceptance criteria**: Specific conditions that must be met
-
-## 4. TECHNICAL CONSTRAINTS
-- Code style and naming conventions from the existing codebase
-- Framework-specific patterns to follow
-- Error handling approach
-- Security considerations
-
-## 5. TESTING REQUIREMENTS
-- Unit tests needed
-- Integration test scenarios
-- Edge cases to test
-
-## 6. DATABASE CHANGES (if applicable)
-- New tables/columns needed
-- Migration scripts
-- Relationships and constraints
-
-Make the prompt comprehensive enough that a developer can implement each story without needing additional context. Be specific about file paths, function names, and code patterns from the existing codebase."""
+    system_prompt = prompt_loader.get_prompt("ai_service.yml", "generate_copilot_prompt_system")
 
     stories_detail = []
     for i, s in enumerate(user_stories, 1):
@@ -1035,57 +780,27 @@ Make the prompt comprehensive enough that a developer can implement each story w
         req_section += "\n"
         context_sections.append(req_section)
 
-    user_prompt = f"""Generate a comprehensive, implementation-ready VS Code Copilot prompt for the following user stories.
-
-Include the FULL repository context, architecture details, file structure, and code patterns so the developer has everything needed for accurate code generation.
-
-For each user story, elaborate the TASK extensively - specify exact files to modify/create, function signatures, data models, API routes, UI components, validation logic, and step-by-step implementation instructions.
-
----
-
-# USER STORIES TO IMPLEMENT
-
-{chr(10).join(stories_detail)}
-
----
-
-# CODEBASE CONTEXT
-
-{chr(10).join(context_sections)}
-
----
-
-Generate the Copilot prompt now. Make the Task section for each story extremely detailed with specific file paths, code patterns to follow, and implementation steps. The prompt should be self-contained so a developer can implement everything without needing to ask questions."""
+    user_prompt = prompt_loader.get_prompt("ai_service.yml", "generate_copilot_prompt_user").format(
+        stories_detail=chr(10).join(stories_detail),
+        context_sections=chr(10).join(context_sections)
+    )
 
     prompt = build_prompt(system_prompt, user_prompt)
     return await call_pwc_genai(prompt)
 
 
 async def find_related_stories(feature_description: str, jira_stories: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    system_prompt = """You are analyzing JIRA stories to find ones semantically related to a new feature request.
-
-Return a JSON array of related story objects. Include only stories that are genuinely related.
-Score each story from 0.0 to 1.0 based on relevance.
-
-Return format:
-[
-  {"key": "PROJ-123", "summary": "Story summary", "relevanceScore": 0.85, "reason": "Why it's related"}
-]
-
-If no stories are related, return an empty array: []"""
+    system_prompt = prompt_loader.get_prompt("ai_service.yml", "find_related_stories_system")
 
     stories_text = "\n".join([
         f"- {s.get('key', '')}: {s.get('summary', '')} [{s.get('issueType', 'Story')}]"
         for s in jira_stories
     ])
 
-    user_prompt = f"""Find JIRA stories related to this feature:
-
-Feature Description:
-{feature_description}
-
-Available JIRA Stories:
-{stories_text}"""
+    user_prompt = prompt_loader.get_prompt("ai_service.yml", "find_related_stories_user").format(
+        feature_description=feature_description,
+        stories_text=stories_text
+    )
 
     prompt = build_prompt(system_prompt, user_prompt)
     response_text = await call_pwc_genai(prompt)

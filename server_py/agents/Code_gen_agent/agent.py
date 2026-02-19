@@ -11,6 +11,7 @@ from typing import Dict, Any, List, Optional
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from ai import call_pwc_genai, build_prompt, parse_json_response
+from ..prompts import prompt_loader
 
 
 class CodeGenAgent:
@@ -232,46 +233,15 @@ class CodeGenAgent:
             })
 
             plan_prompt = build_prompt(
-                """You are an expert software architect creating an implementation plan for user stories.
-You MUST analyze the existing codebase architecture, patterns, and coding standards before proposing changes.
-
-CRITICAL RULES:
-- Follow the EXACT same coding patterns, naming conventions, and file organization as the existing codebase
-- Use the SAME libraries, frameworks, and tools already in the project
-- Code must integrate seamlessly with existing code - no standalone scripts
-- Match indentation style, import patterns, error handling patterns from existing code
-- If the project uses TypeScript, write TypeScript. If Python, write Python, etc.
-- Create new files ONLY where the existing project structure suggests they should go
-- Modify existing files where appropriate instead of always creating new ones
-
-Return a JSON array of file changes. Each entry must be:
-{
-  "file_path": "path/to/file.ext",
-  "action": "create" | "modify",
-  "description": "What this change does and which user story it addresses",
-  "story_refs": ["US-1", "US-2"]
-}
-
-Return ONLY valid JSON array. No other text.""",
-                f"""## Repository Structure
-{file_tree}
-
-## Configuration Files
-{key_files_text}
-
-## Architecture Context
-{arch_context}
-
-## Existing Source Code Samples
-{source_samples}
-
-## User Stories to Implement
-{stories_text}
-
-## Copilot Prompt (Context)
-{copilot_prompt[:3000]}
-
-Create an implementation plan listing all files to create or modify."""
+                prompt_loader.get_prompt("code_gen_agent.yml", "plan_implementation_system"),
+                prompt_loader.get_prompt("code_gen_agent.yml", "plan_implementation_user").format(
+                    file_tree=file_tree,
+                    key_files_text=key_files_text,
+                    arch_context=arch_context,
+                    source_samples=source_samples,
+                    stories_text=stories_text,
+                    copilot_prompt=copilot_prompt[:3000]
+                )
             )
 
             import asyncio
@@ -347,66 +317,27 @@ Create an implementation plan listing all files to create or modify."""
 
                 if action == "modify":
                     code_prompt = build_prompt(
-                        f"""You are an expert {language} developer. You must modify an existing file to implement the required changes.
-
-CRITICAL RULES:
-- Keep ALL existing functionality intact - only add or change what's needed
-- Follow the EXACT same coding style, patterns, and conventions as the existing code
-- Use the same imports, error handling, and naming conventions
-- Do NOT remove any existing code unless it directly conflicts with the new feature
-- Ensure the modified code compiles/runs without errors
-- Output ONLY the complete modified file content, no explanations or markdown fences""",
-                        f"""## File to modify: {file_path}
-
-## Current file content:
-```
-{existing_content}
-```
-
-## Related files in same directory (for reference):
-{related_files_content}
-
-## What to implement:
-{description}
-
-## User Stories being addressed:
-{stories_text}
-
-## Architecture Context:
-{arch_context}
-
-Output the COMPLETE modified file content:"""
+                        prompt_loader.get_prompt("code_gen_agent.yml", "modify_file_system").format(language=language),
+                        prompt_loader.get_prompt("code_gen_agent.yml", "modify_file_user").format(
+                            file_path=file_path,
+                            existing_content=existing_content,
+                            related_files_content=related_files_content,
+                            description=description,
+                            stories_text=stories_text,
+                            arch_context=arch_context
+                        )
                     )
                 else:
                     code_prompt = build_prompt(
-                        f"""You are an expert {language} developer. You must create a new file that integrates seamlessly with the existing codebase.
-
-CRITICAL RULES:
-- Follow the EXACT same coding style, patterns, and conventions as existing files in this project
-- Use the same imports, error handling, and naming conventions as sibling files
-- The new file must work as part of the existing codebase, not as a standalone script
-- Use proper imports referencing other modules in the project
-- Match indentation (tabs vs spaces), quote style, and formatting
-- Ensure the code compiles/runs without errors
-- Output ONLY the file content, no explanations or markdown fences""",
-                        f"""## New file to create: {file_path}
-
-## Related files in same directory (for reference and style matching):
-{related_files_content}
-
-## Project configuration:
-{key_files_text[:2000]}
-
-## What to implement:
-{description}
-
-## User Stories being addressed:
-{stories_text}
-
-## Architecture Context:
-{arch_context}
-
-Output the COMPLETE file content:"""
+                        prompt_loader.get_prompt("code_gen_agent.yml", "create_file_system").format(language=language),
+                        prompt_loader.get_prompt("code_gen_agent.yml", "create_file_user").format(
+                            file_path=file_path,
+                            related_files_content=related_files_content,
+                            key_files_text=key_files_text[:2000],
+                            description=description,
+                            stories_text=stories_text,
+                            arch_context=arch_context
+                        )
                     )
 
                 try:

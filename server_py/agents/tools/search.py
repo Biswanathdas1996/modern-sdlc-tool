@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Optional
 import re
 
 from core.logging import log_info, log_error, log_debug
+from ..prompts import prompt_loader
 
 
 async def generate_jql_from_query(ai_service, query: str, project_key: Optional[str] = None) -> Optional[str]:
@@ -19,45 +20,9 @@ async def generate_jql_from_query(ai_service, query: str, project_key: Optional[
     try:
         log_info(f"Generating JQL for: {query}", "jql_generator")
         
-        prompt = f"""Convert this natural language query to JIRA Query Language (JQL).
-
-Query: "{query}"
-
-JQL Syntax Reference:
-- Field operators: =, !=, ~, !~, >, <, >=, <=, IN, NOT IN, IS, IS NOT
-- Text search: summary ~ "keyword" or text ~ "keyword" (contains)
-- Issue types: type = Bug, type = Story, type = Task, type = Epic, type = "Sub-task"
-- Status: status = "In Progress", status = Done, status = "To Do", status IN ("In Progress", "In Review")
-- Priority: priority = High, priority = Critical, priority = Medium, priority = Low
-- Labels: labels = "bug-fix", labels IN ("urgent", "frontend")
-- Components: component = "Backend", component IN ("API", "Database")
-- Assignee: assignee = currentUser(), assignee = "John Doe", assignee IS EMPTY
-- Reporter: reporter = currentUser(), reporter = "Jane Doe"
-- Date functions: created >= -7d (last 7 days), created >= startOfWeek(), updated >= -1w
-- Sprint: sprint IN openSprints(), sprint = "Sprint 5"
-- Resolution: resolution = Unresolved, resolution IS EMPTY
-- Logical operators: AND, OR, NOT
-- Ordering: ORDER BY created DESC, ORDER BY priority ASC
-
-Examples:
-- "high priority bugs" -> type = Bug AND priority IN (High, Critical) ORDER BY priority DESC
-- "my open tasks" -> assignee = currentUser() AND resolution = Unresolved AND type = Task
-- "bugs created this week" -> type = Bug AND created >= startOfWeek() ORDER BY created DESC
-- "stories in progress" -> type = Story AND status = "In Progress"
-- "unassigned tickets" -> assignee IS EMPTY AND resolution = Unresolved
-- "issues with label frontend" -> labels = "frontend"
-- "critical issues updated recently" -> priority = Critical AND updated >= -3d
-- "epics in backlog" -> type = Epic AND status = Backlog
-
-Rules:
-1. Always include ORDER BY for better results (prefer created DESC or priority DESC)
-2. Use proper quoting for values with spaces
-3. Use resolution = Unresolved for open issues
-4. Be generous with interpretation - if user mentions "bugs", include type = Bug
-5. If query mentions time ("recent", "this week", "today"), use appropriate date functions
-6. For vague queries, create a broad but sensible JQL
-
-Return ONLY the JQL query, nothing else. No explanation, no markdown."""
+        prompt = prompt_loader.get_prompt("tools.yml", "jql_generation").format(
+            query=query
+        )
 
         jql = await ai_service.call_genai(
             prompt=prompt,
