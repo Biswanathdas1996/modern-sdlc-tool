@@ -86,6 +86,82 @@ def _fix_invalid_escapes(text: str) -> str:
     return ''.join(result)
 
 
+def _fix_truncated_json(text: str) -> str:
+    text = text.rstrip()
+    if text.endswith(","):
+        text = text[:-1]
+    
+    open_braces = text.count("{") - text.count("}")
+    open_brackets = text.count("[") - text.count("]")
+    
+    in_string = False
+    escape_next = False
+    for ch in text:
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\":
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+    
+    if in_string:
+        text += '"'
+
+    text = text.rstrip().rstrip(",")
+    
+    for _ in range(open_braces):
+        text += "}"
+    for _ in range(open_brackets):
+        text += "]"
+    
+    return text
+
+
+def _sanitize_json_string_values(text: str) -> str:
+    result = []
+    i = 0
+    in_string = False
+    while i < len(text):
+        ch = text[i]
+        if ch == '\\' and in_string and i + 1 < len(text):
+            next_ch = text[i + 1]
+            if next_ch in ('"', '\\', '/', 'b', 'f', 'n', 'r', 't', 'u'):
+                result.append(ch)
+                result.append(next_ch)
+                i += 2
+                continue
+            else:
+                result.append('\\\\')
+                i += 1
+                continue
+        if ch == '"':
+            if not in_string:
+                in_string = True
+                result.append(ch)
+            else:
+                if i + 1 < len(text) and text[i + 1] not in (',', '}', ']', ':', '\n', '\r', ' ', '\t'):
+                    result.append('\\"')
+                else:
+                    in_string = False
+                    result.append(ch)
+            i += 1
+            continue
+        if in_string and ch in ('\n', '\r', '\t'):
+            if ch == '\n':
+                result.append('\\n')
+            elif ch == '\r':
+                result.append('\\r')
+            elif ch == '\t':
+                result.append('\\t')
+            i += 1
+            continue
+        result.append(ch)
+        i += 1
+    return ''.join(result)
+
+
 def parse_json_response(text: str) -> Any:
     cleaned = text.strip()
     if cleaned.startswith("```json"):
@@ -108,25 +184,52 @@ def parse_json_response(text: str) -> Any:
         except json.JSONDecodeError:
             pass
         
-        print("Escape fix failed, attempting regex extraction...")
+        print("Attempting sanitize fix...")
+        try:
+            sanitized = _sanitize_json_string_values(stripped)
+            return json.loads(sanitized)
+        except json.JSONDecodeError:
+            pass
         
-        object_match = re.search(r'\{[\s\S]*\}', text)
-        if object_match:
-            try:
-                return json.loads(object_match.group(0))
-            except json.JSONDecodeError:
-                try:
-                    return json.loads(_fix_invalid_escapes(object_match.group(0)))
-                except:
-                    pass
+        print("Attempting truncated JSON fix...")
+        try:
+            truncated_fix = _fix_truncated_json(stripped)
+            return json.loads(truncated_fix)
+        except json.JSONDecodeError:
+            pass
+        try:
+            truncated_fix = _fix_truncated_json(_sanitize_json_string_values(stripped))
+            return json.loads(truncated_fix)
+        except json.JSONDecodeError:
+            pass
+        
+        print("Attempting regex extraction...")
         
         array_match = re.search(r'\[[\s\S]*\]', text)
         if array_match:
-            try:
-                return json.loads(array_match.group(0))
-            except json.JSONDecodeError:
+            candidate = array_match.group(0)
+            for attempt_fn in [
+                lambda t: t,
+                _fix_invalid_escapes,
+                _sanitize_json_string_values,
+                lambda t: _fix_truncated_json(_sanitize_json_string_values(t)),
+            ]:
                 try:
-                    return json.loads(_fix_invalid_escapes(array_match.group(0)))
+                    return json.loads(attempt_fn(candidate))
+                except:
+                    pass
+
+        object_match = re.search(r'\{[\s\S]*\}', text)
+        if object_match:
+            candidate = object_match.group(0)
+            for attempt_fn in [
+                lambda t: t,
+                _fix_invalid_escapes,
+                _sanitize_json_string_values,
+                lambda t: _fix_truncated_json(_sanitize_json_string_values(t)),
+            ]:
+                try:
+                    return json.loads(attempt_fn(candidate))
                 except:
                     pass
         
@@ -654,7 +757,9 @@ Generate test data sets for each test case. Include:
 3. edge - Edge case data (min/max values, empty strings, etc.)
 4. boundary - Boundary condition data
 
-Return a JSON array of test data:
+IMPORTANT: Return ONLY a valid JSON array. Do NOT include any text before or after the JSON. Do NOT use markdown code fences. Ensure all string values are properly escaped (no unescaped quotes, newlines, or special characters inside strings).
+
+Return format:
 [
   {
     "testCaseId": "test case id",
@@ -665,18 +770,46 @@ Return a JSON array of test data:
   }
 ]"""
 
+    tc_summaries = []
+    for tc in test_cases:
+        tc_summaries.append({
+            "id": tc.get("id", ""),
+            "title": tc.get("title", ""),
+            "category": tc.get("category", ""),
+            "description": tc.get("description", ""),
+            "steps": tc.get("steps", []),
+            "expectedOutcome": tc.get("expectedOutcome", "")
+        })
+
     user_prompt = f"""Generate test data for these test cases:
 
-{json.dumps([{"id": tc.get("id", ""), "title": tc.get("title", ""), "category": tc.get("category", "")} for tc in test_cases], indent=2)}
+{json.dumps(tc_summaries, indent=2)}
 
 BRD Context:
 Title: {brd.get('title', '')}
 Overview: {brd.get('content', {}).get('overview', '')}"""
 
     prompt = build_prompt(system_prompt, user_prompt)
-    response_text = await call_pwc_genai(prompt)
     
-    return parse_json_response(response_text)
+    max_retries = 2
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            response_text = await call_pwc_genai(prompt)
+            result = parse_json_response(response_text)
+            if isinstance(result, list):
+                return result
+            elif isinstance(result, dict):
+                return [result]
+            else:
+                raise ValueError(f"Unexpected response type: {type(result)}")
+        except Exception as e:
+            last_error = e
+            print(f"Test data generation attempt {attempt + 1} failed: {e}")
+            if attempt < max_retries - 1:
+                print("Retrying...")
+    
+    raise last_error
 
 
 async def generate_user_stories(
