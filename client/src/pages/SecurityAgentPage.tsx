@@ -313,7 +313,6 @@ export default function SecurityAgentPage() {
   const [input, setInput] = useState("");
   const [sessionId, setSessionId] = useState(() => generateSessionId());
   const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -349,9 +348,6 @@ export default function SecurityAgentPage() {
     },
   });
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -515,7 +511,6 @@ export default function SecurityAgentPage() {
                       </div>
                     </div>
                   )}
-                  <div ref={messagesEndRef} />
                 </div>
               )}
             </div>

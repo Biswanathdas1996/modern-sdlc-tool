@@ -242,7 +242,6 @@ export default function UnitTestAgentPage() {
   const [pushCommitMsg, setPushCommitMsg] = useState("feat: add AI-generated unit tests");
   const [isPushing, setIsPushing] = useState(false);
   const lastStepCountRef = useRef(0);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { getSessionArtifact } = useSession();
 
@@ -410,9 +409,6 @@ export default function UnitTestAgentPage() {
     return () => clearInterval(interval);
   }, [activeTaskId]);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, progressSteps]);
 
   const handlePushToGitHub = async () => {
     setIsPushing(true);
@@ -658,7 +654,6 @@ export default function UnitTestAgentPage() {
                       </div>
                     </div>
                   )}
-                  <div ref={messagesEndRef} />
                 </div>
               )}
             </div>
