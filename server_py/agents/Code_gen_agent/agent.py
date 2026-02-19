@@ -10,7 +10,8 @@ from typing import Dict, Any, List, Optional
 
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-from ai import call_pwc_genai, build_prompt, parse_json_response
+from utils.pwc_llm import call_pwc_genai_async, build_pwc_prompt
+from ai import parse_json_response
 from prompts import prompt_loader
 
 
@@ -232,7 +233,7 @@ class CodeGenAgent:
                 "tool_name": "plan_implementation"
             })
 
-            plan_prompt = build_prompt(
+            plan_prompt = build_pwc_prompt(
                 prompt_loader.get_prompt("code_gen_agent.yml", "plan_implementation_system"),
                 prompt_loader.get_prompt("code_gen_agent.yml", "plan_implementation_user").format(
                     file_tree=file_tree,
@@ -246,7 +247,7 @@ class CodeGenAgent:
 
             import asyncio
             loop = asyncio.new_event_loop()
-            plan_text = loop.run_until_complete(call_pwc_genai(plan_prompt, temperature=0.3, max_tokens=4096))
+            plan_text = loop.run_until_complete(call_pwc_genai_async(plan_prompt, temperature=0.3, max_tokens=4096))
 
             try:
                 change_plan = parse_json_response(plan_text)
@@ -316,7 +317,7 @@ class CodeGenAgent:
                                 related_files_content += f"\n--- {rel} ---\n{sib_content}\n"
 
                 if action == "modify":
-                    code_prompt = build_prompt(
+                    code_prompt = build_pwc_prompt(
                         prompt_loader.get_prompt("code_gen_agent.yml", "modify_file_system").format(language=language),
                         prompt_loader.get_prompt("code_gen_agent.yml", "modify_file_user").format(
                             file_path=file_path,
@@ -328,7 +329,7 @@ class CodeGenAgent:
                         )
                     )
                 else:
-                    code_prompt = build_prompt(
+                    code_prompt = build_pwc_prompt(
                         prompt_loader.get_prompt("code_gen_agent.yml", "create_file_system").format(language=language),
                         prompt_loader.get_prompt("code_gen_agent.yml", "create_file_user").format(
                             file_path=file_path,
@@ -341,7 +342,7 @@ class CodeGenAgent:
                     )
 
                 try:
-                    generated_code = loop.run_until_complete(call_pwc_genai(code_prompt, temperature=0.2, max_tokens=4096))
+                    generated_code = loop.run_until_complete(call_pwc_genai_async(code_prompt, temperature=0.2, max_tokens=4096))
 
                     generated_code = generated_code.strip()
                     if generated_code.startswith("```"):

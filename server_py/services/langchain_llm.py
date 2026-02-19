@@ -4,24 +4,18 @@ from langchain_core.language_models.llms import LLM
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.outputs import GenerationChunk
 
-from services.ai_service import AIService
+from utils.pwc_llm import call_pwc_genai_async
 from core.logging import log_info
 
 
 class PwCGenAILLM(LLM):
-    """Custom LangChain LLM wrapper for PwC GenAI."""
+    """Custom LangChain LLM wrapper for PwC GenAI using centralized utility."""
     
     temperature: float = 0.7
     max_tokens: int = 4096
     
     class Config:
         arbitrary_types_allowed = True
-    
-    def __init__(self, **kwargs):
-        """Initialize the PwC GenAI LLM wrapper."""
-        super().__init__(**kwargs)
-        # Initialize ai_service after parent init
-        object.__setattr__(self, 'ai_service', AIService())
     
     @property
     def _llm_type(self) -> str:
@@ -63,14 +57,14 @@ class PwCGenAILLM(LLM):
         run_manager: Optional[CallbackManagerForLLMRun] = None,
         **kwargs: Any,
     ) -> str:
-        """Async call to PwC GenAI."""
+        """Async call to PwC GenAI using centralized utility."""
         log_info(f"LLM call with prompt length: {len(prompt)}", "pwc_genai_llm")
         
-        ai_service = object.__getattribute__(self, 'ai_service')
-        response = await ai_service.call_genai(
+        response = await call_pwc_genai_async(
             prompt=prompt,
             temperature=kwargs.get("temperature", self.temperature),
-            max_tokens=kwargs.get("max_tokens", self.max_tokens)
+            max_tokens=kwargs.get("max_tokens", self.max_tokens),
+            timeout=120
         )
         
         return response

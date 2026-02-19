@@ -1,69 +1,24 @@
 import os
 import re
 import json
-import httpx
 from typing import Optional, Dict, Any, List, Callable
 from prompts import prompt_loader
-
-GENAI_ENDPOINT = os.environ.get("PWC_GENAI_ENDPOINT_URL", "")
-API_KEY = os.environ.get("PWC_GENAI_API_KEY", "")
-BEARER_TOKEN = os.environ.get("PWC_GENAI_BEARER_TOKEN", "")
+from utils.pwc_llm import call_pwc_genai_async, build_pwc_prompt
 
 
+# Backward compatibility wrapper
 async def call_pwc_genai(prompt: str, temperature: float = 0.7, max_tokens: int = 4096) -> str:
-    if not API_KEY or not BEARER_TOKEN or not GENAI_ENDPOINT:
-        raise ValueError(
-            "PwC GenAI credentials not configured. Please provide PWC_GENAI_API_KEY, "
-            "PWC_GENAI_BEARER_TOKEN, and PWC_GENAI_ENDPOINT_URL."
-        )
-
-    request_body = {
-        "model": "vertex_ai.gemini-2.0-flash",
-        "prompt": prompt,
-        "temperature": temperature,
-        "top_p": 1,
-        "presence_penalty": 0,
-        "stream": False,
-        "stream_options": None,
-        "seed": 25,
-        "stop": None,
-    }
-
-    headers = {
-        "accept": "application/json",
-        "API-Key": API_KEY,
-        "Authorization": f"Bearer {BEARER_TOKEN}",
-        "Content-Type": "application/json",
-    }
-
-    print(f"Calling PwC GenAI with prompt length: {len(prompt)}")
-
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        response = await client.post(GENAI_ENDPOINT, json=request_body, headers=headers)
-
-    if response.status_code != 200:
-        print(f"PwC GenAI API error: {response.status_code} - {response.text}")
-        raise ValueError(f"PwC GenAI API Error: {response.status_code} - {response.text}")
-
-    result = response.json()
-    print(f"PwC GenAI API response received: {list(result.keys())}")
-
-    if "choices" in result and len(result["choices"]) > 0:
-        choice = result["choices"][0]
-        if "message" in choice and "content" in choice["message"]:
-            return choice["message"]["content"]
-        if "text" in choice:
-            return choice["text"]
-    if "text" in result:
-        return result["text"]
-    if "content" in result:
-        return result["content"]
-
-    raise ValueError("Unexpected response format from PwC GenAI API")
+    """
+    Legacy wrapper for PWC GenAI calls. Use utils.pwc_llm.call_pwc_genai_async directly.
+    """
+    return await call_pwc_genai_async(prompt, temperature, max_tokens)
 
 
 def build_prompt(system_message: str, user_message: str) -> str:
-    return f"System: {system_message}\n\nUser: {user_message}"
+    """
+    Legacy wrapper for building prompts. Use utils.pwc_llm.build_pwc_prompt directly.
+    """
+    return build_pwc_prompt(system_message, user_message)
 
 
 def _fix_invalid_escapes(text: str) -> str:
