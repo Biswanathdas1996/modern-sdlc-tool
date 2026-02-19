@@ -20,6 +20,12 @@ import httpx
 
 from storage import storage
 from models import AnalyzeRequest, RequirementsRequest
+from database import (
+    init_database, authenticate_user, create_session, get_session_user,
+    delete_session, get_user_permissions, create_user, get_all_users,
+    update_user_permissions, update_user_status, delete_user,
+    update_user_password, ALL_FEATURES, ALL_FEATURE_KEYS, cleanup_expired_sessions
+)
 from ai import (
     analyze_repository, generate_documentation, generate_bpmn_diagram,
     generate_brd, generate_test_cases, generate_test_data,
@@ -54,9 +60,50 @@ app.add_middleware(
 )
 
 
+try:
+    init_database()
+    print("[AUTH] Database initialized successfully")
+except Exception as e:
+    print(f"[AUTH] Database init error: {e}")
+
+
 def log(message: str, source: str = "express"):
     formatted_time = datetime.now().strftime("%I:%M:%S %p")
     print(f"{formatted_time} [{source}] {message}")
+
+
+SESSION_COOKIE = "docugen_session"
+
+
+def get_current_user(request: Request) -> Optional[dict]:
+    session_id = request.cookies.get(SESSION_COOKIE)
+    if not session_id:
+        return None
+    return get_session_user(session_id)
+
+
+def require_auth(request: Request) -> dict:
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return user
+
+
+def require_admin(request: Request) -> dict:
+    user = require_auth(request)
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
+def require_feature(request: Request, feature_key: str) -> dict:
+    user = require_auth(request)
+    if user["role"] == "admin":
+        return user
+    permissions = get_user_permissions(user["id"])
+    if feature_key not in permissions:
+        raise HTTPException(status_code=403, detail=f"Access to {feature_key} is not granted")
+    return user
 
 
 @app.middleware("http")
@@ -69,6 +116,166 @@ async def log_requests(request: Request, call_next):
         log(f"{request.method} {request.url.path} {response.status_code} in {duration:.0f}ms")
     
     return response
+
+
+@app.post("/api/auth/login")
+async def login(request: Request):
+    try:
+        body = await request.json()
+        email = body.get("email", "").strip()
+        password = body.get("password", "")
+        if not email or not password:
+            raise HTTPException(status_code=400, detail="Email and password are required")
+        user = authenticate_user(email, password)
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        session_id = create_session(user["id"])
+        permissions = get_user_permissions(user["id"])
+        response = JSONResponse(content={
+            "user": {
+                "id": user["id"],
+                "username": user["username"],
+                "email": user["email"],
+                "role": user["role"],
+            },
+            "permissions": permissions,
+        })
+        response.set_cookie(
+            key=SESSION_COOKIE,
+            value=session_id,
+            httponly=True,
+            samesite="lax",
+            max_age=86400,
+            path="/",
+        )
+        return response
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Login error: {e}")
+        raise HTTPException(status_code=500, detail="Login failed")
+
+
+@app.post("/api/auth/logout")
+async def logout(request: Request):
+    session_id = request.cookies.get(SESSION_COOKIE)
+    if session_id:
+        delete_session(session_id)
+    response = JSONResponse(content={"success": True})
+    response.delete_cookie(key=SESSION_COOKIE, path="/")
+    return response
+
+
+@app.get("/api/auth/me")
+async def get_me(request: Request):
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    permissions = get_user_permissions(user["id"])
+    return {
+        "user": {
+            "id": user["id"],
+            "username": user["username"],
+            "email": user["email"],
+            "role": user["role"],
+        },
+        "permissions": permissions,
+    }
+
+
+@app.get("/api/auth/features")
+async def get_features():
+    return ALL_FEATURES
+
+
+@app.get("/api/admin/users")
+async def admin_get_users(request: Request):
+    require_admin(request)
+    return get_all_users()
+
+
+@app.post("/api/admin/users")
+async def admin_create_user(request: Request):
+    require_admin(request)
+    try:
+        body = await request.json()
+        username = body.get("username", "").strip()
+        email = body.get("email", "").strip()
+        password = body.get("password", "")
+        role = body.get("role", "user")
+        features = body.get("features", [])
+        if not username or not email or not password:
+            raise HTTPException(status_code=400, detail="Username, email, and password are required")
+        if role not in ("admin", "user"):
+            raise HTTPException(status_code=400, detail="Role must be admin or user")
+        user = create_user(username, email, password, role, features)
+        return user
+    except ValueError as ve:
+        raise HTTPException(status_code=409, detail=str(ve))
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Create user error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create user")
+
+
+@app.patch("/api/admin/users/{user_id}/permissions")
+async def admin_update_permissions(user_id: str, request: Request):
+    require_admin(request)
+    try:
+        body = await request.json()
+        features = body.get("features", [])
+        valid_features = [f for f in features if f in ALL_FEATURE_KEYS]
+        user = update_user_permissions(user_id, valid_features)
+        return user
+    except Exception as e:
+        print(f"Update permissions error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update permissions")
+
+
+@app.patch("/api/admin/users/{user_id}/status")
+async def admin_update_status(user_id: str, request: Request):
+    require_admin(request)
+    try:
+        body = await request.json()
+        is_active = body.get("is_active", True)
+        user = update_user_status(user_id, is_active)
+        return user
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        print(f"Update status error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update user status")
+
+
+@app.patch("/api/admin/users/{user_id}/password")
+async def admin_reset_password(user_id: str, request: Request):
+    require_admin(request)
+    try:
+        body = await request.json()
+        new_password = body.get("password", "")
+        if not new_password or len(new_password) < 6:
+            raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+        update_user_password(user_id, new_password)
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Reset password error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to reset password")
+
+
+@app.delete("/api/admin/users/{user_id}")
+async def admin_delete_user(user_id: str, request: Request):
+    require_admin(request)
+    try:
+        delete_user(user_id)
+        return {"success": True}
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        print(f"Delete user error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete user")
 
 
 @app.get("/api/projects")
@@ -147,9 +354,11 @@ async def run_analysis(project_id: str, repo_url: str):
 
 
 @app.post("/api/projects/analyze")
-async def analyze_project(request: AnalyzeRequest, background_tasks: BackgroundTasks):
+async def analyze_project(request: Request, background_tasks: BackgroundTasks):
+    require_feature(request, "analyze")
     try:
-        repo_url = request.repoUrl
+        body = await request.json()
+        repo_url = body.get("repoUrl", "")
         
         match = re.match(r"github\.com/([^/]+)/([^/]+)", repo_url.replace("https://", ""))
         if not match:
@@ -192,7 +401,8 @@ async def get_current_analysis():
 
 
 @app.get("/api/documentation/current")
-async def get_current_documentation():
+async def get_current_documentation(request: Request):
+    require_feature(request, "documentation")
     try:
         projects = storage.get_all_projects()
         if not projects:
@@ -419,6 +629,7 @@ async def delete_current_database_schema():
 
 @app.post("/api/requirements")
 async def create_requirements(
+    request: Request,
     title: str = Form(...),
     description: Optional[str] = Form(None),
     inputType: str = Form(...),
@@ -426,6 +637,7 @@ async def create_requirements(
     file: Optional[UploadFile] = File(None),
     audio: Optional[UploadFile] = File(None)
 ):
+    require_feature(request, "requirements")
     try:
         projects = storage.get_all_projects()
         project_id = projects[0].id if projects else "global"
@@ -471,6 +683,7 @@ async def get_current_brd():
 
 @app.post("/api/brd/generate")
 async def generate_brd_endpoint(request: Request):
+    require_feature(request, "brd")
     try:
         body = {}
         try:
@@ -629,6 +842,7 @@ async def get_test_cases():
 
 @app.post("/api/test-cases/generate")
 async def generate_test_cases_endpoint(request: Request):
+    require_feature(request, "test_cases")
     try:
         body = {}
         try:
@@ -703,6 +917,7 @@ async def get_test_data():
 
 @app.post("/api/test-data/generate")
 async def generate_test_data_endpoint(request: Request):
+    require_feature(request, "test_data")
     try:
         body = {}
         try:
@@ -808,6 +1023,7 @@ async def get_user_stories(brd_id: str):
 
 @app.post("/api/user-stories/generate")
 async def generate_user_stories_endpoint(request: Request):
+    require_feature(request, "user_stories")
     try:
         body = await request.json() if request.headers.get("content-type") == "application/json" else {}
         parent_jira_key = body.get("parentJiraKey")
@@ -1020,6 +1236,7 @@ async def find_related_jira_stories_endpoint(request: Request):
 @app.post("/api/v1/jira-agent/chat")
 async def chat_with_jira_agent(request: Request):
     """Interactive chat endpoint with smart information gathering."""
+    require_feature(request, "agent_jira")
     try:
         import uuid
         body = await request.json()
@@ -1195,6 +1412,7 @@ async def jira_agent_health():
 
 @app.post("/api/v1/security-agent/chat")
 async def chat_with_security_agent(request: Request):
+    require_feature(request, "agent_security")
     try:
         body = await request.json()
         prompt = body.get("prompt")
@@ -1214,6 +1432,7 @@ async def chat_with_security_agent(request: Request):
 
 @app.post("/api/v1/unit-test-agent/chat")
 async def chat_with_unit_test_agent(request: Request):
+    require_feature(request, "agent_unit_test")
     try:
         body = await request.json()
         prompt = body.get("prompt")
@@ -1404,6 +1623,7 @@ async def push_tests_to_github(request: Request):
 
 @app.post("/api/v1/web-test-agent/chat")
 async def chat_with_web_test_agent(request: Request):
+    require_feature(request, "agent_web_test")
     try:
         body = await request.json()
         prompt = body.get("prompt")
@@ -1424,6 +1644,7 @@ async def chat_with_web_test_agent(request: Request):
 
 @app.post("/api/v1/code-gen/generate")
 async def start_code_generation(request: Request):
+    require_feature(request, "code_generation")
     try:
         body = await request.json()
         session_id = body.get("session_id", "")
@@ -1747,7 +1968,8 @@ def build_confluence_content(brd: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @app.get("/api/knowledge-base")
-async def get_knowledge_base():
+async def get_knowledge_base(request: Request):
+    require_feature(request, "knowledge_base")
     try:
         documents = get_knowledge_documents_from_mongo()
         return documents
@@ -1767,7 +1989,8 @@ async def get_knowledge_base_stats():
 
 
 @app.post("/api/knowledge-base/upload")
-async def upload_knowledge_document(file: UploadFile = File(...)):
+async def upload_knowledge_document(request: Request, file: UploadFile = File(...)):
+    require_feature(request, "knowledge_base")
     try:
         if not file:
             raise HTTPException(status_code=400, detail="No file provided")
