@@ -16,7 +16,7 @@ export default function LoginPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    document.title = "Login | DocuGen AI";
+    document.title = "Login | Defuse 2.O";
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -62,7 +62,7 @@ export default function LoginPage() {
               <Sparkles className="h-6 w-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-white tracking-tight">DocuGen AI</h1>
+              <h1 className="text-3xl font-bold text-white tracking-tight">Defuse 2.O</h1>
               <p className="text-sm text-blue-200/80">Intelligent SDLC Platform</p>
             </div>
           </div>
@@ -91,7 +91,7 @@ export default function LoginPage() {
             <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary mb-4">
               <Sparkles className="h-7 w-7 text-primary-foreground" />
             </div>
-            <h1 className="text-2xl font-bold" data-testid="text-app-title">DocuGen AI</h1>
+            <h1 className="text-2xl font-bold" data-testid="text-app-title">Defuse 2.O</h1>
             <p className="text-sm text-muted-foreground mt-1">Intelligent SDLC Platform</p>
           </div>
 

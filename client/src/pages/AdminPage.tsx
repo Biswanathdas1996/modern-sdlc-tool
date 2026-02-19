@@ -72,7 +72,7 @@ export default function AdminPage() {
   const [resetPassword, setResetPassword] = useState("");
 
   useEffect(() => {
-    document.title = "Admin Dashboard | DocuGen AI";
+    document.title = "Admin Dashboard | Defuse 2.O";
   }, []);
 
   const { data: users = [], isLoading: usersLoading } = useQuery<UserData[]>({
