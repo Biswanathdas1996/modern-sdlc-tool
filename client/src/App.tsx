@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation, Redirect } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient, hydrateFromLocalStorage } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -9,7 +9,11 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SessionContext, useSessionProvider } from "@/hooks/useSession";
+import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { Loader2 } from "lucide-react";
 import NotFound from "@/pages/not-found";
+import LoginPage from "@/pages/LoginPage";
+import AdminPage from "@/pages/AdminPage";
 import AnalyzePage from "@/pages/AnalyzePage";
 import DocumentationPage from "@/pages/DocumentationPage";
 import RequirementsPage from "@/pages/RequirementsPage";
@@ -27,22 +31,58 @@ import type { Project } from "@shared/schema";
 
 hydrateFromLocalStorage();
 
+const featureRouteMap: Record<string, string> = {
+  "/": "analyze",
+  "/documentation": "documentation",
+  "/requirements": "requirements",
+  "/brd": "brd",
+  "/user-stories": "user_stories",
+  "/code-generation": "code_generation",
+  "/test-cases": "test_cases",
+  "/test-data": "test_data",
+  "/knowledge-base": "knowledge_base",
+  "/agent-chat": "agent_jira",
+  "/agent-security": "agent_security",
+  "/agent-unit-test": "agent_unit_test",
+  "/agent-web-test": "agent_web_test",
+};
+
+function ProtectedRoute({ component: Component, featureKey }: { component: React.ComponentType; featureKey?: string }) {
+  const { hasPermission } = useAuth();
+  if (featureKey && !hasPermission(featureKey)) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center space-y-2">
+          <h2 className="text-lg font-semibold">Access Denied</h2>
+          <p className="text-sm text-muted-foreground">You don't have permission to access this feature.</p>
+          <p className="text-xs text-muted-foreground">Contact your administrator for access.</p>
+        </div>
+      </div>
+    );
+  }
+  return <Component />;
+}
+
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={AnalyzePage} />
-      <Route path="/documentation" component={DocumentationPage} />
-      <Route path="/requirements" component={RequirementsPage} />
-      <Route path="/brd" component={BRDPage} />
-      <Route path="/user-stories" component={UserStoriesPage} />
-      <Route path="/code-generation" component={CodeGenerationPage} />
-      <Route path="/test-cases" component={TestCasesPage} />
-      <Route path="/test-data" component={TestDataPage} />
-      <Route path="/knowledge-base" component={KnowledgeBasePage} />
-      <Route path="/agent-chat" component={AgentChatPage} />
-      <Route path="/agent-security" component={SecurityAgentPage} />
-      <Route path="/agent-unit-test" component={UnitTestAgentPage} />
-      <Route path="/agent-web-test" component={WebTestAgentPage} />
+      <Route path="/">{() => <ProtectedRoute component={AnalyzePage} featureKey="analyze" />}</Route>
+      <Route path="/documentation">{() => <ProtectedRoute component={DocumentationPage} featureKey="documentation" />}</Route>
+      <Route path="/requirements">{() => <ProtectedRoute component={RequirementsPage} featureKey="requirements" />}</Route>
+      <Route path="/brd">{() => <ProtectedRoute component={BRDPage} featureKey="brd" />}</Route>
+      <Route path="/user-stories">{() => <ProtectedRoute component={UserStoriesPage} featureKey="user_stories" />}</Route>
+      <Route path="/code-generation">{() => <ProtectedRoute component={CodeGenerationPage} featureKey="code_generation" />}</Route>
+      <Route path="/test-cases">{() => <ProtectedRoute component={TestCasesPage} featureKey="test_cases" />}</Route>
+      <Route path="/test-data">{() => <ProtectedRoute component={TestDataPage} featureKey="test_data" />}</Route>
+      <Route path="/knowledge-base">{() => <ProtectedRoute component={KnowledgeBasePage} featureKey="knowledge_base" />}</Route>
+      <Route path="/agent-chat">{() => <ProtectedRoute component={AgentChatPage} featureKey="agent_jira" />}</Route>
+      <Route path="/agent-security">{() => <ProtectedRoute component={SecurityAgentPage} featureKey="agent_security" />}</Route>
+      <Route path="/agent-unit-test">{() => <ProtectedRoute component={UnitTestAgentPage} featureKey="agent_unit_test" />}</Route>
+      <Route path="/agent-web-test">{() => <ProtectedRoute component={WebTestAgentPage} featureKey="agent_web_test" />}</Route>
+      <Route path="/admin">{() => {
+        const { isAdmin } = useAuth();
+        return isAdmin ? <AdminPage /> : <Redirect to="/" />;
+      }}</Route>
       <Route component={NotFound} />
     </Switch>
   );
@@ -54,6 +94,7 @@ function AppLayout() {
   });
   
   const currentProject = projects && projects.length > 0 ? projects[0] : null;
+  const { user, logout, isAdmin } = useAuth();
 
   const sidebarStyle = {
     "--sidebar-width": "18rem",
@@ -70,7 +111,14 @@ function AppLayout() {
         <SidebarInset className="flex flex-col flex-1 overflow-hidden">
           <header className="flex items-center justify-between h-14 shrink-0 gap-2 px-4 border-b border-border bg-background">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <ThemeToggle />
+            <div className="flex items-center gap-2">
+              {user && (
+                <span className="text-xs text-muted-foreground" data-testid="text-user-info">
+                  {user.username} ({user.role})
+                </span>
+              )}
+              <ThemeToggle />
+            </div>
           </header>
           <main className="flex-1 overflow-hidden">
             <Router />
@@ -90,14 +138,36 @@ function SessionWrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
+function AuthGate() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
+
+  return (
+    <SessionWrapper>
+      <AppLayout />
+    </SessionWrapper>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <TooltipProvider>
-          <SessionWrapper>
-            <AppLayout />
-          </SessionWrapper>
+          <AuthProvider>
+            <AuthGate />
+          </AuthProvider>
           <Toaster />
         </TooltipProvider>
       </ThemeProvider>

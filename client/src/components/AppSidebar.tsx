@@ -6,17 +6,18 @@ import {
   FileCheck,
   TestTube,
   Database,
-  Home,
   ChevronRight,
   Sparkles,
   Bookmark,
   Library,
-  Upload,
   Bot,
   Shield,
   FlaskConical,
   Globe,
   Code2,
+  Settings,
+  LogOut,
+  User,
 } from "lucide-react";
 import {
   Sidebar,
@@ -31,10 +32,13 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 
 interface WorkflowStep {
   id: string;
+  featureKey: string;
   title: string;
   description: string;
   path: string;
@@ -45,6 +49,7 @@ interface WorkflowStep {
 const prerequisiteSteps: WorkflowStep[] = [
   {
     id: "analyze",
+    featureKey: "analyze",
     title: "Analyze Repository",
     description: "Connect and analyze GitHub repo",
     path: "/",
@@ -53,6 +58,7 @@ const prerequisiteSteps: WorkflowStep[] = [
   },
   {
     id: "document",
+    featureKey: "documentation",
     title: "Documentation",
     description: "View generated docs",
     path: "/documentation",
@@ -64,6 +70,7 @@ const prerequisiteSteps: WorkflowStep[] = [
 const workflowSteps: WorkflowStep[] = [
   {
     id: "requirements",
+    featureKey: "requirements",
     title: "Feature Request",
     description: "Input new requirements",
     path: "/requirements",
@@ -72,6 +79,7 @@ const workflowSteps: WorkflowStep[] = [
   },
   {
     id: "brd",
+    featureKey: "brd",
     title: "Generate BRD",
     description: "Create business requirements",
     path: "/brd",
@@ -80,6 +88,7 @@ const workflowSteps: WorkflowStep[] = [
   },
   {
     id: "user-stories",
+    featureKey: "user_stories",
     title: "User Stories",
     description: "Generate stories for JIRA",
     path: "/user-stories",
@@ -88,6 +97,7 @@ const workflowSteps: WorkflowStep[] = [
   },
   {
     id: "code-gen",
+    featureKey: "code_generation",
     title: "Generate Code",
     description: "AI code implementation",
     path: "/code-generation",
@@ -96,6 +106,7 @@ const workflowSteps: WorkflowStep[] = [
   },
   {
     id: "test-cases",
+    featureKey: "test_cases",
     title: "Test Cases",
     description: "Generate test scenarios",
     path: "/test-cases",
@@ -104,12 +115,20 @@ const workflowSteps: WorkflowStep[] = [
   },
   {
     id: "test-data",
+    featureKey: "test_data",
     title: "Test Data",
     description: "Generate test datasets",
     path: "/test-data",
     icon: Database,
     step: 8,
   },
+];
+
+const agentItems = [
+  { path: "/agent-chat", featureKey: "agent_jira", icon: Bot, title: "JIRA Agent", description: "Interactive JIRA assistant", testId: "link-agent-chat" },
+  { path: "/agent-security", featureKey: "agent_security", icon: Shield, title: "Security Agent", description: "Web security assessment", testId: "link-agent-security" },
+  { path: "/agent-unit-test", featureKey: "agent_unit_test", icon: FlaskConical, title: "Unit Test Agent", description: "Auto test generation", testId: "link-agent-unit-test" },
+  { path: "/agent-web-test", featureKey: "agent_web_test", icon: Globe, title: "Web Test Agent", description: "Web app test cases", testId: "link-agent-web-test" },
 ];
 
 interface AppSidebarProps {
@@ -119,11 +138,64 @@ interface AppSidebarProps {
 
 export function AppSidebar({ currentProject, completedSteps = [] }: AppSidebarProps) {
   const [location] = useLocation();
+  const { user, isAdmin, hasPermission, logout } = useAuth();
 
   const getStepStatus = (step: WorkflowStep) => {
     if (completedSteps.includes(step.id)) return "completed";
     if (location === step.path) return "active";
     return "pending";
+  };
+
+  const visiblePrereqSteps = prerequisiteSteps.filter(s => hasPermission(s.featureKey));
+  const visibleWorkflowSteps = workflowSteps.filter(s => hasPermission(s.featureKey));
+  const visibleAgents = agentItems.filter(a => hasPermission(a.featureKey));
+
+  const renderStepItem = (step: WorkflowStep, index: number, totalSteps: number) => {
+    const status = getStepStatus(step);
+    const isActive = location === step.path;
+    const Icon = step.icon;
+
+    return (
+      <SidebarMenuItem key={step.id}>
+        <SidebarMenuButton
+          asChild
+          className={cn(
+            "group relative",
+            isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
+          )}
+        >
+          <Link href={step.path} data-testid={`link-step-${step.id}`}>
+            <div className="flex items-center gap-3 w-full">
+              <div className={cn(
+                "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
+                status === "completed" && "bg-success border-success text-success-foreground",
+                status === "active" && "bg-primary border-primary text-primary-foreground",
+                status === "pending" && "bg-muted border-border text-muted-foreground"
+              )}>
+                <Icon className="h-4 w-4" />
+              </div>
+              <div className="flex flex-col flex-1 min-w-0">
+                <span className="text-sm font-medium truncate">{step.title}</span>
+                <span className="text-xs text-muted-foreground truncate">{step.description}</span>
+              </div>
+              {status === "completed" && (
+                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-success text-success-foreground">
+                  <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 6l3 3 5-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+              )}
+              {isActive && status !== "completed" && (
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              )}
+            </div>
+          </Link>
+        </SidebarMenuButton>
+        {index < totalSteps - 1 && (
+          <div className="absolute left-[1.625rem] top-[3.25rem] h-4 w-0.5 bg-border" />
+        )}
+      </SidebarMenuItem>
+    );
   };
 
   return (
@@ -168,214 +240,182 @@ export function AppSidebar({ currentProject, completedSteps = [] }: AppSidebarPr
           </SidebarGroup>
         )}
 
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
-            Pre-requisite
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {prerequisiteSteps.map((step, index) => {
-                const status = getStepStatus(step);
-                const isActive = location === step.path;
-                const Icon = step.icon;
+        {visiblePrereqSteps.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
+              Pre-requisite
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visiblePrereqSteps.map((step, index) => renderStepItem(step, index, visiblePrereqSteps.length))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
-                return (
-                  <SidebarMenuItem key={step.id}>
-                    <SidebarMenuButton
-                      asChild
-                      className={cn(
-                        "group relative",
-                        isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
-                      )}
-                    >
-                      <Link href={step.path} data-testid={`link-step-${step.id}`}>
-                        <div className="flex items-center gap-3 w-full">
-                          <div className={cn(
-                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
-                            status === "completed" && "bg-success border-success text-success-foreground",
-                            status === "active" && "bg-primary border-primary text-primary-foreground",
-                            status === "pending" && "bg-muted border-border text-muted-foreground"
-                          )}>
-                            <Icon className="h-4 w-4" />
-                          </div>
-                          <div className="flex flex-col flex-1 min-w-0">
-                            <span className="text-sm font-medium truncate">{step.title}</span>
-                            <span className="text-xs text-muted-foreground truncate">{step.description}</span>
-                          </div>
-                          {status === "completed" && (
-                            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-success text-success-foreground">
-                              <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
-                                <path d="M2 6l3 3 5-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                            </div>
-                          )}
-                          {isActive && status !== "completed" && (
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                          )}
-                        </div>
-                      </Link>
-                    </SidebarMenuButton>
-                    {index < prerequisiteSteps.length - 1 && (
-                      <div className="absolute left-[1.625rem] top-[3.25rem] h-4 w-0.5 bg-border" />
+        {visibleWorkflowSteps.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
+              Workflow
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleWorkflowSteps.map((step, index) => renderStepItem(step, index, visibleWorkflowSteps.length))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {hasPermission("knowledge_base") && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
+              Knowledge Base
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    className={cn(
+                      "group",
+                      location === "/knowledge-base" && "bg-sidebar-accent text-sidebar-accent-foreground"
                     )}
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+                  >
+                    <Link href="/knowledge-base" data-testid="link-knowledge-base">
+                      <div className="flex items-center gap-3 w-full">
+                        <div className={cn(
+                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
+                          location === "/knowledge-base" 
+                            ? "bg-primary border-primary text-primary-foreground"
+                            : "bg-muted border-border text-muted-foreground"
+                        )}>
+                          <Library className="h-4 w-4" />
+                        </div>
+                        <div className="flex flex-col flex-1 min-w-0">
+                          <span className="text-sm font-medium truncate">Documents</span>
+                          <span className="text-xs text-muted-foreground truncate">Upload & manage docs</span>
+                        </div>
+                        {location === "/knowledge-base" && (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </div>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
-            Workflow
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {workflowSteps.map((step, index) => {
-                const status = getStepStatus(step);
-                const isActive = location === step.path;
-                const Icon = step.icon;
-
-                return (
-                  <SidebarMenuItem key={step.id}>
-                    <SidebarMenuButton
-                      asChild
-                      className={cn(
-                        "group relative",
-                        isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
-                      )}
-                    >
-                      <Link href={step.path} data-testid={`link-step-${step.id}`}>
-                        <div className="flex items-center gap-3 w-full">
-                          <div className={cn(
-                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
-                            status === "completed" && "bg-success border-success text-success-foreground",
-                            status === "active" && "bg-primary border-primary text-primary-foreground",
-                            status === "pending" && "bg-muted border-border text-muted-foreground"
-                          )}>
-                            <Icon className="h-4 w-4" />
-                          </div>
-                          <div className="flex flex-col flex-1 min-w-0">
-                            <span className="text-sm font-medium truncate">{step.title}</span>
-                            <span className="text-xs text-muted-foreground truncate">{step.description}</span>
-                          </div>
-                          {status === "completed" && (
-                            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-success text-success-foreground">
-                              <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
-                                <path d="M2 6l3 3 5-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
+        {visibleAgents.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
+              AI Agents
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleAgents.map((agent) => {
+                  const isActive = location === agent.path;
+                  const Icon = agent.icon;
+                  return (
+                    <SidebarMenuItem key={agent.path}>
+                      <SidebarMenuButton
+                        asChild
+                        className={cn(
+                          "group",
+                          isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
+                        )}
+                      >
+                        <Link href={agent.path} data-testid={agent.testId}>
+                          <div className="flex items-center gap-3 w-full">
+                            <div className={cn(
+                              "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
+                              isActive
+                                ? "bg-primary border-primary text-primary-foreground"
+                                : "bg-muted border-border text-muted-foreground"
+                            )}>
+                              <Icon className="h-4 w-4" />
                             </div>
-                          )}
-                          {isActive && status !== "completed" && (
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                          )}
-                        </div>
-                      </Link>
-                    </SidebarMenuButton>
-                    {index < workflowSteps.length - 1 && (
-                      <div className="absolute left-[1.625rem] top-[3.25rem] h-4 w-0.5 bg-border" />
+                            <div className="flex flex-col flex-1 min-w-0">
+                              <span className="text-sm font-medium truncate">{agent.title}</span>
+                              <span className="text-xs text-muted-foreground truncate">{agent.description}</span>
+                            </div>
+                            {isActive && (
+                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </div>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
+              Administration
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    className={cn(
+                      "group",
+                      location === "/admin" && "bg-sidebar-accent text-sidebar-accent-foreground"
                     )}
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
-            Knowledge Base
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  className={cn(
-                    "group",
-                    location === "/knowledge-base" && "bg-sidebar-accent text-sidebar-accent-foreground"
-                  )}
-                >
-                  <Link href="/knowledge-base" data-testid="link-knowledge-base">
-                    <div className="flex items-center gap-3 w-full">
-                      <div className={cn(
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
-                        location === "/knowledge-base" 
-                          ? "bg-primary border-primary text-primary-foreground"
-                          : "bg-muted border-border text-muted-foreground"
-                      )}>
-                        <Library className="h-4 w-4" />
-                      </div>
-                      <div className="flex flex-col flex-1 min-w-0">
-                        <span className="text-sm font-medium truncate">Documents</span>
-                        <span className="text-xs text-muted-foreground truncate">Upload & manage docs</span>
-                      </div>
-                      {location === "/knowledge-base" && (
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </div>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
-            AI Agents
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {[
-                { path: "/agent-chat", icon: Bot, title: "JIRA Agent", description: "Interactive JIRA assistant", testId: "link-agent-chat" },
-                { path: "/agent-security", icon: Shield, title: "Security Agent", description: "Web security assessment", testId: "link-agent-security" },
-                { path: "/agent-unit-test", icon: FlaskConical, title: "Unit Test Agent", description: "Auto test generation", testId: "link-agent-unit-test" },
-                { path: "/agent-web-test", icon: Globe, title: "Web Test Agent", description: "Web app test cases", testId: "link-agent-web-test" },
-              ].map((agent) => {
-                const isActive = location === agent.path;
-                const Icon = agent.icon;
-                return (
-                  <SidebarMenuItem key={agent.path}>
-                    <SidebarMenuButton
-                      asChild
-                      className={cn(
-                        "group",
-                        isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
-                      )}
-                    >
-                      <Link href={agent.path} data-testid={agent.testId}>
-                        <div className="flex items-center gap-3 w-full">
-                          <div className={cn(
-                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
-                            isActive
-                              ? "bg-primary border-primary text-primary-foreground"
-                              : "bg-muted border-border text-muted-foreground"
-                          )}>
-                            <Icon className="h-4 w-4" />
-                          </div>
-                          <div className="flex flex-col flex-1 min-w-0">
-                            <span className="text-sm font-medium truncate">{agent.title}</span>
-                            <span className="text-xs text-muted-foreground truncate">{agent.description}</span>
-                          </div>
-                          {isActive && (
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                          )}
+                  >
+                    <Link href="/admin" data-testid="link-admin">
+                      <div className="flex items-center gap-3 w-full">
+                        <div className={cn(
+                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
+                          location === "/admin"
+                            ? "bg-primary border-primary text-primary-foreground"
+                            : "bg-muted border-border text-muted-foreground"
+                        )}>
+                          <Settings className="h-4 w-4" />
                         </div>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+                        <div className="flex flex-col flex-1 min-w-0">
+                          <span className="text-sm font-medium truncate">User Management</span>
+                          <span className="text-xs text-muted-foreground truncate">Manage users & access</span>
+                        </div>
+                        {location === "/admin" && (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </div>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border px-4 py-3">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Sparkles className="h-3 w-3" />
-          <span>Powered by AI</span>
+      <SidebarFooter className="border-t border-sidebar-border px-3 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
+              <User className="h-3.5 w-3.5 text-muted-foreground" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">{user?.username}</p>
+              <p className="text-xs text-muted-foreground truncate">{user?.role}</p>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={logout}
+            title="Sign out"
+            data-testid="button-logout"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
         </div>
       </SidebarFooter>
     </Sidebar>
