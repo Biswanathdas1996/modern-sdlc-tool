@@ -4,8 +4,7 @@ from typing import List, Dict, Any
 from io import BytesIO
 import json
 from schemas import KnowledgeSearchRequest
-from services import get_kb_service
-from core.database import get_db
+from services.knowledge_base_service import get_kb_service
 from core.logging import log_info, log_error
 from utils.exceptions import bad_request, internal_error
 from utils.response import success_response
@@ -98,7 +97,7 @@ async def upload_knowledge_document(file: UploadFile = File(...)):
                 doc["filename"],
                 content
             )
-            update_knowledge_document_in_mongo(
+            kb_service.update_knowledge_document(
                 doc["id"],
                 {"chunkCount": chunk_count, "status": "ready"}
             )
@@ -106,7 +105,7 @@ async def upload_knowledge_document(file: UploadFile = File(...)):
             doc["status"] = "ready"
         except Exception as ingest_error:
             log_error("Error ingesting document", "api", ingest_error)
-            update_knowledge_document_in_mongo(
+            kb_service.update_knowledge_document(
                 doc["id"],
                 {"status": "error", "errorMessage": str(ingest_error)}
             )

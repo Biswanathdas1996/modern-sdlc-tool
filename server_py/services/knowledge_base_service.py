@@ -180,6 +180,15 @@ class KnowledgeBaseService:
         collection.insert_one(doc)
         return doc
     
+    def update_knowledge_document(self, document_id: str, updates: Dict[str, Any]) -> bool:
+        """Update a knowledge document record."""
+        collection = self.db[self.DOCUMENTS_COLLECTION]
+        result = collection.update_one(
+            {"id": document_id},
+            {"$set": updates}
+        )
+        return result.modified_count > 0
+
     def delete_knowledge_document(self, document_id: str) -> bool:
         """Delete a knowledge document."""
         collection = self.db[self.DOCUMENTS_COLLECTION]

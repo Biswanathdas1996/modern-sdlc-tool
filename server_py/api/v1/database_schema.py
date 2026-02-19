@@ -1,18 +1,13 @@
 """Database schema API router."""
 import re
-from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException
 from repositories import storage
+from schemas.requests_database import ConnectDatabaseRequest
 from core.logging import log_info, log_error
 from utils.exceptions import bad_request, not_found, internal_error
 from utils.response import success_response
 
 router = APIRouter(prefix="/database-schema", tags=["database-schema"])
-
-
-class ConnectDatabaseRequest(BaseModel):
-    """Request model for database connection."""
-    connectionString: str
 
 
 @router.post("/connect")

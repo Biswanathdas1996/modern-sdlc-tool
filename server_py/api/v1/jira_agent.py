@@ -1,67 +1,16 @@
 """API endpoints for JIRA agent with interactive conversation support."""
 import uuid
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from typing import Optional, List, Any, Dict
 
-from agents.Jira_agent.jira_agent import jira_agent
-from agents.Jira_agent.conversation_manager import conversation_manager
+from agents.jira_agent.jira_agent import jira_agent
+from agents.jira_agent.conversation_manager import conversation_manager
 from schemas.requests import JiraAgentRequest, JiraAgentResponse, MissingInfoField
+from schemas.requests_jira import SearchJiraResponse, ProcessQueryRequest
 from core.logging import log_info, log_error
-from utils.response import success_response, error_response
+from utils.response import success_response
 
 
 router = APIRouter(prefix="/v1/jira-agent", tags=["jira-agent"])
-
-
-# ==================== REQUEST/RESPONSE MODELS ====================
-
-class SearchJiraRequest(BaseModel):
-    """Legacy request model for searching JIRA tickets."""
-    prompt: str
-    max_results: Optional[int] = 10
-
-
-class SearchJiraResponse(BaseModel):
-    """Legacy response model for JIRA search."""
-    success: bool
-    prompt: str
-    response: str
-    intent: Optional[str] = None
-    tickets: Optional[List[Any]] = None
-    error: Optional[str] = None
-
-
-class ProcessQueryRequest(BaseModel):
-    """Legacy request model for intelligent query processing."""
-    prompt: str
-
-
-class CreateTicketRequest(BaseModel):
-    """Request model for creating a JIRA ticket."""
-    summary: str
-    description: str
-    issue_type: Optional[str] = "Story"
-    priority: Optional[str] = "Medium"
-    labels: Optional[List[str]] = []
-
-
-class UpdateTicketRequest(BaseModel):
-    """Request model for updating a JIRA ticket."""
-    ticket_key: str
-    summary: Optional[str] = None
-    description: Optional[str] = None
-    status: Optional[str] = None
-    priority: Optional[str] = None
-    comment: Optional[str] = None
-
-
-class TicketResponse(BaseModel):
-    """Response model for ticket operations."""
-    success: bool
-    response: str
-    ticket_key: Optional[str] = None
-    error: Optional[str] = None
 
 
 # ==================== API ENDPOINTS ====================

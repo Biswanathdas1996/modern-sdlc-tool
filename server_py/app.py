@@ -15,7 +15,9 @@ import httpx
 # Import configurations and middleware
 from core.config import get_settings
 from core.logging import setup_logging
-from core.database import mongo_db
+from core.db.mongo import mongo_db
+from core.db.postgres import init_postgres_database
+from repositories.auth_repository import seed_admin_user
 from middleware.logging import LoggingMiddleware
 
 # Import API routers
@@ -76,6 +78,14 @@ async def startup_event():
     log_info(f"{settings.app_name} v{settings.app_version} starting", "app")
     log_info(f"Environment: {settings.environment}", "app")
     log_info(f"Server: http://{settings.host}:{settings.port}", "app")
+    
+    # Initialize PostgreSQL schema and seed admin
+    try:
+        init_postgres_database()
+        seed_admin_user()
+        log_info("PostgreSQL initialized successfully", "app")
+    except Exception as e:
+        log_error("PostgreSQL initialization failed", "app", e)
     
     # Connect to MongoDB if configured
     if settings.mongodb_uri:

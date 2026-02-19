@@ -3,23 +3,16 @@ import os
 import json
 import base64
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 import httpx
 
 from repositories import storage
+from schemas.requests_confluence import PublishRequest
 from core.logging import log_info, log_error
 from utils.exceptions import bad_request, internal_error
 
 router = APIRouter(prefix="/confluence", tags=["confluence"])
-
-
-# ==================== REQUEST/RESPONSE MODELS ====================
-
-class PublishRequest(BaseModel):
-    """Request for publishing BRD to Confluence."""
-    brdId: Optional[str] = None
 
 
 # ==================== CONFLUENCE ENDPOINTS ====================

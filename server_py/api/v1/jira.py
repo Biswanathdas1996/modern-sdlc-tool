@@ -1,28 +1,13 @@
 """JIRA integration API router for syncing stories."""
-from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
-from typing import List, Any
+from fastapi import APIRouter, HTTPException
 
 from services import jira_service, ai_service
 from repositories import storage
+from schemas.requests_jira import FindRelatedRequest, SyncSubtaskRequest
 from core.logging import log_info, log_error
 from utils.exceptions import bad_request, internal_error
-from utils.response import success_response
 
 router = APIRouter(prefix="/jira", tags=["jira"])
-
-
-# ==================== REQUEST/RESPONSE MODELS ====================
-
-class FindRelatedRequest(BaseModel):
-    """Request for finding related JIRA stories."""
-    featureDescription: str
-
-
-class SyncSubtaskRequest(BaseModel):
-    """Request for syncing a user story as a JIRA subtask."""
-    storyId: str
-    parentKey: str
 
 
 # ==================== JIRA ENDPOINTS ====================

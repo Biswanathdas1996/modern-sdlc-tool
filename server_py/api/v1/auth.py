@@ -1,14 +1,17 @@
 """Authentication and authorization API router."""
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-from typing import List, Optional
+from typing import Optional
 
-from database import (
+from repositories.auth_repository import (
     authenticate_user, create_session, get_session_user,
     delete_session, get_user_permissions, create_user, get_all_users,
     update_user_permissions, update_user_status, delete_user as db_delete_user,
     update_user_password, ALL_FEATURES, ALL_FEATURE_KEYS
+)
+from schemas.requests_auth import (
+    LoginRequest, CreateUserRequest, UpdatePermissionsRequest,
+    UpdateStatusRequest, UpdatePasswordRequest
 )
 from core.logging import log_info, log_error
 from utils.exceptions import bad_request, not_found, internal_error
@@ -57,38 +60,6 @@ def require_feature(request: Request, feature_key: str) -> dict:
             detail=f"Access to {feature_key} is not granted"
         )
     return user
-
-
-# ==================== REQUEST/RESPONSE MODELS ====================
-
-class LoginRequest(BaseModel):
-    """Login request model."""
-    email: str
-    password: str
-
-
-class CreateUserRequest(BaseModel):
-    """Create user request model."""
-    username: str
-    email: str
-    password: str
-    role: str = "user"
-    features: List[str] = []
-
-
-class UpdatePermissionsRequest(BaseModel):
-    """Update permissions request model."""
-    features: List[str]
-
-
-class UpdateStatusRequest(BaseModel):
-    """Update user status request model."""
-    is_active: bool = True
-
-
-class UpdatePasswordRequest(BaseModel):
-    """Update password request model."""
-    password: str
 
 
 # ==================== AUTH ENDPOINTS ====================
