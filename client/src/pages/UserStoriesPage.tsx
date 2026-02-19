@@ -352,7 +352,26 @@ export default function UserStoriesPage() {
                     Copy this prompt and paste it into VS Code Copilot to implement the features
                   </DialogDescription>
                 </DialogHeader>
-                <div className="flex justify-end mb-2">
+                <div className="flex justify-end gap-2 mb-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => generatePromptMutation.mutate()}
+                    disabled={generatePromptMutation.isPending}
+                    data-testid="button-regenerate-prompt"
+                  >
+                    {generatePromptMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Regenerating...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Regenerate
+                      </>
+                    )}
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
