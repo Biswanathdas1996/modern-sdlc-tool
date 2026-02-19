@@ -1,4 +1,4 @@
-# 📄 DocuGen AI
+# 📄 Defuse 2.O
 
 ## ✨ AI-Powered Documentation & Development Workflow
 
@@ -35,7 +35,7 @@ Requirements, documentation, and test cases live in separate tools with no unifi
 
 ### The Solution
 
-DocuGen AI delivers:
+Defuse 2.O delivers:
 
 ✅ **Automatic Repository Analysis**
 Connect any GitHub repository and get instant AI-powered analysis of architecture, tech stack, and code patterns.
@@ -56,7 +56,7 @@ Generate ready-to-use implementation prompts for GitHub Copilot to accelerate de
 
 ## 📋 Application Summary
 
-DocuGen AI is an AI-powered web application that bridges the gap between your codebase and development artifacts. It provides a guided workflow to analyze repositories and generate professional-grade documentation, requirements, and testing materials.
+Defuse 2.O is an AI-powered web application that bridges the gap between your codebase and development artifacts. It provides a guided workflow to analyze repositories and generate professional-grade documentation, requirements, and testing materials.
 
 ### 💎 Key Value Propositions
 

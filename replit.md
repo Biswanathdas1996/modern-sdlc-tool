@@ -1,8 +1,8 @@
-# DocuGen AI
+# Defuse 2.O
 
 ## Overview
 
-DocuGen AI is an AI-powered documentation and business requirements document (BRD) generator. The application analyzes GitHub repositories and automatically generates comprehensive technical documentation, BRDs, test cases, and test data using PWC GenAI (Gemini 2.0 Flash model).
+Defuse 2.O is an AI-powered documentation and business requirements document (BRD) generator. The application analyzes GitHub repositories and automatically generates comprehensive technical documentation, BRDs, test cases, and test data using PWC GenAI (Gemini 2.0 Flash model).
 
 The workflow guides users through a multi-step process:
 1. **Analyze Repository** - Connect and analyze a GitHub repository

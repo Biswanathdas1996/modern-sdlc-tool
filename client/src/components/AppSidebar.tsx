@@ -134,8 +134,8 @@ export function AppSidebar({ currentProject, completedSteps = [] }: AppSidebarPr
             <Sparkles className="h-5 w-5 text-primary-foreground" />
           </div>
           <div className="flex flex-col">
-            <span className="text-base font-semibold text-sidebar-foreground">DocuGen AI</span>
-            <span className="text-xs text-muted-foreground">Documentation Platform</span>
+            <span className="text-base font-semibold text-sidebar-foreground">Defuse 2.O</span>
+            <span className="text-xs text-muted-foreground">Modern SDLC acclerator </span>
           </div>
         </Link>
       </SidebarHeader>

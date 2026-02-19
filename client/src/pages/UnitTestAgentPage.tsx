@@ -272,7 +272,7 @@ export default function UnitTestAgentPage() {
   };
 
   useEffect(() => {
-    document.title = "Unit Test Agent | DocuGen AI";
+    document.title = "Unit Test Agent | Defuse 2.O";
   }, []);
 
   const progressMessageId = useRef<string | null>(null);

@@ -43,7 +43,7 @@ export default function WebTestAgentPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    document.title = "Web Test Agent | DocuGen AI";
+    document.title = "Web Test Agent | Defuse 2.O";
   }, []);
 
   const chatMutation = useMutation({

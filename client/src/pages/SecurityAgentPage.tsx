@@ -316,7 +316,7 @@ export default function SecurityAgentPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    document.title = "Shannon Security Agent | DocuGen AI";
+    document.title = "Shannon Security Agent | Defuse 2.O";
   }, []);
 
   const chatMutation = useMutation({

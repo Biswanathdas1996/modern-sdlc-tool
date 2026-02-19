@@ -47,7 +47,7 @@ export default function AgentChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    document.title = "AI Agent Chat | DocuGen AI";
+    document.title = "AI Agent Chat | Defuse 2.O";
   }, []);
 
   const chatMutation = useMutation({

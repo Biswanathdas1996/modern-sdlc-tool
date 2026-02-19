@@ -60,7 +60,7 @@ python main.py
 
 You should see:
 ```
-🚀 DocuGen AI API v1.0.0
+🚀 Defuse 2.O API v1.0.0
 📝 Environment: development
 🌐 Server: http://0.0.0.0:5000
 ✓ Connected to MongoDB: docugen_knowledge
