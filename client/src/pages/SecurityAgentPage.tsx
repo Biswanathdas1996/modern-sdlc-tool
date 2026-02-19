@@ -483,15 +483,27 @@ export default function SecurityAgentPage() {
                               {message.thinking_steps.length} scan phases
                             </button>
                             {expandedSteps[message.id] && (
-                              <div className="mt-1.5 space-y-1 pl-2 border-l-2 border-border/50">
-                                {message.thinking_steps.map((step, i) => (
-                                  <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground py-0.5" data-testid={`step-${index}-${i}`}>
-                                    <Badge variant="outline" className="text-[10px] shrink-0 px-1.5 py-0">
-                                      {step.tool_name || step.type}
-                                    </Badge>
-                                    <span className="break-words">{step.content}</span>
-                                  </div>
-                                ))}
+                              <div className="mt-2 rounded-md border border-border bg-[hsl(var(--background))] dark:bg-[#0d1117] overflow-hidden">
+                                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted/50 dark:bg-[#161b22] border-b border-border">
+                                  <div className="h-2 w-2 rounded-full bg-destructive/60" />
+                                  <div className="h-2 w-2 rounded-full bg-yellow-500/60" />
+                                  <div className="h-2 w-2 rounded-full bg-green-500/60" />
+                                  <span className="text-[10px] text-muted-foreground ml-2 font-mono">scan phases</span>
+                                </div>
+                                <div className="max-h-36 overflow-y-auto p-2 font-mono text-[11px] leading-relaxed">
+                                  {message.thinking_steps.map((step, i) => (
+                                    <div key={i} className="flex items-start gap-1.5 py-px" data-testid={`step-${index}-${i}`}>
+                                      <span className="text-muted-foreground/60 shrink-0 select-none">$</span>
+                                      <span className={cn(
+                                        "shrink-0",
+                                        step.type === "tool_result" ? "text-green-500 dark:text-green-400" : "text-primary"
+                                      )}>
+                                        {step.tool_name || step.type}
+                                      </span>
+                                      <span className="text-muted-foreground truncate">{step.content}</span>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
                             )}
                           </div>

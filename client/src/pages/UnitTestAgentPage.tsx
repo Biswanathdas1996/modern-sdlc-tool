@@ -209,16 +209,27 @@ function ProgressTracker({ steps, thinkingSteps, isExpanded, onToggle }: {
 
           {thinkingSteps.length > 0 && (
             <div className="mt-3 pt-3 border-t border-border/30">
-              <p className="text-xs text-muted-foreground mb-1.5 font-medium">Recent Activity</p>
-              <div className="space-y-1 max-h-32 overflow-y-auto">
-                {thinkingSteps.map((step, i) => (
-                  <div key={i} className="flex items-start gap-1.5">
-                    <Badge variant="outline" className="text-[10px] shrink-0 mt-0.5">
-                      {step.tool_name || step.type}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground truncate">{step.content}</span>
-                  </div>
-                ))}
+              <div className="rounded-md border border-border bg-[hsl(var(--background))] dark:bg-[#0d1117] overflow-hidden">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted/50 dark:bg-[#161b22] border-b border-border">
+                  <div className="h-2.5 w-2.5 rounded-full bg-destructive/60" />
+                  <div className="h-2.5 w-2.5 rounded-full bg-yellow-500/60" />
+                  <div className="h-2.5 w-2.5 rounded-full bg-green-500/60" />
+                  <span className="text-[10px] text-muted-foreground ml-2 font-mono">agent activity</span>
+                </div>
+                <div className="max-h-36 overflow-y-auto p-2 font-mono text-xs leading-relaxed">
+                  {thinkingSteps.map((step, i) => (
+                    <div key={i} className="flex items-start gap-1.5 py-px">
+                      <span className="text-muted-foreground/60 shrink-0 select-none">$</span>
+                      <span className={cn(
+                        "shrink-0",
+                        step.type === "tool_result" ? "text-green-500 dark:text-green-400" : "text-primary"
+                      )}>
+                        {step.tool_name || step.type}
+                      </span>
+                      <span className="text-muted-foreground truncate">{step.content}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -597,17 +608,27 @@ export default function UnitTestAgentPage() {
                           )}
                         </div>
                         {message.thinking_steps && message.thinking_steps.length > 0 && !activeTaskId && (
-                          <div className="mt-1 flex flex-wrap gap-1">
-                            {message.thinking_steps.slice(0, 5).map((step, i) => (
-                              <Badge key={i} variant="outline" className="text-xs" data-testid={`badge-step-${index}-${i}`}>
-                                {step.tool_name || step.type}: {step.content.slice(0, 50)}
-                              </Badge>
-                            ))}
-                            {message.thinking_steps.length > 5 && (
-                              <Badge variant="outline" className="text-xs">
-                                +{message.thinking_steps.length - 5} more
-                              </Badge>
-                            )}
+                          <div className="mt-2 w-full rounded-md border border-border bg-[hsl(var(--background))] dark:bg-[#0d1117] overflow-hidden">
+                            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted/50 dark:bg-[#161b22] border-b border-border">
+                              <div className="h-2 w-2 rounded-full bg-destructive/60" />
+                              <div className="h-2 w-2 rounded-full bg-yellow-500/60" />
+                              <div className="h-2 w-2 rounded-full bg-green-500/60" />
+                              <span className="text-[10px] text-muted-foreground ml-2 font-mono">{message.thinking_steps.length} steps</span>
+                            </div>
+                            <div className="max-h-28 overflow-y-auto p-2 font-mono text-[11px] leading-relaxed">
+                              {message.thinking_steps.map((step, i) => (
+                                <div key={i} className="flex items-start gap-1.5 py-px" data-testid={`badge-step-${index}-${i}`}>
+                                  <span className="text-muted-foreground/60 shrink-0 select-none">$</span>
+                                  <span className={cn(
+                                    "shrink-0",
+                                    step.type === "tool_result" ? "text-green-500 dark:text-green-400" : "text-primary"
+                                  )}>
+                                    {step.tool_name || step.type}
+                                  </span>
+                                  <span className="text-muted-foreground truncate">{step.content}</span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
                         <span className="text-xs text-muted-foreground mt-1">{message.timestamp.toLocaleTimeString()}</span>
