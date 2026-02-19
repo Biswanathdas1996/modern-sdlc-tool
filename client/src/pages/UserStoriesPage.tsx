@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, ArrowRight, Bookmark, RefreshCw, Clock, Layers, Tag, CheckCircle2, AlertCircle, Loader2, Wand2, Copy, Check, Upload, Pencil, Plus, X, GitBranch, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bookmark, RefreshCw, Clock, Layers, Tag, CheckCircle2, AlertCircle, Loader2, Wand2, Copy, Check, Upload, Pencil, Plus, X, GitBranch, Trash2, Code2 } from "lucide-react";
 import { SiJira } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -653,23 +653,31 @@ export default function UserStoriesPage() {
             Back to BRD
           </Button>
         </Link>
-        <Button 
-          onClick={() => generateTestCasesMutation.mutate()}
-          disabled={generateTestCasesMutation.isPending || !brd}
-          data-testid="button-next-test-cases"
-        >
-          {generateTestCasesMutation.isPending ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Generating Test Cases...
-            </>
-          ) : (
-            <>
-              Generate Test Cases
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </>
-          )}
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link href="/code-generation">
+            <Button variant="outline" data-testid="button-go-to-code-gen">
+              <Code2 className="h-4 w-4 mr-2" />
+              Generate Code
+            </Button>
+          </Link>
+          <Button 
+            onClick={() => generateTestCasesMutation.mutate()}
+            disabled={generateTestCasesMutation.isPending || !brd}
+            data-testid="button-next-test-cases"
+          >
+            {generateTestCasesMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Generating Test Cases...
+              </>
+            ) : (
+              <>
+                Generate Test Cases
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
