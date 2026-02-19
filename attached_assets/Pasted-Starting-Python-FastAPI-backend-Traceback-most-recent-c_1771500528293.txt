@@ -1,0 +1,44 @@
+Starting Python FastAPI backend...
+Traceback (most recent call last):
+  File "C:\Users\daspa\Desktop\modern-sdlc-tool\server_py\main.py", line 39, in <module>
+    from agents.jira_agent import jira_agent
+  File "C:\Users\daspa\Desktop\modern-sdlc-tool\server_py\agents\__init__.py", line 2, in <module>
+    from .jira_agent import JiraAgent
+  File "C:\Users\daspa\Desktop\modern-sdlc-tool\server_py\agents\jira_agent.py", line 24, in <module>
+    from services.jira_service import JiraService
+  File "C:\Users\daspa\Desktop\modern-sdlc-tool\server_py\services\__init__.py", line 2, in <module>
+    from services.ai_service import ai_service, AIService
+  File "C:\Users\daspa\Desktop\modern-sdlc-tool\server_py\services\ai_service.py", line 94, in <module>
+    ai_service = AIService()
+  File "C:\Users\daspa\Desktop\modern-sdlc-tool\server_py\services\ai_service.py", line 13, in __init__
+    self.settings = get_settings()
+                    ~~~~~~~~~~~~^^
+  File "C:\Users\daspa\Desktop\modern-sdlc-tool\server_py\core\config.py", line 87, in get_settings
+    return Settings.from_env()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\daspa\Desktop\modern-sdlc-tool\server_py\core\config.py", line 66, in from_env
+    return cls(
+        pwc_genai_endpoint_url=os.getenv("PWC_GENAI_ENDPOINT_URL", ""),
+    ...<12 lines>...
+        vite_dev_server=os.getenv("VITE_DEV_SERVER", "http://localhost:5173"),
+    )
+  File "C:\Users\daspa\AppData\Roaming\Python\Python313\site-packages\pydantic_settings\main.py", line 167, in __init__
+    super().__init__(
+    ~~~~~~~~~~~~~~~~^
+        **__pydantic_self__._settings_build_values(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<24 lines>...
+        )
+        ^
+    )
+    ^
+  File "C:\Users\daspa\AppData\Roaming\Python\Python313\site-packages\pydantic\main.py", line 212, in __init__
+    validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)  
+pydantic_core._pydantic_core.ValidationError: 1 validation error for Settings
+neon_database_url
+  Extra inputs are not permitted [type=extra_forbidden, input_value='postgresql://neondb_owne...channel_binding=require', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.9/v/extra_forbidden
+error Command failed with exit code 1.
+info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command.        
+
+C:\Users\daspa\Desktop\modern-sdlc-tool>

@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     
     # Database (PostgreSQL - optional)
     database_url: Optional[str] = None
+    neon_database_url: Optional[str] = None
     
     # Session
     session_secret: Optional[str] = None
