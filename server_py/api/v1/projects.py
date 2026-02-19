@@ -75,11 +75,13 @@ async def analyze_project(
         repo_name = f"{match.group(1)}/{match.group(2)}".replace(".git", "")
         
         # Create project
+        from datetime import datetime
         project = storage.create_project({
             "name": repo_name,
             "repoUrl": repo_url,
             "techStack": [],
             "status": "analyzing",
+            "analyzedAt": datetime.utcnow().isoformat(),
         })
         
         # Run analysis in background
