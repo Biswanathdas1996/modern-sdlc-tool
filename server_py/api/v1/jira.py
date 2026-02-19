@@ -98,7 +98,29 @@ async def find_related_jira_stories_endpoint(request: FindRelatedRequest):
         if not feature_description:
             raise bad_request("Feature description is required")
         
-        related_stories = await jira_service.find_related_jira_stories(feature_description)
+        jira_stories = await jira_service.get_jira_stories()
+        
+        if not jira_stories:
+            return {"relatedStories": []}
+        
+        related_raw = await ai_service.find_related_stories(feature_description, jira_stories)
+        
+        jira_story_map = {s["key"]: s for s in jira_stories}
+        related_stories = []
+        for item in related_raw:
+            key = item.get("key", "")
+            story_data = jira_story_map.get(key, {"key": key, "summary": item.get("summary", "")})
+            related_stories.append({
+                "story": {
+                    "key": story_data.get("key", key),
+                    "summary": story_data.get("summary", ""),
+                    "description": story_data.get("description", ""),
+                    "status": story_data.get("status", ""),
+                    "priority": story_data.get("priority", ""),
+                },
+                "relevanceScore": item.get("relevanceScore", 0),
+                "reason": item.get("reason", ""),
+            })
         
         return {"relatedStories": related_stories}
         

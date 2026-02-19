@@ -290,6 +290,48 @@ class JiraService:
             log_info(f"JQL search returned {len(issues)} issues", "jira_service")
             return issues
 
+    async def sync_subtask_to_jira(self, story: Any, parent_key: str, storage) -> Dict[str, Any]:
+        """Sync a single user story as a JIRA subtask under a parent story."""
+        auth_header = self._get_auth_header()
+        jira_base_url = f"https://{self.settings.jira_instance_url}/rest/api/3"
+        
+        description = self._build_story_description(story)
+        
+        issue_data = {
+            "fields": {
+                "project": {"key": self.settings.jira_project_key},
+                "summary": story.title,
+                "description": description,
+                "issuetype": {"name": "Sub-task"},
+                "parent": {"key": parent_key},
+                "labels": story.labels or []
+            }
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{jira_base_url}/issue",
+                headers={
+                    "Authorization": auth_header,
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                },
+                json=issue_data
+            )
+            
+            if response.status_code == 201:
+                data = response.json()
+                log_info(f"Created subtask {data.get('key')} under {parent_key}", "jira")
+                return {
+                    "storyKey": story.storyKey,
+                    "jiraKey": data.get("key"),
+                    "parentKey": parent_key,
+                    "isSubtask": True
+                }
+            else:
+                log_error(f"JIRA subtask creation failed: {response.text}", "jira")
+                raise Exception(f"Failed to create subtask: {response.status_code} - {response.text}")
+
     async def get_parent_story_context(self, parent_jira_key: str) -> Optional[str]:
         """Fetch context from parent JIRA story."""
         try:

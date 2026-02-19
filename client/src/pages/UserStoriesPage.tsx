@@ -917,7 +917,7 @@ export default function UserStoriesPage() {
               <div className="mt-4 space-y-2">
                 <Label>Select parent story:</Label>
                 <ScrollArea className="h-48 border rounded-md p-2">
-                  {relatedStories.map((related) => (
+                  {relatedStories.filter((related) => related?.story?.key).map((related) => (
                     <div
                       key={related.story.key}
                       className={`p-3 rounded-md border mb-2 cursor-pointer transition-colors ${
