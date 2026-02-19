@@ -7,7 +7,7 @@ from core.logging import log_error, log_info
 from core.database import get_db
 from services.knowledge_base_service import KnowledgeBaseService
 from .utils import ActionType
-from .prompts import prompt_loader
+from prompts import prompt_loader
 from .tools import (
     TicketToolsContext,
     search_tickets_tool,

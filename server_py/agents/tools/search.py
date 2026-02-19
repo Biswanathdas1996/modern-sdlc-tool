@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional
 import re
 
 from core.logging import log_info, log_error, log_debug
-from ..prompts import prompt_loader
+from prompts import prompt_loader
 
 
 async def generate_jql_from_query(ai_service, query: str, project_key: Optional[str] = None) -> Optional[str]:

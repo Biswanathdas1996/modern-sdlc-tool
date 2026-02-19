@@ -3,7 +3,7 @@ import re
 import json
 import httpx
 from typing import Optional, Dict, Any, List, Callable
-from agents.prompts import prompt_loader
+from prompts import prompt_loader
 
 GENAI_ENDPOINT = os.environ.get("PWC_GENAI_ENDPOINT_URL", "")
 API_KEY = os.environ.get("PWC_GENAI_API_KEY", "")

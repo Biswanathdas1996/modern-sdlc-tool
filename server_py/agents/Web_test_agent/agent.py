@@ -8,7 +8,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from .ai_service import ai_service
 from .tools.web_scraper import scrape_webpage
-from ..prompts import prompt_loader
+from prompts import prompt_loader
 
 env_path = Path(__file__).parent.parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)

@@ -11,7 +11,7 @@ from typing import Dict, Any, List, Optional
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from ai import call_pwc_genai, build_prompt, parse_json_response
-from ..prompts import prompt_loader
+from prompts import prompt_loader
 
 
 class CodeGenAgent:

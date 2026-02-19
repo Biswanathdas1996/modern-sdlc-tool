@@ -15,7 +15,7 @@ from .tools.dir_enum import enumerate_directories
 from .tools.injection_tester import test_form_injections
 from .tools.method_tester import test_http_methods
 from .tools.cve_lookup import lookup_cves
-from ..prompts import prompt_loader
+from prompts import prompt_loader
 
 env_path = Path(__file__).parent.parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)

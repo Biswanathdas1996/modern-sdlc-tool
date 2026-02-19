@@ -12,7 +12,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional, List, Tuple
 from .ai_service import ai_service
-from ..prompts import prompt_loader
+from prompts import prompt_loader
 
 # Configure logger with proper formatting
 logger = logging.getLogger(__name__)
