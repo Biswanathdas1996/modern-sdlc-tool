@@ -235,9 +235,9 @@ export default function DocumentationPage() {
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden min-h-0">
           {/* Sidebar TOC */}
-          <aside className="w-64 border-r border-border bg-card/50 flex flex-col shrink-0">
+          <aside className="w-64 border-r border-border bg-card/50 flex flex-col shrink-0 hidden md:flex">
             <div className="p-4 border-b border-border">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -266,7 +266,7 @@ export default function DocumentationPage() {
           </aside>
 
           {/* Main Content */}
-          <main className="flex-1 overflow-auto">
+          <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
             <div className="p-6 max-w-4xl mx-auto space-y-8">
               {/* Overview Section */}
               <section id="overview" className="space-y-4 animate-fade-in">
@@ -389,11 +389,11 @@ export default function DocumentationPage() {
                       </CardHeader>
                       <CardContent className="space-y-3">
                         <p className="text-muted-foreground">{feature.description}</p>
-                        <div>
+                        <div className="min-w-0">
                           <p className="text-sm font-medium text-foreground mb-2">Related Files:</p>
                           <div className="flex flex-wrap gap-2">
                             {feature.files.map((file) => (
-                              <Badge key={file} variant="outline" className="font-mono text-xs">
+                              <Badge key={file} variant="outline" className="font-mono text-xs break-all">
                                 {file}
                               </Badge>
                             ))}
@@ -452,7 +452,7 @@ export default function DocumentationPage() {
                       <CardDescription>{bpmnDiagrams.diagrams[0].description}</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <div className="bg-muted/30 rounded-lg p-6 overflow-x-auto">
+                      <div className="bg-muted/30 rounded-lg p-6 overflow-x-auto max-w-full">
                         <MermaidDiagram 
                           chart={bpmnDiagrams.diagrams[0].mermaidCode} 
                           className="min-h-[400px]"
@@ -565,8 +565,8 @@ export default function DocumentationPage() {
                               <ChevronDown className="h-4 w-4 text-muted-foreground" />
                             </CollapsibleTrigger>
                             <CollapsibleContent className="pt-2">
-                              <div className="border rounded-lg overflow-hidden">
-                                <table className="w-full text-sm">
+                              <div className="border rounded-lg overflow-x-auto">
+                                <table className="w-full text-sm min-w-[500px]">
                                   <thead className="bg-muted/50">
                                     <tr>
                                       <th className="text-left p-2 font-medium">Column</th>
