@@ -211,7 +211,7 @@ function ProgressTracker({ steps, thinkingSteps, isExpanded, onToggle }: {
             <div className="mt-3 pt-3 border-t border-border/30">
               <p className="text-xs text-muted-foreground mb-1.5 font-medium">Recent Activity</p>
               <div className="space-y-1 max-h-32 overflow-y-auto">
-                {thinkingSteps.slice(-5).map((step, i) => (
+                {thinkingSteps.map((step, i) => (
                   <div key={i} className="flex items-start gap-1.5">
                     <Badge variant="outline" className="text-[10px] shrink-0 mt-0.5">
                       {step.tool_name || step.type}
@@ -400,24 +400,13 @@ export default function UnitTestAgentPage() {
 
   useEffect(() => {
     if (!activeTaskId) return;
-    let pollCount = 0;
-    const maxPolls = 120;
+    
+    // Poll every 3 seconds until task completes or fails
+    // The onSuccess handler will set activeTaskId to null when done
     const interval = setInterval(() => {
-      pollCount++;
-      if (pollCount >= maxPolls) {
-        clearInterval(interval);
-        setActiveTaskId(null);
-        const timeoutMsg: Message = {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: "Task polling timed out after 10 minutes. The task may still be running in the background.",
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, timeoutMsg]);
-        return;
-      }
       pollTaskMutation.mutate(activeTaskId);
     }, 3000);
+    
     return () => clearInterval(interval);
   }, [activeTaskId]);
 

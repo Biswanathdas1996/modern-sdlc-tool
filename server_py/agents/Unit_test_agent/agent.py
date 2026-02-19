@@ -6,11 +6,28 @@ import shutil
 import threading
 import uuid
 import time
+import logging
+import sys
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional, List, Tuple
 from .ai_service import ai_service
 
+# Configure logger with proper formatting
+logger = logging.getLogger(__name__)
+if not logger.handlers:
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter(
+        '%(asctime)s [%(levelname)s] [UnitTestAgent] %(message)s',
+        datefmt='%I:%M:%S %p'
+    )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+MAX_FIX_ATTEMPTS=2  # Increased from 2 to allow more fix attempts
 IGNORE_DIRS = {
     '.git', 'node_modules', '__pycache__', '.next', 'dist', 'build',
     '.venv', 'venv', 'env', '.env', '.idea', '.vscode', 'vendor',
@@ -86,6 +103,7 @@ class UnitTestAgent:
     def __init__(self):
         self.sessions: Dict[str, Dict[str, Any]] = {}
         self.tasks: Dict[str, Dict[str, Any]] = {}
+        logger.info("🧪 Unit Test Generator Agent initialized")
         print("🧪 Unit Test Generator Agent initialized")
 
     def _get_session(self, session_id: str) -> Dict[str, Any]:
@@ -105,15 +123,24 @@ class UnitTestAgent:
         return self.sessions[session_id]
 
     def set_repo(self, session_id: str, repo_url: str, repo_path: str, repo_name: str) -> bool:
+        logger.info(f"Setting repo for session {session_id}: {repo_name}")
         session = self._get_session(session_id)
         if session["cloned"]:
+            logger.info(f"Repo already set for session {session_id}")
             return True
 
         if not Path(repo_path).exists():
+            logger.error(f"Repo path does not exist: {repo_path}")
             return False
 
+        logger.info(f"Detecting language for repo: {repo_path}")
         language = self._detect_language(repo_path)
+        logger.info(f"Detected language: {language}")
+        
+        logger.info(f"Detecting tech stack for repo: {repo_path}")
         tech_stack = self._detect_tech_stack(repo_path, language)
+        logger.info(f"Detected tech stack: {tech_stack}")
+        
         session["repo_url"] = repo_url
         session["repo_path"] = repo_path
         session["repo_name"] = repo_name
@@ -320,6 +347,7 @@ Return ONLY the JSON, no markdown or explanations."""
         }
 
     def _collect_source_files(self, repo_path: str) -> Dict[str, str]:
+        logger.info(f"Collecting source files from: {repo_path}")
         files = {}
         root = Path(repo_path)
 
@@ -340,7 +368,9 @@ Return ONLY the JSON, no markdown or explanations."""
                 except Exception:
                     pass
                 if len(files) >= MAX_FILES_FOR_ANALYSIS:
+                    logger.info(f"Reached maximum file limit ({MAX_FILES_FOR_ANALYSIS}), stopping collection")
                     break
+        logger.info(f"Collected {len(files)} source files")
         return files
 
     def _is_test_file_strict(self, filename: str) -> bool:
@@ -372,6 +402,7 @@ Return ONLY the JSON, no markdown or explanations."""
         return False
 
     def _discover_existing_tests(self, repo_path: str, language: str) -> Dict[str, Dict[str, Any]]:
+        logger.info(f"Discovering existing tests in: {repo_path}")
         existing_tests = {}
         root = Path(repo_path)
 
@@ -401,6 +432,7 @@ Return ONLY the JSON, no markdown or explanations."""
                 except Exception:
                     pass
 
+        logger.info(f"Discovered {len(existing_tests)} existing test files")
         return existing_tests
 
     def _infer_source_file(self, test_path: str, language: str, repo_path: str) -> Optional[str]:
@@ -480,7 +512,9 @@ Return ONLY the JSON, no markdown or explanations."""
         return None
 
     def _analyze_test_patterns(self, existing_tests: Dict[str, Dict[str, Any]], language: str) -> str:
+        logger.info(f"Analyzing test patterns from {len(existing_tests)} existing tests")
         if not existing_tests:
+            logger.info("No existing tests found to analyze")
             return ""
 
         sample_tests = []
@@ -508,9 +542,12 @@ Provide a concise style guide covering:
 Return ONLY the style guide as plain text, no markdown headers. Be concise and specific."""
 
         try:
+            logger.info("Calling AI service to analyze test patterns...")
             style_guide = ai_service.call_genai(prompt, temperature=0.1, max_tokens=2000)
+            logger.info(f"Successfully generated style guide ({len(style_guide)} chars)")
             return style_guide.strip()
         except Exception as e:
+            logger.error(f"Test pattern analysis error: {e}")
             print(f"⚠️ Test pattern analysis error: {e}")
             return ""
 
@@ -771,88 +808,175 @@ React-specific:
             return result.returncode == 0
         except Exception:
             return False
+    
+    def _run_npm_command(self, args: List[str], cwd: str, timeout: int = 300, env: Optional[Dict[str, str]] = None) -> subprocess.CompletedProcess:
+        """Run npm/npx command with proper Windows support."""
+        if os.name == 'nt':  # Windows
+            # On Windows, npm/npx are batch files, so we need shell=True
+            cmd = ' '.join(args)
+            return subprocess.run(
+                cmd,
+                cwd=cwd, 
+                capture_output=True, 
+                text=True, 
+                timeout=timeout,
+                shell=True,
+                env=env or os.environ.copy()
+            )
+        else:
+            return subprocess.run(
+                args,
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=env
+            )
 
     def _install_test_deps(self, repo_path: str, language: str) -> Dict[str, Any]:
+        logger.info(f"Starting test dependency installation for language: {language}")
+        logger.info(f"Repository path: {repo_path}")
         root = Path(repo_path)
         try:
             if language == "python":
+                logger.info("Installing pytest and pytest-mock...")
                 result = subprocess.run(
                     ["pip", "install", "pytest", "pytest-mock", "-q"],
                     cwd=str(root), capture_output=True, text=True, timeout=120
                 )
+                logger.info(f"pytest installation completed with return code: {result.returncode}")
+                
                 req_file = root / "requirements.txt"
                 if req_file.exists():
+                    logger.info("Found requirements.txt - installing project dependencies...")
                     try:
                         subprocess.run(
                             ["pip", "install", "-r", "requirements.txt", "-q"],
                             cwd=str(root), capture_output=True, text=True, timeout=180
                         )
-                    except Exception:
+                        logger.info("requirements.txt dependencies installed successfully")
+                    except Exception as e:
+                        logger.warning(f"Failed to install requirements.txt: {e}")
                         pass
+                
                 setup_py = root / "setup.py"
                 pyproject = root / "pyproject.toml"
                 if setup_py.exists() or pyproject.exists():
+                    logger.info("Found setup.py or pyproject.toml - installing in editable mode...")
                     try:
                         subprocess.run(
                             ["pip", "install", "-e", ".", "-q"],
                             cwd=str(root), capture_output=True, text=True, timeout=180
                         )
-                    except Exception:
+                        logger.info("Project installed in editable mode successfully")
+                    except Exception as e:
+                        logger.warning(f"Failed to install in editable mode: {e}")
                         pass
+                logger.info("Python test dependencies installation complete")
                 return {"success": True, "message": "pytest installed"}
 
             elif language in ("javascript", "typescript"):
+                logger.info("Checking for npm installation...")
                 if not self._check_command_exists("npm"):
+                    logger.error("npm command not found in PATH")
                     return {
                         "success": False,
                         "message": "npm not found. Please install Node.js from https://nodejs.org/ (includes npm)"
                     }
+                logger.info("npm found successfully")
                 
+                # Check if dependencies are already installed
+                node_modules = root / "node_modules"
                 pkg = root / "package.json"
-                if pkg.exists():
+                
+                logger.info(f"Checking for node_modules directory: {node_modules}")
+                logger.info(f"node_modules exists: {node_modules.exists()}")
+                
+                # Auto-install dependencies if node_modules doesn't exist
+                if pkg.exists() and not node_modules.exists():
+                    logger.warning("node_modules directory not found - running npm install...")
+                    print("⚠️ node_modules not found - installing dependencies (this may take a few minutes)...")
                     try:
-                        result = subprocess.run(
-                            ["npm", "install", "--legacy-peer-deps"],
-                            cwd=str(root), capture_output=True, text=True, timeout=300
+                        result = self._run_npm_command(
+                            ["npm", "install"],
+                            str(root),
+                            timeout=300  # 5 minutes for full install
                         )
                         if result.returncode != 0:
-                            print(f"⚠️ npm install warning: {result.stderr[:500]}")
-                    except Exception as e:
-                        print(f"⚠️ npm install exception: {e}")
-
+                            logger.error(f"npm install failed: {result.stderr[:500]}")
+                            return {
+                                "success": False,
+                                "message": f"npm install failed: {result.stderr[:500]}"
+                            }
+                        logger.info("npm install completed successfully")
+                        print("✅ Dependencies installed successfully")
+                    except subprocess.TimeoutExpired:
+                        logger.error("npm install timed out after 300 seconds")
+                        return {
+                            "success": False,
+                            "message": "npm install timed out (5 min limit). The project may have too many dependencies. Please run 'npm install' manually."
+                        }
+                else:
+                    logger.info("node_modules directory found - skipping npm install")
+                
+                logger.info("Detecting if project is Create React App...")
                 is_cra = self._is_cra_project(str(root))
+                logger.info(f"Is Create React App: {is_cra}")
+                
                 if is_cra:
                     test_deps = ["@testing-library/react", "@testing-library/jest-dom", "@testing-library/user-event"]
-                    result = subprocess.run(
-                        ["npm", "install", "--save-dev", "--legacy-peer-deps"] + test_deps,
-                        cwd=str(root), capture_output=True, text=True, timeout=300
-                    )
-                    if result.returncode != 0:
-                        print(f"⚠️ testing-library install warning: {result.stderr[:300]}")
-                    return {"success": True, "message": "react-scripts + testing-library installed"}
+                    logger.info(f"Installing React Testing Library dependencies: {test_deps}")
+                    try:
+                        result = self._run_npm_command(
+                            ["npm", "install", "--save-dev", "--legacy-peer-deps"] + test_deps,
+                            str(root),
+                            timeout=180
+                        )
+                        if result.returncode != 0:
+                            logger.error(f"testing-library install failed: {result.stderr[:300]}")
+                            print(f"⚠️ testing-library install warning: {result.stderr[:300]}")
+                            return {"success": False, "message": f"testing-library install failed: {result.stderr[:300]}"}
+                        logger.info("React Testing Library installed successfully")
+                        return {"success": True, "message": "react-scripts + testing-library installed"}
+                    except subprocess.TimeoutExpired:
+                        logger.error("React Testing Library installation timed out")
+                        return {"success": False, "message": "Test dependency installation timed out. Please run 'npm install' manually first."}
                 else:
-                    result = subprocess.run(
-                        ["npm", "install", "--save-dev", "jest", "@types/jest"],
-                        cwd=str(root), capture_output=True, text=True, timeout=300
-                    )
-                    if result.returncode != 0:
-                        return {"success": False, "message": f"jest install failed: {result.stderr[:500]}"}
-                    return {"success": True, "message": "jest installed"}
+                    logger.info("Installing Jest test framework...")
+                    try:
+                        result = self._run_npm_command(
+                            ["npm", "install", "--save-dev", "jest", "@types/jest"],
+                            str(root),
+                            timeout=180
+                        )
+                        if result.returncode != 0:
+                            logger.error(f"Jest install failed: {result.stderr[:500]}")
+                            return {"success": False, "message": f"jest install failed: {result.stderr[:500]}"}
+                        logger.info("Jest installed successfully")
+                        return {"success": True, "message": "jest installed"}
+                    except subprocess.TimeoutExpired:
+                        logger.error("Jest installation timed out")
+                        return {"success": False, "message": "Jest installation timed out. Please run 'npm install' manually first."}
 
             elif language == "go":
+                logger.info("Running go mod tidy...")
                 result = subprocess.run(
                     ["go", "mod", "tidy"],
                     cwd=str(root), capture_output=True, text=True, timeout=120
                 )
+                logger.info(f"go mod tidy completed with return code: {result.returncode}")
                 return {"success": True, "message": "go dependencies tidied"}
 
+            logger.info(f"No specific test dependencies to install for language: {language}")
             return {"success": True, "message": "No specific test deps to install"}
         except subprocess.TimeoutExpired as e:
+            logger.error(f"Dependency installation timeout: {e}")
             print(f"❌ Dependency installation timeout: {e}")
             return {"success": False, "message": "Dependency installation timed out (300s limit). Try manual install."}
         except Exception as e:
             import traceback
             error_detail = traceback.format_exc()
+            logger.error(f"Dependency installation error: {error_detail}")
             print(f"❌ Dependency installation error: {error_detail}")
             return {"success": False, "message": f"Failed to install deps: {str(e)[:200]}"}
 
@@ -870,9 +994,14 @@ React-specific:
         return False
 
     def _run_test_file(self, repo_path: str, test_path: str, language: str) -> Dict[str, Any]:
+        logger.info(f"Running test file: {test_path}")
+        logger.info(f"Repository path: {repo_path}")
+        logger.info(f"Language: {language}")
+        
         root = Path(repo_path)
         full_test_path = root / test_path
         if not full_test_path.exists():
+            logger.error(f"Test file not found: {full_test_path}")
             return {"success": False, "passed": False, "output": "Test file not found", "error": "File not found"}
 
         env = os.environ.copy()
@@ -884,12 +1013,22 @@ React-specific:
         try:
             if language == "python":
                 cmd = ["python", "-m", "pytest", test_path, "-v", "--tb=short", "--no-header", "-x"]
+                logger.info(f"Executing pytest command: {' '.join(cmd)}")
+                result = subprocess.run(
+                    cmd, cwd=str(root), capture_output=True, text=True,
+                    timeout=180, env=env
+                )
+                logger.info(f"pytest completed with return code: {result.returncode}")
             elif language in ("javascript", "typescript"):
                 if self._is_cra_project(str(root)):
                     escaped_path = re.escape(test_path).replace("\\\\", "/")
                     cmd = ["npx", "react-scripts", "test", "--watchAll=false", "--ci", "--verbose", "--forceExit", "--testPathPattern", escaped_path]
+                    logger.info(f"Executing react-scripts test command: {' '.join(cmd)}")
                 else:
                     cmd = ["npx", "jest", test_path, "--no-coverage", "--verbose", "--forceExit"]
+                    logger.info(f"Executing jest command: {' '.join(cmd)}")
+                result = self._run_npm_command(cmd, str(root), timeout=180, env=env)
+                logger.info(f"Test command completed with return code: {result.returncode}")
             elif language == "go":
                 test_dir = str(Path(test_path).parent)
                 if test_dir == ".":
@@ -897,29 +1036,29 @@ React-specific:
                 else:
                     test_dir = "./" + test_dir + "/..."
                 cmd = ["go", "test", "-v", "-count=1", test_dir]
+                result = subprocess.run(
+                    cmd, cwd=str(root), capture_output=True, text=True,
+                    timeout=180, env=env
+                )
             else:
                 return {"success": True, "passed": True, "output": "No runner for this language, skipping validation"}
-
-            result = subprocess.run(
-                cmd, cwd=str(root), capture_output=True, text=True,
-                timeout=180, env=env
-            )
 
             combined_output = result.stdout + "\n" + result.stderr
             combined_output = combined_output[-4000:]
 
             if result.returncode != 0 and self._is_cra_project(str(root)) and "react-scripts" in " ".join(cmd):
                 if "Cannot find module" in combined_output and "react-scripts" in combined_output:
+                    logger.warning("react-scripts test failed with module error - falling back to jest")
                     print("⚠️ react-scripts test failed, falling back to npx jest")
                     fallback_cmd = ["npx", "jest", test_path, "--no-coverage", "--verbose", "--forceExit"]
-                    result = subprocess.run(
-                        fallback_cmd, cwd=str(root), capture_output=True, text=True,
-                        timeout=180, env=env
-                    )
+                    logger.info(f"Executing fallback jest command: {' '.join(fallback_cmd)}")
+                    result = self._run_npm_command(fallback_cmd, str(root), timeout=180, env=env)
                     combined_output = result.stdout + "\n" + result.stderr
                     combined_output = combined_output[-4000:]
+                    logger.info(f"Fallback jest completed with return code: {result.returncode}")
 
             passed = result.returncode == 0
+            logger.info(f"Test execution result - Passed: {passed}")
 
             return {
                 "success": True,
@@ -928,8 +1067,10 @@ React-specific:
                 "returncode": result.returncode,
             }
         except subprocess.TimeoutExpired:
+            logger.error("Test execution timed out after 180 seconds")
             return {"success": True, "passed": False, "output": "Test execution timed out (180s)", "returncode": -1}
         except Exception as e:
+            logger.error(f"Test execution error: {e}")
             print(f"⚠️ Test execution error: {e}")
             return {"success": False, "passed": False, "output": str(e), "returncode": -1}
 
@@ -984,6 +1125,107 @@ Return ONLY the complete test file code with only passing tests. No explanations
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    def _classify_test_error(self, error_output: str, language: str) -> Dict[str, str]:
+        """Classify test error type for targeted fixing."""
+        error_output_lower = error_output.lower()
+        
+        # Import/Module errors (most common)
+        if re.search(r"cannot find module|modulenotfounderror|importerror|no module named|cannot resolve", error_output_lower):
+            return {
+                "type": "IMPORT_ERROR",
+                "priority": "critical",
+                "description": "Module import path is incorrect"
+            }
+        
+        # Mock configuration errors
+        if re.search(r"is not a function|mockreturnvalue.*undefined|mock.*not defined|cannot read.*undefined", error_output_lower):
+            return {
+                "type": "MOCK_ERROR",
+                "priority": "high",
+                "description": "Mock not properly configured or defined after imports"
+            }
+        
+        # Function/attribute doesn't exist
+        if re.search(r"is not a function|undefined.*function|attributeerror|has no attribute|is undefined", error_output_lower):
+            return {
+                "type": "ATTRIBUTE_ERROR",
+                "priority": "high",
+                "description": "Testing function/method that doesn't exist in source"
+            }
+        
+        # Async/Promise handling
+        if re.search(r"promise|async|await|then.*catch|unhandledpromise", error_output_lower):
+            return {
+                "type": "ASYNC_ERROR",
+                "priority": "medium",
+                "description": "Async function not properly handled"
+            }
+        
+        # Syntax errors
+        if re.search(r"syntaxerror|unexpected token|invalid syntax", error_output_lower):
+            return {
+                "type": "SYNTAX_ERROR",
+                "priority": "critical",
+                "description": "Code has syntax errors"
+            }
+        
+        # Assertion failures (logic errors)
+        if re.search(r"expected.*received|assertionerror|expected.*to.*but|test failed", error_output_lower):
+            return {
+                "type": "ASSERTION_ERROR",
+                "priority": "low",
+                "description": "Test assertion logic is incorrect"
+            }
+        
+        # Default
+        return {
+            "type": "UNKNOWN",
+            "priority": "medium",
+            "description": "Unknown error type"
+        }
+
+    def _calculate_correct_import_path(self, test_file_path: str, source_file_path: str, tech_stack: Dict[str, Any] = None) -> str:
+        """Calculate the correct import path from test file to source file."""
+        test_path = Path(test_file_path)
+        source_path = Path(source_file_path)
+        
+        # Get tech stack info
+        if tech_stack:
+            import_style = tech_stack.get("import_style", "relative")
+            path_alias = tech_stack.get("path_alias")
+            has_src_dir = tech_stack.get("has_src_dir", False)
+            
+            # If using path aliases like @/ or ~/
+            if path_alias and import_style == "alias":
+                # Remove src/ prefix if exists
+                source_str = str(source_path)
+                if source_str.startswith("src/") or source_str.startswith("src\\"):
+                    source_str = source_str[4:]
+                # Remove file extension
+                source_no_ext = str(Path(source_str).with_suffix(""))
+                return f"{path_alias}/{source_no_ext.replace(chr(92), '/')}"
+        
+        # Calculate relative path
+        # Get common ancestor
+        try:
+            # Get relative path from test directory to source file
+            test_dir = test_path.parent
+            rel_path = Path(os.path.relpath(source_path, test_dir))
+            
+            # Remove extension and convert to import format
+            rel_path_no_ext = rel_path.with_suffix("")
+            import_path = str(rel_path_no_ext).replace(chr(92), "/")
+            
+            # Add ./ prefix if not starting with .. or /
+            if not import_path.startswith("..") and not import_path.startswith("/"):
+                import_path = "./" + import_path
+            
+            return import_path
+        except Exception as e:
+            logger.warning(f"Error calculating import path: {e}")
+            # Fallback to simple guess
+            return f"./{source_path.stem}"
+
     def _get_mocking_guidance(self, language: str) -> str:
         if language == "python":
             return "4. Use unittest.mock.patch, unittest.mock.MagicMock, or pytest-mock (mocker fixture) for mocking"
@@ -996,6 +1238,92 @@ Return ONLY the complete test file code with only passing tests. No explanations
         else:
             return "4. Use the standard mocking library for this language to mock all external dependencies"
 
+    def _get_error_specific_guidance(self, error_type: str, filepath: str, language: str, repo_path: str = "") -> str:
+        """Provide targeted guidance based on error type."""
+        
+        if error_type == "IMPORT_ERROR":
+            return """**CRITICAL FIX NEEDED: Import path is wrong!**
+
+ACTION REQUIRED:
+1. Check the error message to see which import is failing
+2. The test file needs to import from the source file
+3. Use RELATIVE imports (e.g., '../api/APIService' or './APIService')
+4. Remove file extensions in imports (use 'APIService' not 'APIService.js')
+5. Count the directory levels carefully - each '../' goes up one level
+
+EXAMPLE:
+If test is at:    __tests__/api/APIService.test.js
+And source is at: api/APIService.js
+Then import:      import { APIService } from '../../api/APIService';
+
+DO NOT use absolute imports like '/api/APIService' - they will fail!
+"""
+        
+        elif error_type == "MOCK_ERROR":
+            return """**CRITICAL FIX NEEDED: Mock configuration is broken!**
+
+ACTION REQUIRED:
+1. Move ALL jest.mock() calls to the VERY TOP of the file (line 1-5)
+2. Mocks MUST be defined BEFORE any imports
+3. Mock the MODULE PATH, not the imported variable
+
+CORRECT ORDER:
+```javascript
+// 1. Mocks FIRST (top of file)
+jest.mock('axios');
+jest.mock('../services/api');
+
+// 2. Then imports
+import React from 'react';
+import { APIService } from '../api/APIService';
+
+// 3. Then tests
+describe('APIService', () => {...});
+```
+"""
+        
+        elif error_type == "ATTRIBUTE_ERROR":
+            return """**CRITICAL FIX NEEDED: Testing functions that don't exist!**
+
+ACTION REQUIRED:
+1. Read the SOURCE FILE above carefully
+2. Only test functions/methods that ACTUALLY EXIST in the source
+3. Check exact function names (case-sensitive)
+4. Remove tests for functions you assumed exist but don't
+"""
+        
+        elif error_type == "ASYNC_ERROR":
+            return """**FIX NEEDED: Async/Promise handling is incorrect!**
+
+ACTION REQUIRED:
+1. If testing async function, mark test as async: it('test', async () => {
+2. Use await before calling async functions
+3. For React Testing Library: use waitFor() or findBy*() queries
+4. Mock promises to resolve/reject properly
+"""
+        
+        elif error_type == "SYNTAX_ERROR":
+            return """**CRITICAL FIX: Syntax error in generated code!**
+
+ACTION REQUIRED:
+1. Check for missing brackets, parentheses, braces
+2. Check for incorrect JSX syntax
+3. Check for incorrect string quotes
+4. Ensure proper async/await syntax
+"""
+        
+        elif error_type == "ASSERTION_ERROR":
+            return """**FIX NEEDED: Assertion values don't match actual behavior!**
+
+ACTION REQUIRED:
+1. Re-read the SOURCE CODE to understand what it actually does
+2. Update expected values to match real behavior
+3. If uncertain, use simpler assertions (e.g., toBeDefined() instead of exact values)
+"""
+        
+        else:  # UNKNOWN
+            return """**General debugging needed - carefully review the error message and fix accordingly.**"""
+
     def _fix_failing_tests(
         self,
         filepath: str,
@@ -1007,7 +1335,13 @@ Return ONLY the complete test file code with only passing tests. No explanations
         deps_context: str = "",
         repo_path: str = "",
     ) -> Dict[str, Any]:
+        logger.info(f"Attempting to fix failing tests for {filepath} (attempt {attempt}/{MAX_FIX_ATTEMPTS})")
         config = LANGUAGE_TEST_CONFIG.get(language, LANGUAGE_TEST_CONFIG["python"])
+
+        # Classify the error type for targeted fixing
+        error_classification = self._classify_test_error(error_output, language)
+        error_type = error_classification["type"]
+        logger.info(f"Error classified as: {error_type} ({error_classification['priority']} priority)")
 
         is_cra = self._is_cra_project(repo_path) if repo_path else False
         cra_note = ""
@@ -1022,47 +1356,95 @@ IMPORTANT: This is a Create React App (CRA) project using react-scripts.
 - Use act() for state updates and async operations
 """
 
-        prompt = f"""You are a senior {language} developer fixing failing unit tests. This is fix attempt {attempt}.
+        prompt = f"""You are a senior {language} developer fixing failing unit tests. This is fix attempt {attempt}/{MAX_FIX_ATTEMPTS}.
 
-The test file was generated for this source file but FAILED when executed. Fix the tests so they PASS.
+🎯 **YOUR TASK:** Analyze the TEST EXECUTION ERROR OUTPUT below and fix the FAILING TEST CODE to make it pass.
+
+**CRITICAL:** You have access to three pieces of information:
+1. The SOURCE FILE (what the tests are testing)
+2. The FAILING TEST CODE (the generated test that's broken)
+3. The TEST EXECUTION ERROR OUTPUT (the console output showing exactly what's wrong)
+
+Your job is to READ THE ERROR OUTPUT carefully, identify what's broken in the test code, and fix it.
 
 SOURCE FILE ({filepath}):
 ```{language}
 {source_content[:6000]}
 ```
 
-FAILING TEST CODE:
+❌ FAILING TEST CODE (THIS IS WHAT YOU NEED TO FIX):
 ```{language}
 {test_code[:6000]}
 ```
 
-TEST EXECUTION ERROR OUTPUT:
+🚨 TEST EXECUTION ERROR OUTPUT (THIS TELLS YOU WHAT'S WRONG):
 ```
 {error_output[:3000]}
 ```
 
-{f"PROJECT DEPENDENCIES:{deps_context}" if deps_context else ""}
+{f"PROJECT DEPENDENCIES:{deps_context[:1500]}" if deps_context else ""}
 {cra_note}
-CRITICAL FIX RULES:
-1. Carefully read the error output to understand EXACTLY why each test failed
-2. Common issues to fix:
-   - ImportError/ModuleNotFoundError: Fix import paths, use correct module structure, mock unavailable modules
-   - AttributeError: The function/class doesn't exist as assumed - check the source carefully
-   - AssertionError: Expected values are wrong - analyze the actual source code logic
-   - TypeError: Wrong argument count or types - match the actual function signatures
-   - SyntaxError in JSX: Make sure test files that test React components have proper JSX support
-   - Cannot find module: Verify the relative import path from the test file to the source file
-3. MOCK all external dependencies (database connections, API calls, file system, network requests)
-{self._get_mocking_guidance(language)}
-5. DO NOT test private/internal methods unless they're the only methods
-6. Make sure import paths exactly match the project structure
-7. If a function is too complex to test reliably, write a simpler test that just validates basic behavior
-8. REMOVE any test that cannot be reliably fixed rather than leaving it broken
-9. If attempt >= 2, be MORE AGGRESSIVE about removing problematic tests - keep only tests you are CONFIDENT will pass
 
-Return ONLY the complete fixed test file code. No explanations, no markdown fences."""
+📋 **STEP-BY-STEP FIXING PROCESS:**
+
+Step 1: READ the "TEST EXECUTION ERROR OUTPUT" above - this shows EXACTLY what failed
+Step 2: IDENTIFY the root cause (import error? mock issue? wrong assertion? wrong function signature?)
+Step 3: LOCATE the broken code in the "FAILING TEST CODE"
+Step 4: FIX the specific issue (update import path, fix mock, correct assertion, etc.)
+Step 5: VERIFY your fix addresses the error message
+Step 6: Return the COMPLETE fixed test file
+
+⚠️ The error output is your guide - use it to pinpoint exactly what needs fixing!
+
+DEBUG CHECKLIST - Fix these common errors:
+
+1. **ImportError/ModuleNotFoundError**: 
+   - Verify import paths match the actual file structure  
+   - Mock modules that aren't available in test environment
+   - For React: ensure test file can import component correctly
+
+2. **AttributeError** (function/class doesn't exist):
+   - Re-check the source file - test ONLY what actually exists
+   - Don't assume methods/properties that aren't in source
+   - Remove tests for non-existent functionality
+
+3. **TypeError** (wrong arguments):  
+   - Match EXACT function signature from source
+   - Check for default parameters, optional args, *args, **kwargs
+   - Verify you're passing correct number and type of arguments
+
+4. **AssertionError** (wrong expected values):
+   - Re-analyze source code logic carefully
+   - Use realistic test data that matches actual behavior
+   - Don't guess return values - deduce from source code
+
+5. **Cannot find module** (JS/TS):
+   - Fix relative import path from test file to source file
+   - Use correct path separators and extensions
+
+6. **Mock issues**:
+   {self._get_mocking_guidance(language)}
+   - Mock external dependencies BEFORE they're imported/used
+   - For Python: use unittest.mock.patch or pytest-mock
+   - For JS/TS: use jest.mock() at top level
+
+🎯 **ERROR ANALYSIS - This test has a {error_type} error:**
+{self._get_error_specific_guidance(error_type, filepath, language, repo_path)}
+
+FIX STRATEGY FOR ATTEMPT {attempt}:
+{"- Be aggressive: If a test is too complex to fix reliably, REMOVE it" if attempt >= 2 else "- Fix each error systematically"}
+{"- Focus ONLY on tests that will definitely pass" if attempt >= 2 else "- Attempt to fix all tests"}
+{"- It's better to have 3 passing tests than 10 failing tests" if attempt >= 3 else ""}
+
+OUTPUT REQUIREMENTS:
+- Return the COMPLETE fixed test file
+- Every test MUST pass when run
+- Remove any test that you cannot fix with 100% confidence
+- NO explanations, NO markdown fences - just the code
+"""
 
         try:
+            logger.info("Calling AI service to fix failing tests...")
             fixed_code = ai_service.call_genai(prompt, temperature=0.15, max_tokens=8192)
             fixed_code = fixed_code.strip()
             if fixed_code.startswith("```"):
@@ -1072,8 +1454,10 @@ Return ONLY the complete fixed test file code. No explanations, no markdown fenc
                 if lines and lines[-1].strip() == "```":
                     lines = lines[:-1]
                 fixed_code = "\n".join(lines)
+            logger.info(f"Successfully generated fixed test code ({len(fixed_code)} chars)")
             return {"success": True, "test_code": fixed_code}
         except Exception as e:
+            logger.error(f"Failed to fix tests: {e}")
             return {"success": False, "error": str(e)}
 
     def _generate_tests_for_file(
@@ -1164,7 +1548,7 @@ Return the COMPLETE UPDATED test file that includes both the existing tests AND 
 The code must be ready to save to a file and run. Return ONLY the code, no explanations or markdown."""
 
         else:
-            prompt = f"""You are a senior {language} developer writing comprehensive unit tests.
+            prompt = f"""You are a senior {language} developer writing comprehensive unit tests that MUST PASS on first run.
 
 Analyze this source file and generate thorough unit tests using {config['framework']}.
 
@@ -1173,22 +1557,64 @@ File: {filepath}
 {content[:8000]}
 ```
 {style_section}{deps_section}{imports_section}{import_section}
-Requirements:
-1. Write tests for EVERY public function, class method, and key behavior
-2. Include positive tests (happy path), negative tests (error cases), and edge cases
-3. MOCK ALL external dependencies (API calls, database, file I/O, network requests) - tests MUST run without any external service
-4. Use unittest.mock.patch / pytest-mock for Python, jest.mock for JavaScript/TypeScript
-5. Follow {config['framework']} best practices and conventions
-6. Add descriptive test names that explain what is being tested
-7. Group related tests in test classes/describe blocks where appropriate
-8. Test boundary conditions and special cases
-9. Follow the import guidelines above - use correct import paths based on project structure
-10. Every test must be self-contained and deterministic - no reliance on external state
+
+CRITICAL REQUIREMENTS (tests MUST pass validation):
+1. ✅ Write tests ONLY for functions/classes that ACTUALLY EXIST in the source file above
+2. ✅ Match function signatures EXACTLY - check parameter names, count, and default values
+3. ✅ MOCK ALL external dependencies (API calls, database, file I/O, network requests) - tests MUST run without any external service
+4. ✅ For JavaScript/TypeScript: Place ALL jest.mock() calls at the TOP of the file, BEFORE any imports
+5. ✅ For imports: Use RELATIVE paths (e.g., './Component' or '../utils/helper') - verify the path is correct for where the test file will be located
+6. ✅ Add descriptive test names that explain what is being tested
+7. ✅ Group related tests in test classes/describe blocks where appropriate
+8. ✅ Include positive tests (happy path), negative tests (error cases), and edge cases
+9. ✅ Every test must be self-contained and deterministic - no reliance on external state
+10. ✅ Follow {config['framework']} best practices and conventions
+
+🚨 COMMON MISTAKES TO AVOID (90% of test failures come from these):
+
+**1. IMPORT ERRORS (40-50% of failures):**
+❌ Wrong: import {{ Component }} from '/absolute/path'  (absolute paths fail)
+❌ Wrong: import {{ Component }} from 'Component'  (missing ./ or ../)
+✅ Correct: import {{ Component }} from './Component'  (relative path)
+✅ Correct: import {{ Component }} from '../components/Component'  (relative with directory)
+
+**2. MOCK ERRORS (20-30% of failures):**
+❌ Wrong order:
+```javascript
+import axios from 'axios';  // ❌ import before mock
+jest.mock('axios');  // ❌ too late!
+```
+✅ Correct order:
+```javascript
+jest.mock('axios');  // ✅ mock FIRST
+jest.mock('../services/api');  // ✅ before imports
+import axios from 'axios';  // ✅ then import
+```
+
+**3. TESTING NON-EXISTENT CODE (15-20% of failures):**
+❌ Testing: APIService.getUser(id)  when source only has fetchUser(id)
+❌ Testing: Component.handleSubmit()  when source has no such method
+✅ Only test what you see in the source code above!
+
+**4. ASYNC HANDLING (10-15% of failures):**
+❌ Wrong: it('fetches data', () => {{ fetchData(); expect(...) }})  // missing async/await
+✅ Correct: it('fetches data', async () => {{ await fetchData(); expect(...) }})
+
+**5. WRONG FUNCTION SIGNATURES (10% of failures):**
+❌ Testing: calculate(a, b, c)  when function only takes (a, b)
+✅ Match the EXACT number and names of parameters from source
+
+PRE-FLIGHT CHECKLIST (before generating each test):
+☑️ Does this function/class exist in the source file? (scroll up and verify!)
+☑️ Does my import path account for the test file location?
+☑️ Are all mocks defined at the TOP of the file?
+☑️ Am I testing behavior that can be determined from the source code?
+☑️ Have I mocked all external dependencies (API, database, localStorage, etc.)?
 
 Return ONLY the complete test file code, no explanations or markdown. The code must be ready to save to a file and run."""
 
         try:
-            test_code = ai_service.call_genai(prompt, temperature=0.2, max_tokens=8192)
+            test_code = ai_service.call_genai(prompt, temperature=0.1, max_tokens=8192)
             test_code = test_code.strip()
             if test_code.startswith("```"):
                 lines = test_code.split('\n')
@@ -1261,12 +1687,15 @@ Return ONLY the complete test file code, no explanations or markdown. The code m
             return str(Path("tests") / test_filename)
 
     def _write_test_file(self, repo_path: str, test_path: str, test_code: str) -> Dict[str, Any]:
+        logger.info(f"Writing test file: {test_path}")
         try:
             full_path = Path(repo_path) / test_path
             full_path.parent.mkdir(parents=True, exist_ok=True)
             full_path.write_text(test_code, encoding='utf-8')
+            logger.info(f"Successfully wrote test file: {test_path} ({len(test_code)} chars)")
             return {"success": True, "path": test_path}
         except Exception as e:
+            logger.error(f"Failed to write test file {test_path}: {e}")
             return {"success": False, "error": str(e), "path": test_path}
 
     def _write_test_config(self, repo_path: str, language: str):
@@ -1557,6 +1986,10 @@ Return ONLY the complete test file code, no explanations or markdown. The code m
                             })
                         else:
                             error_output = run_result.get("output", "Unknown error")
+                            logger.warning(f"Test failed for {test_path}")
+                            logger.info(f"Captured error output: {len(error_output)} characters")
+                            logger.info(f"Error preview: {error_output[:200]}...")
+                            
                             fix_time_remaining = TIME_BUDGET_SECONDS - (time.time() - start_time)
                             if fix_time_remaining < 90:
                                 task["thinking_steps"].append({
@@ -1571,6 +2004,7 @@ Return ONLY the complete test file code, no explanations or markdown. The code m
                                     "mode": actual_mode,
                                     "validated": False,
                                     "fix_attempts": 0,
+                                    "error_message": error_output[:500],  # First 500 chars of error
                                 }
                                 if actual_mode == "augment":
                                     augmented_tests.append(entry)
@@ -1593,6 +2027,9 @@ Return ONLY the complete test file code, no explanations or markdown. The code m
                                     "tool_name": "fix_test"
                                 })
 
+                                logger.info(f"Sending to LLM for fix attempt {fix_attempts}/{MAX_FIX_ATTEMPTS}")
+                                logger.info(f"Input: test_code={len(current_test_code)} chars, error_output={len(error_output)} chars")
+
                                 fix_result = self._fix_failing_tests(
                                     filepath, content, current_test_code,
                                     error_output, language, fix_attempts,
@@ -1613,6 +2050,8 @@ Return ONLY the complete test file code, no explanations or markdown. The code m
                                         })
                                     else:
                                         error_output = rerun.get("output", "Unknown error")
+                                        logger.warning(f"Tests still failing after fix attempt {fix_attempts}")
+                                        logger.info(f"Updated error output: {len(error_output)} characters")
                                         task["thinking_steps"].append({
                                             "type": "tool_result",
                                             "content": f"⚠️ Tests still failing after attempt {fix_attempts}"
@@ -1664,6 +2103,10 @@ Return ONLY the complete test file code, no explanations or markdown. The code m
                             "validated": test_passed,
                             "fix_attempts": fix_attempts,
                         }
+                        
+                        # Add error message if test failed
+                        if not test_passed and error_output:
+                            entry["error_message"] = error_output[:500]  # First 500 chars of error
 
                         if actual_mode == "augment":
                             augmented_tests.append(entry)
@@ -1724,6 +2167,10 @@ Return ONLY the complete test file code, no explanations or markdown. The code m
                     else:
                         status = "⚠️ Not validated"
                     response += f"| `{t['source_file']}` | `{t['test_path']}` | {t['priority']} | {status} |\n"
+                    # Add error message if test failed
+                    if not t.get("validated") and t.get("error_message"):
+                        error_preview = t['error_message'].replace('\n', ' ')[:200]
+                        response += f"| | **Error:** {error_preview}... | | |\n"
                 response += "\n"
 
             if augmented_tests:
@@ -1739,6 +2186,10 @@ Return ONLY the complete test file code, no explanations or markdown. The code m
                     else:
                         status = "⚠️ Not validated"
                     response += f"| `{t['source_file']}` | `{t['test_path']}` | {t['priority']} | {status} |\n"
+                    # Add error message if test failed
+                    if not t.get("validated") and t.get("error_message"):
+                        error_preview = t['error_message'].replace('\n', ' ')[:200]
+                        response += f"| | **Error:** {error_preview}... | | |\n"
                 response += "\n"
 
             if failed_tests:
