@@ -16,6 +16,14 @@ The frontend is built with React 18 and TypeScript, utilizing Wouter for routing
 ### Backend
 The backend is a Python 3.11 FastAPI application. It features RESTful JSON APIs, PWC GenAI integration via `httpx`, and handles file uploads using `python-multipart`. SSE streaming is used for BRD generation. `psycopg2` is used for PostgreSQL introspection and `pymongo` for MongoDB knowledge base operations. The backend follows a layered architecture with dedicated modules for core configuration, API routes, Pydantic schemas, data access (repositories), business logic (services), and AI agent implementations.
 
+### Backend Module Structure (Refactored)
+Large backend modules have been split into focused sub-modules for maintainability:
+- **server_py/agents/unit_test_agent/**: `constants.py`, `repo_analyzer.py`, `test_discovery.py`, `test_runner.py`, `test_generator.py`, `agent.py` (coordinator)
+- **server_py/agents/jira_agent/**: `ticket_actions.py`, `issue_actions.py`, `direct_processor.py` (orchestrator)
+- **server_py/agents/shannon_security_agent/**: `security_analyzers.py`, `assessment.py`, `agent.py` (coordinator)
+- **server_py/services/**: `github_fetcher.py`, `generators.py`, `ai_service.py` (core + delegation wrappers)
+- Pattern: Coordinator/orchestrator classes import standalone functions from sub-modules. Backward compatibility maintained via class delegation methods and `__init__.py` exports.
+
 ### Data Storage
 Drizzle ORM with a PostgreSQL dialect is used for database interactions, with Zod schemas for validation. The application manages data for projects, repository analysis, documentation, feature requests, BRDs, test cases, and test data. In-memory storage is used via a `StorageManager` and `BaseRepository` pattern.
 
