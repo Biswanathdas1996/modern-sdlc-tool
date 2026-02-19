@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
+import ReactMarkdown from "react-markdown";
 import { ArrowLeft, ArrowRight, Bookmark, RefreshCw, Clock, Layers, Tag, CheckCircle2, AlertCircle, Loader2, Wand2, Copy, Check, Upload, Pencil, Plus, X, GitBranch, Trash2, Code2 } from "lucide-react";
 import { SiJira } from "react-icons/si";
 import { Button } from "@/components/ui/button";
@@ -395,54 +396,37 @@ export default function UserStoriesPage() {
                   </div>
                 </div>
                 <ScrollArea className="h-[60vh] rounded-md border">
-                  <div className="p-5 space-y-4">
+                  <div className="p-5">
                     {copilotPrompt ? (
-                      copilotPrompt.split('\n').reduce((acc: { sections: JSX.Element[], currentCode: string[], inCode: boolean, key: number }, line: string) => {
-                        if (line.startsWith('```')) {
-                          if (acc.inCode) {
-                            acc.sections.push(
-                              <div key={acc.key++} className="rounded-md bg-muted border overflow-x-auto">
-                                <pre className="p-3 text-xs font-mono text-foreground whitespace-pre-wrap">{acc.currentCode.join('\n')}</pre>
-                              </div>
-                            );
-                            acc.currentCode = [];
-                            acc.inCode = false;
-                          } else {
-                            acc.inCode = true;
-                          }
-                        } else if (acc.inCode) {
-                          acc.currentCode.push(line);
-                        } else if (line.match(/^#{1,3}\s/)) {
-                          const level = line.match(/^(#{1,3})\s/)![1].length;
-                          const text = line.replace(/^#{1,3}\s+/, '');
-                          acc.sections.push(
-                            <div key={acc.key++} className={`${level === 1 ? 'text-lg font-bold border-b pb-2' : level === 2 ? 'text-base font-semibold mt-3' : 'text-sm font-semibold mt-2'} text-foreground`}>
-                              {text}
-                            </div>
-                          );
-                        } else if (line.match(/^\d+\.\s/)) {
-                          acc.sections.push(
-                            <div key={acc.key++} className="flex gap-2 text-sm text-foreground pl-2">
-                              <span className="text-primary font-semibold shrink-0">{line.match(/^(\d+\.)\s/)![1]}</span>
-                              <span>{line.replace(/^\d+\.\s/, '')}</span>
-                            </div>
-                          );
-                        } else if (line.match(/^[-*]\s/)) {
-                          acc.sections.push(
-                            <div key={acc.key++} className="flex gap-2 text-sm text-foreground pl-4">
-                              <span className="text-muted-foreground shrink-0">-</span>
-                              <span>{line.replace(/^[-*]\s/, '')}</span>
-                            </div>
-                          );
-                        } else if (line.trim() === '') {
-                          acc.sections.push(<div key={acc.key++} className="h-2" />);
-                        } else {
-                          acc.sections.push(
-                            <p key={acc.key++} className="text-sm text-foreground leading-relaxed">{line}</p>
-                          );
-                        }
-                        return acc;
-                      }, { sections: [], currentCode: [], inCode: false, key: 0 }).sections
+                      <ReactMarkdown
+                        components={{
+                          h1: ({ children }) => <h1 className="text-xl font-bold text-foreground border-b pb-2 mb-4">{children}</h1>,
+                          h2: ({ children }) => <h2 className="text-lg font-semibold text-foreground mt-6 mb-3">{children}</h2>,
+                          h3: ({ children }) => <h3 className="text-base font-semibold text-foreground mt-4 mb-2">{children}</h3>,
+                          p: ({ children }) => <p className="text-sm text-foreground leading-relaxed mb-3">{children}</p>,
+                          ul: ({ children }) => <ul className="space-y-1.5 mb-3 pl-1">{children}</ul>,
+                          ol: ({ children }) => <ol className="space-y-1.5 mb-3 pl-1 list-decimal list-inside">{children}</ol>,
+                          li: ({ children }) => <li className="text-sm text-foreground flex gap-2"><span className="text-muted-foreground mt-0.5 shrink-0">-</span><span>{children}</span></li>,
+                          strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+                          em: ({ children }) => <em className="italic text-muted-foreground">{children}</em>,
+                          code: ({ className, children }) => {
+                            const isBlock = className?.includes('language-');
+                            if (isBlock) {
+                              return (
+                                <div className="rounded-md bg-muted border overflow-x-auto my-3">
+                                  <pre className="p-4 text-xs font-mono text-foreground whitespace-pre-wrap">{children}</pre>
+                                </div>
+                              );
+                            }
+                            return <code className="px-1.5 py-0.5 rounded bg-muted text-xs font-mono text-foreground">{children}</code>;
+                          },
+                          pre: ({ children }) => <>{children}</>,
+                          hr: () => <hr className="my-4 border-border" />,
+                          blockquote: ({ children }) => <blockquote className="border-l-2 border-primary pl-4 my-3 text-sm text-muted-foreground italic">{children}</blockquote>,
+                        }}
+                      >
+                        {copilotPrompt}
+                      </ReactMarkdown>
                     ) : (
                       <p className="text-sm text-muted-foreground">Loading...</p>
                     )}
