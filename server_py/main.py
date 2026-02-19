@@ -1150,26 +1150,68 @@ async def delete_user_story(id: str):
 
 
 @app.post("/api/copilot-prompt/generate")
-async def generate_copilot_prompt_endpoint():
+async def generate_copilot_prompt_endpoint(request: Request):
     try:
+        body = {}
+        try:
+            body = await request.json()
+        except:
+            pass
+
         brd = storage.get_current_brd()
+        if not brd and body.get("brd"):
+            from server_py.models import BRD
+            brd = BRD(**body["brd"])
+            storage.save_brd(brd)
+
         if not brd:
             raise HTTPException(status_code=400, detail="No BRD found. Please generate a BRD first.")
         
-        user_stories = storage.get_user_stories(brd.id)
-        if not user_stories:
+        user_stories_list = storage.get_user_stories(brd.id)
+        if not user_stories_list and body.get("userStories"):
+            from server_py.models import UserStory
+            for us_data in body["userStories"]:
+                story = UserStory(**us_data)
+                storage.save_user_story(story)
+            user_stories_list = storage.get_user_stories(brd.id)
+
+        if not user_stories_list:
             raise HTTPException(status_code=400, detail="No user stories found. Please generate user stories first.")
         
         projects = storage.get_all_projects()
         documentation = storage.get_documentation(projects[0].id) if projects else None
         analysis = storage.get_analysis(projects[0].id) if projects else None
         database_schema = storage.get_database_schema(projects[0].id) if projects else None
-        
+
+        if not documentation and body.get("documentation"):
+            documentation_data = body["documentation"]
+        else:
+            documentation_data = documentation.model_dump() if documentation else None
+
+        if not analysis and body.get("analysis"):
+            analysis_data = body["analysis"]
+        else:
+            analysis_data = analysis.model_dump() if analysis else None
+
+        if not database_schema and body.get("databaseSchema"):
+            database_schema_data = body["databaseSchema"]
+        else:
+            database_schema_data = database_schema.model_dump() if database_schema else None
+
+        feature_request_data = None
+        if body.get("featureRequest"):
+            feature_request_data = body["featureRequest"]
+        else:
+            fr = storage.get_current_feature_request()
+            if fr:
+                feature_request_data = fr.model_dump()
+
         prompt = await generate_copilot_prompt(
-            [s.model_dump() for s in user_stories],
-            documentation.model_dump() if documentation else None,
-            analysis.model_dump() if analysis else None,
-            database_schema.model_dump() if database_schema else None
+            [s.model_dump() for s in user_stories_list],
+            documentation_data,
+            analysis_data,
+            database_schema_data,
+            feature_request_data
         )
         
         return {"prompt": prompt}

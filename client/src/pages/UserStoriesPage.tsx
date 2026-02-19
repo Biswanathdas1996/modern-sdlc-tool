@@ -171,7 +171,20 @@ export default function UserStoriesPage() {
 
   const generatePromptMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/copilot-prompt/generate");
+      const body: Record<string, any> = {};
+      const cachedBrd = getSessionArtifact("brd");
+      if (cachedBrd) body.brd = cachedBrd;
+      const cachedStories = getSessionArtifact("userStories");
+      if (cachedStories) body.userStories = cachedStories;
+      const cachedDocumentation = getSessionArtifact("documentation");
+      if (cachedDocumentation) body.documentation = cachedDocumentation;
+      const cachedAnalysis = getSessionArtifact("analysis");
+      if (cachedAnalysis) body.analysis = cachedAnalysis;
+      const cachedSchema = getSessionArtifact("databaseSchema");
+      if (cachedSchema) body.databaseSchema = cachedSchema;
+      const cachedFeatureRequest = getSessionArtifact("featureRequest");
+      if (cachedFeatureRequest) body.featureRequest = cachedFeatureRequest;
+      const response = await apiRequest("POST", "/api/copilot-prompt/generate", body);
       return response.json();
     },
     onSuccess: (data) => {

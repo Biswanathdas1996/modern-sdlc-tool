@@ -746,40 +746,183 @@ async def generate_copilot_prompt(
     user_stories: List[Dict[str, Any]],
     documentation: Optional[Dict[str, Any]],
     analysis: Optional[Dict[str, Any]],
-    database_schema: Optional[Dict[str, Any]]
+    database_schema: Optional[Dict[str, Any]],
+    feature_request: Optional[Dict[str, Any]] = None
 ) -> str:
-    system_prompt = """You are a prompt engineer creating a comprehensive VS Code Copilot prompt that developers can use to implement user stories.
+    system_prompt = """You are an expert prompt engineer creating a highly detailed, implementation-ready VS Code Copilot prompt. The prompt you generate will be used by a developer to implement specific user stories in an existing codebase.
 
-Create a detailed prompt that includes:
-1. Context about the existing codebase and architecture
-2. User stories to implement
-3. Technical requirements and constraints
-4. Code patterns to follow
-5. Testing requirements
+Your generated prompt MUST include ALL of the following sections with rich detail:
 
-The prompt should be ready to paste into VS Code Copilot chat."""
+## 1. PROJECT CONTEXT
+- Repository name, description, and purpose
+- Full architecture overview (frontend, backend, API design, data flow)
+- Complete tech stack with versions where available
+- Existing code patterns and conventions the developer must follow
 
-    stories_text = "\n".join([
-        f"- {s.get('storyKey', '')}: {s.get('title', '')} ({s.get('storyPoints', 0)} points)"
-        for s in user_stories
-    ])
+## 2. REPOSITORY STRUCTURE
+- Directory layout and file organization
+- Key files and their responsibilities
+- Module boundaries and dependencies
 
-    context_parts = []
-    if documentation:
-        context_parts.append(f"Documentation: {documentation.get('title', '')}")
+## 3. TASK BREAKDOWN (Most Important Section)
+For EACH user story, create an elaborate implementation task that includes:
+- **What to build**: Detailed functional description
+- **Where to implement**: Exact files to create or modify, with file paths
+- **How to implement**: Step-by-step implementation approach
+- **Data models**: Any new or modified data structures/schemas needed
+- **API endpoints**: New routes, request/response schemas, HTTP methods
+- **UI components**: Frontend components to create or modify
+- **Business logic**: Core logic, validation rules, edge cases to handle
+- **Integration points**: How this connects to existing code
+- **Acceptance criteria**: Specific conditions that must be met
+
+## 4. TECHNICAL CONSTRAINTS
+- Code style and naming conventions from the existing codebase
+- Framework-specific patterns to follow
+- Error handling approach
+- Security considerations
+
+## 5. TESTING REQUIREMENTS
+- Unit tests needed
+- Integration test scenarios
+- Edge cases to test
+
+## 6. DATABASE CHANGES (if applicable)
+- New tables/columns needed
+- Migration scripts
+- Relationships and constraints
+
+Make the prompt comprehensive enough that a developer can implement each story without needing additional context. Be specific about file paths, function names, and code patterns from the existing codebase."""
+
+    stories_detail = []
+    for i, s in enumerate(user_stories, 1):
+        story_text = f"""### Story {i}: {s.get('storyKey', 'N/A')} - {s.get('title', 'Untitled')}
+- **Priority**: {s.get('priority', 'Medium')}
+- **Story Points**: {s.get('storyPoints', 0)}
+- **Description**: {s.get('description', 'No description')}
+- **Acceptance Criteria**: {s.get('acceptanceCriteria', 'None specified')}"""
+        if s.get('technicalNotes'):
+            story_text += f"\n- **Technical Notes**: {s['technicalNotes']}"
+        if s.get('dependencies'):
+            story_text += f"\n- **Dependencies**: {s['dependencies']}"
+        stories_detail.append(story_text)
+
+    context_sections = []
+
     if analysis:
-        context_parts.append(f"Tech Stack: {json.dumps(analysis.get('techStack', {}))}")
+        arch_section = "## REPOSITORY ANALYSIS\n"
+        if analysis.get('summary'):
+            arch_section += f"**Summary**: {analysis['summary']}\n\n"
+        if analysis.get('architecture'):
+            arch_section += f"**Architecture**: {analysis['architecture']}\n\n"
+
+        tech_stack = analysis.get('techStack', {})
+        if tech_stack:
+            arch_section += "**Tech Stack**:\n"
+            if tech_stack.get('languages'):
+                arch_section += f"- Languages: {', '.join(tech_stack['languages'])}\n"
+            if tech_stack.get('frameworks'):
+                arch_section += f"- Frameworks: {', '.join(tech_stack['frameworks'])}\n"
+            if tech_stack.get('databases'):
+                arch_section += f"- Databases: {', '.join(tech_stack['databases'])}\n"
+            if tech_stack.get('tools'):
+                arch_section += f"- Tools: {', '.join(tech_stack['tools'])}\n"
+            arch_section += "\n"
+
+        if analysis.get('codePatterns'):
+            arch_section += "**Existing Code Patterns**:\n"
+            for pattern in analysis['codePatterns']:
+                arch_section += f"- {pattern}\n"
+            arch_section += "\n"
+
+        if analysis.get('testingFramework'):
+            arch_section += f"**Testing Framework**: {analysis['testingFramework']}\n\n"
+
+        features = analysis.get('features', [])
+        if features:
+            arch_section += "**Existing Features & Related Files**:\n"
+            for feat in features:
+                arch_section += f"- **{feat.get('name', '')}**: {feat.get('description', '')}\n"
+                if feat.get('files'):
+                    arch_section += f"  Files: {', '.join(feat['files'])}\n"
+            arch_section += "\n"
+
+        context_sections.append(arch_section)
+
+    if documentation:
+        doc_section = "## DOCUMENTATION\n"
+        if documentation.get('title'):
+            doc_section += f"**Project**: {documentation['title']}\n\n"
+        if documentation.get('content'):
+            content = documentation['content']
+            if len(content) > 4000:
+                content = content[:4000] + "\n... (truncated for brevity)"
+            doc_section += f"**Technical Documentation**:\n{content}\n\n"
+        if documentation.get('sections'):
+            doc_section += "**Documentation Sections**:\n"
+            for sec in documentation.get('sections', []):
+                if isinstance(sec, dict):
+                    doc_section += f"- {sec.get('title', '')}: {sec.get('content', '')[:200]}\n"
+                elif isinstance(sec, str):
+                    doc_section += f"- {sec[:200]}\n"
+            doc_section += "\n"
+        context_sections.append(doc_section)
+
     if database_schema:
-        context_parts.append(f"Database: {database_schema.get('databaseName', '')} with {len(database_schema.get('tables', []))} tables")
+        db_section = "## DATABASE SCHEMA\n"
+        db_section += f"**Database**: {database_schema.get('databaseName', 'Unknown')}\n"
+        db_section += f"**Connection**: {database_schema.get('connectionString', 'N/A')}\n\n"
+        tables = database_schema.get('tables', [])
+        if tables:
+            db_section += f"**Tables ({len(tables)})**:\n"
+            for table in tables:
+                db_section += f"\n### Table: `{table.get('name', '')}`"
+                if table.get('rowCount') is not None:
+                    db_section += f" ({table['rowCount']} rows)"
+                db_section += "\n"
+                columns = table.get('columns', [])
+                if columns:
+                    db_section += "| Column | Type | Nullable | PK | FK |\n"
+                    db_section += "|--------|------|----------|----|----|" + "\n"
+                    for col in columns:
+                        pk = "Yes" if col.get('isPrimaryKey') else ""
+                        fk = col.get('foreignKeyRef', '') if col.get('isForeignKey') else ""
+                        db_section += f"| `{col.get('name', '')}` | {col.get('dataType', '')} | {col.get('isNullable', False)} | {pk} | {fk} |\n"
+            db_section += "\n"
+        context_sections.append(db_section)
 
-    user_prompt = f"""Create a Copilot prompt for implementing these user stories:
+    if feature_request:
+        req_section = "## FEATURE REQUEST CONTEXT\n"
+        if feature_request.get('title'):
+            req_section += f"**Title**: {feature_request['title']}\n"
+        if feature_request.get('description'):
+            req_section += f"**Description**: {feature_request['description']}\n"
+        if feature_request.get('requestType'):
+            req_section += f"**Request Type**: {feature_request['requestType']}\n"
+        req_section += "\n"
+        context_sections.append(req_section)
 
-{stories_text}
+    user_prompt = f"""Generate a comprehensive, implementation-ready VS Code Copilot prompt for the following user stories.
 
-{chr(10).join(context_parts)}
+Include the FULL repository context, architecture details, file structure, and code patterns so the developer has everything needed for accurate code generation.
 
-Full Stories:
-{json.dumps(user_stories, indent=2)}"""
+For each user story, elaborate the TASK extensively - specify exact files to modify/create, function signatures, data models, API routes, UI components, validation logic, and step-by-step implementation instructions.
+
+---
+
+# USER STORIES TO IMPLEMENT
+
+{chr(10).join(stories_detail)}
+
+---
+
+# CODEBASE CONTEXT
+
+{chr(10).join(context_sections)}
+
+---
+
+Generate the Copilot prompt now. Make the Task section for each story extremely detailed with specific file paths, code patterns to follow, and implementation steps. The prompt should be self-contained so a developer can implement everything without needing to ask questions."""
 
     prompt = build_prompt(system_prompt, user_prompt)
     return await call_pwc_genai(prompt)

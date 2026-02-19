@@ -160,6 +160,23 @@ export default function CodeGenerationPage() {
 
   const [promptDialogOpen, setPromptDialogOpen] = useState(false);
 
+  const buildPromptRequestBody = useCallback(() => {
+    const body: Record<string, any> = {};
+    const cachedBrd = getSessionArtifact("brd");
+    if (cachedBrd) body.brd = cachedBrd;
+    const cachedStories = getSessionArtifact("userStories");
+    if (cachedStories) body.userStories = cachedStories;
+    const cachedDocumentation = getSessionArtifact("documentation");
+    if (cachedDocumentation) body.documentation = cachedDocumentation;
+    const cachedAnalysis = getSessionArtifact("analysis");
+    if (cachedAnalysis) body.analysis = cachedAnalysis;
+    const cachedSchema = getSessionArtifact("databaseSchema");
+    if (cachedSchema) body.databaseSchema = cachedSchema;
+    const cachedFeatureRequest = getSessionArtifact("featureRequest");
+    if (cachedFeatureRequest) body.featureRequest = cachedFeatureRequest;
+    return body;
+  }, [getSessionArtifact]);
+
   const fetchCopilotPrompt = useCallback(async () => {
     if (copilotPrompt || isLoadingPrompt) return;
     setIsLoadingPrompt(true);
@@ -170,7 +187,7 @@ export default function CodeGenerationPage() {
         setIsLoadingPrompt(false);
         return;
       }
-      const response = await apiRequest("POST", "/api/copilot-prompt/generate");
+      const response = await apiRequest("POST", "/api/copilot-prompt/generate", buildPromptRequestBody());
       const data = await response.json();
       setCopilotPrompt(data.prompt);
       saveSessionArtifact("copilotPrompt", data.prompt);
@@ -179,12 +196,12 @@ export default function CodeGenerationPage() {
     } finally {
       setIsLoadingPrompt(false);
     }
-  }, [copilotPrompt, isLoadingPrompt, getSessionArtifact, saveSessionArtifact]);
+  }, [copilotPrompt, isLoadingPrompt, getSessionArtifact, saveSessionArtifact, buildPromptRequestBody]);
 
   const regenerateCopilotPrompt = useCallback(async () => {
     setIsLoadingPrompt(true);
     try {
-      const response = await apiRequest("POST", "/api/copilot-prompt/generate");
+      const response = await apiRequest("POST", "/api/copilot-prompt/generate", buildPromptRequestBody());
       const data = await response.json();
       setCopilotPrompt(data.prompt);
       saveSessionArtifact("copilotPrompt", data.prompt);
@@ -193,7 +210,7 @@ export default function CodeGenerationPage() {
     } finally {
       setIsLoadingPrompt(false);
     }
-  }, [saveSessionArtifact]);
+  }, [saveSessionArtifact, buildPromptRequestBody]);
 
   useEffect(() => {
     if (userStories && userStories.length > 0 && !copilotPrompt) {
