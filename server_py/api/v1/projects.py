@@ -59,7 +59,7 @@ async def analyze_project(
 ):
     """Analyze a GitHub repository."""
     import re
-    from ai import analyze_repository, generate_documentation, generate_bpmn_diagram
+    from services import ai_service
     
     try:
         repo_url = request.repoUrl
@@ -86,7 +86,7 @@ async def analyze_project(
         async def run_analysis(project_id: str, repo_url: str):
             try:
                 # Analyze repository
-                analysis = await analyze_repository(repo_url, project_id)
+                analysis = await ai_service.analyze_repository(repo_url, project_id)
                 storage.create_analysis(analysis)
                 
                 # Update project
@@ -106,7 +106,7 @@ async def analyze_project(
                 try:
                     updated_project = storage.get_project(project_id)
                     if updated_project:
-                        documentation = await generate_documentation(
+                        documentation = await ai_service.generate_documentation(
                             analysis,
                             updated_project.model_dump()
                         )
@@ -115,7 +115,7 @@ async def analyze_project(
                         # Generate BPMN
                         try:
                             log_info("Generating BPMN diagrams...", "api")
-                            bpmn_data = await generate_bpmn_diagram(
+                            bpmn_data = await ai_service.generate_bpmn_diagram(
                                 saved_doc.model_dump(),
                                 analysis
                             )

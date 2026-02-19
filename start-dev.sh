@@ -12,7 +12,7 @@ sleep 2
 
 # Start Python backend
 cd server_py
-python main.py 2>&1 | sed 's/^/[Python] /'
+python app.py  2>&1 | sed 's/^/[Python] /'
 
 # Cleanup on exit
 trap "kill $VITE_PID 2>/dev/null" EXIT

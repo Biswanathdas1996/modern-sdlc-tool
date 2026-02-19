@@ -17,8 +17,8 @@ router = APIRouter(prefix="/knowledge-base", tags=["knowledge-base"])
 async def get_knowledge_documents():
     """Get all knowledge documents."""
     try:
-        from mongodb_client import get_knowledge_documents_from_mongo
-        documents = get_knowledge_documents_from_mongo()
+        kb_service = get_kb_service()
+        documents = kb_service.get_knowledge_documents("global")
         return documents
     except Exception as e:
         log_error("Error fetching knowledge documents", "api", e)
@@ -80,12 +80,8 @@ async def upload_knowledge_document(file: UploadFile = File(...)):
             )
         
         # Create document record
-        from mongodb_client import (
-            create_knowledge_document_in_mongo,
-            update_knowledge_document_in_mongo
-        )
-        
-        doc = create_knowledge_document_in_mongo({
+        kb_service = get_kb_service()
+        doc = kb_service.create_knowledge_document({
             "projectId": project_id,
             "filename": file.filename or "unknown",
             "originalName": file.filename or "unknown",
@@ -129,12 +125,10 @@ async def upload_knowledge_document(file: UploadFile = File(...)):
 async def delete_knowledge_document(id: str):
     """Delete a knowledge document."""
     try:
-        from mongodb_client import delete_knowledge_document_from_mongo
-        
         kb_service = get_kb_service()
         kb_service.delete_document_chunks(id)
         
-        deleted = delete_knowledge_document_from_mongo(id)
+        deleted = kb_service.delete_knowledge_document(id)
         if not deleted:
             raise HTTPException(status_code=404, detail="Document not found")
         

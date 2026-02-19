@@ -59,7 +59,7 @@ test_gap_identification: |
   PRIORITIZATION RULES:
   1. Files marked [ NO TESTS] should be HIGH priority - they have zero test coverage
   2. Files marked [HAS TESTS] should be MEDIUM priority - they may need additional coverage for untested functions
-  3. Skip configuration files, entry points (main.py, index.js, app.py), migration files, and auto-generated code
+  3. Skip configuration files, entry points (app.py , index.js, app.py), migration files, and auto-generated code
   4. Focus on files with business logic, utility functions, services, and core functionality
 
   Source files:

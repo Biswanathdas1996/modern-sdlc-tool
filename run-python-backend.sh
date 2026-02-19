@@ -15,7 +15,7 @@ sleep 3
 
 echo "Starting Python FastAPI backend on port 5000..."
 cd server_py
-python main.py
+python app.py
 
 # Cleanup
 trap "kill $VITE_PID 2>/dev/null" EXIT

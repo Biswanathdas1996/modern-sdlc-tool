@@ -4,8 +4,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List, Any, Dict
 
-from agents.jira_agent import jira_agent
-from agents.conversation_manager import conversation_manager
+from agents.Jira_agent.jira_agent import jira_agent
+from agents.Jira_agent.conversation_manager import conversation_manager
 from schemas.requests import JiraAgentRequest, JiraAgentResponse, MissingInfoField
 from core.logging import log_info, log_error
 from utils.response import success_response, error_response
@@ -178,6 +178,7 @@ async def process_query(request: ProcessQueryRequest):
         )
 
 
+
 @router.get("/health")
 async def health_check():
     """Health check endpoint for JIRA agent."""
@@ -193,6 +194,47 @@ async def health_check():
             "active_conversations": active_conversations
         }
     })
+
+
+@router.get("/session/{session_id}")
+async def get_session(session_id: str):
+    """
+    Get conversation history and context for a session.
+    
+    Args:
+        session_id: The session ID to retrieve
+        
+    Returns:
+        Session information with conversation history and context
+    """
+    try:
+        context = conversation_manager.get_context(session_id)
+        
+        if not context:
+            raise HTTPException(
+                status_code=404,
+                detail="Session not found"
+            )
+        
+        return {
+            "session_id": session_id,
+            "state": context.state.value,
+            "summary": context.get_summary(),
+            "message_count": len(context.messages),
+            "messages": context.messages,
+            "collected_data": context.collected_data,
+            "created_at": context.created_at.isoformat(),
+            "updated_at": context.updated_at.isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error(f"Error getting session: {session_id}", "jira_agent_api", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get session: {str(e)}"
+        )
 
 
 @router.delete("/session/{session_id}")
@@ -220,3 +262,4 @@ async def end_session(session_id: str):
             status_code=500,
             detail=f"Failed to end session: {str(e)}"
         )
+

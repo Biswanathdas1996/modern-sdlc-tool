@@ -19,7 +19,18 @@ from core.database import mongo_db
 from middleware.logging import LoggingMiddleware
 
 # Import API routers
-from api.v1 import projects, knowledge_base, jira_agent
+from api.v1 import (
+    auth,
+    projects,
+    knowledge_base,
+    jira,
+    jira_agent,
+    agents,
+    documentation,
+    database_schema,
+    requirements,
+    confluence
+)
 
 # Setup logging
 setup_logging()
@@ -45,13 +56,16 @@ app.add_middleware(
 app.add_middleware(LoggingMiddleware)
 
 # Include API routers
-app.include_router(projects.router, prefix="/api")
-app.include_router(knowledge_base.router, prefix="/api")
-app.include_router(jira_agent.router, prefix="/api")
-
-# Note: Additional routers (BRD, test cases, user stories) 
-# are implemented in main.py legacy endpoints
-# Future: Migrate remaining routes to modular routers
+app.include_router(auth.router, prefix="/api")              # Auth & admin endpoints
+app.include_router(projects.router, prefix="/api")          # Project management
+app.include_router(knowledge_base.router, prefix="/api")    # Knowledge base
+app.include_router(jira.router, prefix="/api")              # JIRA integration
+app.include_router(jira_agent.router, prefix="/api")        # JIRA AI agent
+app.include_router(agents.router, prefix="/api")            # AI agents (security, unit-test, web-test, code-gen)
+app.include_router(documentation.router, prefix="/api")     # Repository analysis & BPMN
+app.include_router(database_schema.router, prefix="/api")   # PostgreSQL schema extraction
+app.include_router(requirements.router, prefix="/api")      # BRD, test cases, user stories
+app.include_router(confluence.router, prefix="/api")        # Confluence publishing
 
 
 @app.on_event("startup")

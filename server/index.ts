@@ -20,7 +20,7 @@ if (isDev) {
 // Wait a moment for Vite to start, then launch Python backend
 setTimeout(() => {
   console.log("Starting Python FastAPI backend...");
-  const pythonProcess = spawn("python", ["main.py"], {
+  const pythonProcess = spawn("python", ["app.py "], {
     cwd: path.join(process.cwd(), "server_py"),
     stdio: "inherit",
     env: { 

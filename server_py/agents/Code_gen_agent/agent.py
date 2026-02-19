@@ -11,7 +11,7 @@ from typing import Dict, Any, List, Optional
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from utils.pwc_llm import call_pwc_genai_async, build_pwc_prompt
-from ai import parse_json_response
+from utils.text import parse_json_response
 from prompts import prompt_loader
 
 

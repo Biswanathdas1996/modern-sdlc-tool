@@ -151,6 +151,40 @@ class KnowledgeBaseService:
             "documentCount": result[0].get("documentCount", 0),
             "chunkCount": result[0].get("chunkCount", 0)
         }
+    
+    def get_knowledge_documents(self, project_id: str) -> List[Dict[str, Any]]:
+        """Get all knowledge documents."""
+        collection = self.db[self.DOCUMENTS_COLLECTION]
+        documents = list(collection.find({}).sort("uploadedAt", -1))
+        
+        # Convert ObjectId to string
+        for doc in documents:
+            if "_id" in doc:
+                doc["_id"] = str(doc["_id"])
+            if "id" not in doc and "_id" in doc:
+                doc["id"] = doc["_id"]
+        
+        return documents
+    
+    def create_knowledge_document(self, doc_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a knowledge document record."""
+        import uuid
+        from datetime import datetime
+        
+        collection = self.db[self.DOCUMENTS_COLLECTION]
+        doc = {
+            "id": str(uuid.uuid4()),
+            "uploadedAt": datetime.utcnow().isoformat(),
+            **doc_data
+        }
+        collection.insert_one(doc)
+        return doc
+    
+    def delete_knowledge_document(self, document_id: str) -> bool:
+        """Delete a knowledge document."""
+        collection = self.db[self.DOCUMENTS_COLLECTION]
+        result = collection.delete_one({"id": document_id})
+        return result.deleted_count > 0
 
 
 def get_kb_service() -> KnowledgeBaseService:

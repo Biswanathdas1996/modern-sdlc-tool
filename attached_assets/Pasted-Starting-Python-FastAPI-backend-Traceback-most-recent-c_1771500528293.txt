@@ -1,6 +1,6 @@
 Starting Python FastAPI backend...
 Traceback (most recent call last):
-  File "C:\Users\daspa\Desktop\modern-sdlc-tool\server_py\main.py", line 39, in <module>
+  File "C:\Users\daspa\Desktop\modern-sdlc-tool\server_py\app.py ", line 39, in <module>
     from agents.jira_agent import jira_agent
   File "C:\Users\daspa\Desktop\modern-sdlc-tool\server_py\agents\__init__.py", line 2, in <module>
     from .jira_agent import JiraAgent
@@ -22,7 +22,7 @@ Traceback (most recent call last):
     ...<12 lines>...
         vite_dev_server=os.getenv("VITE_DEV_SERVER", "http://localhost:5173"),
     )
-  File "C:\Users\daspa\AppData\Roaming\Python\Python313\site-packages\pydantic_settings\main.py", line 167, in __init__
+  File "C:\Users\daspa\AppData\Roaming\Python\Python313\site-packages\pydantic_settings\app.py ", line 167, in __init__
     super().__init__(
     ~~~~~~~~~~~~~~~~^
         **__pydantic_self__._settings_build_values(
@@ -32,7 +32,7 @@ Traceback (most recent call last):
         ^
     )
     ^
-  File "C:\Users\daspa\AppData\Roaming\Python\Python313\site-packages\pydantic\main.py", line 212, in __init__
+  File "C:\Users\daspa\AppData\Roaming\Python\Python313\site-packages\pydantic\app.py ", line 212, in __init__
     validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)  
 pydantic_core._pydantic_core.ValidationError: 1 validation error for Settings
 neon_database_url
