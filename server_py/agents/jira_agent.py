@@ -19,7 +19,7 @@ except ImportError:
         AgentExecutor = None
         create_react_agent = None
         PromptTemplate = None
-        print("⚠️ LangChain AgentExecutor not available - JIRA agent will use direct processing only")
+        # LangChain AgentExecutor not available - will use direct processing only
 
 from services.jira_service import JiraService
 from services.ai_service import AIService
@@ -79,22 +79,19 @@ class JiraAgent:
         For new integrations, use process_query_interactive() instead.
         """
         try:
-            log_info(f"🚀 Processing query (legacy): {user_prompt}", "jira_agent")
-            print(f"🤖 JIRA AGENT - Processing Query")
-            print(f"Query: {user_prompt}\n")
+            log_info(f"Processing query (legacy): {user_prompt}", "jira_agent")
             
             # Analyze intent first for logging and fallback
             intent = analyze_intent(user_prompt)
             log_info(f"Detected intent: {intent['action'].value}", "jira_agent")
-            print(f"🎯 Detected Intent: {intent['action'].value}")
             if intent.get('ticket_key'):
-                print(f"🎫 Ticket Key Found: {intent['ticket_key']}")
+                log_debug(f"Ticket key found: {intent['ticket_key']}", "jira_agent")
             
             # Try LangChain agent first (if available)
             try:
                 if not self.agent:
                     raise Exception("LangChain agent not available, using direct processing")
-                print(f"\n🔧 Running LangChain Agent...")
+                log_debug("Running LangChain Agent", "jira_agent")
                 result = await self._run_agent(user_prompt)
                 agent_output = result.get("output", "")
                 

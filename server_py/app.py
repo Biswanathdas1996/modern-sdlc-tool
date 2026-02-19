@@ -49,35 +49,36 @@ app.include_router(projects.router, prefix="/api")
 app.include_router(knowledge_base.router, prefix="/api")
 app.include_router(jira_agent.router, prefix="/api")
 
-# TODO: Add remaining routers
-# from api.v1 import brd, test_cases, user_stories, jira
-# app.include_router(brd.router, prefix="/api")
-# app.include_router(test_cases.router, prefix="/api")
-# app.include_router(user_stories.router, prefix="/api")
-# app.include_router(jira.router, prefix="/api")
+# Note: Additional routers (BRD, test cases, user stories) 
+# are implemented in main.py legacy endpoints
+# Future: Migrate remaining routes to modular routers
 
 
 @app.on_event("startup")
 async def startup_event():
     """Application startup event."""
-    print(f"\n🚀 {settings.app_name} v{settings.app_version}")
-    print(f"📝 Environment: {settings.environment}")
-    print(f"🌐 Server: http://{settings.host}:{settings.port}")
+    from core.logging import log_info, log_error
+    
+    log_info(f"{settings.app_name} v{settings.app_version} starting", "app")
+    log_info(f"Environment: {settings.environment}", "app")
+    log_info(f"Server: http://{settings.host}:{settings.port}", "app")
     
     # Connect to MongoDB if configured
     if settings.mongodb_uri:
         try:
             mongo_db.connect()
+            log_info("MongoDB connected successfully", "app")
         except Exception as e:
-            print(f"⚠️  MongoDB connection failed: {e}")
+            log_error("MongoDB connection failed", "app", e)
     else:
-        print("⚠️  MongoDB not configured (MONGODB_URI not set)")
+        log_info("MongoDB not configured (MONGODB_URI not set)", "app")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Application shutdown event."""
-    print("\n👋 Shutting down...")
+    from core.logging import log_info
+    log_info("Application shutting down", "app")
     mongo_db.disconnect()
 
 

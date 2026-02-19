@@ -25,7 +25,7 @@ def parse_json_response(text: str) -> Any:
         if object_match:
             try:
                 return json.loads(object_match.group(0))
-            except:
+            except (json.JSONDecodeError, ValueError):
                 pass
         
         # Try regex extraction for JSON array
@@ -33,7 +33,7 @@ def parse_json_response(text: str) -> Any:
         if array_match:
             try:
                 return json.loads(array_match.group(0))
-            except:
+            except (json.JSONDecodeError, ValueError):
                 pass
         
         # Raise original error if all attempts fail

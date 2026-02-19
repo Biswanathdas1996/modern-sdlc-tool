@@ -74,7 +74,6 @@ export const getQueryFn: <T>(options: {
       if (isCacheableEndpoint(url)) {
         const cached = getFromCache<T>(url);
         if (cached !== null) {
-          console.log(`Using cached data for ${url}`);
           return cached;
         }
       }

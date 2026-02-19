@@ -5,6 +5,7 @@ from datetime import datetime
 from pymongo import MongoClient
 from pymongo.database import Database
 from pymongo.collection import Collection
+from core.logging import log_info, log_error, log_debug
 
 client: Optional[MongoClient] = None
 db: Optional[Database] = None
@@ -27,11 +28,11 @@ def connect_mongodb() -> Database:
     try:
         client = MongoClient(uri)
         db = client[DB_NAME]
-        print("Connected to MongoDB Atlas")
+        log_info("Connected to MongoDB Atlas", "mongodb")
         ensure_vector_index()
         return db
     except Exception as error:
-        print(f"Failed to connect to MongoDB: {error}")
+        log_error(f"Failed to connect to MongoDB", "mongodb", error)
         raise
 
 
@@ -47,11 +48,11 @@ def ensure_vector_index():
         has_vector_index = any(idx.get("name") == "vector_index" for idx in indexes)
 
         if not has_vector_index:
-            print("Creating text index for search...")
+            log_info("Creating text index for search", "mongodb")
             collection.create_index([("content", "text")], name="text_search_index")
-            print("Text search index created")
+            log_info("Text search index created", "mongodb")
     except Exception as error:
-        print(f"Index might already exist or requires Atlas UI setup: {error}")
+        log_debug(f"Index might already exist or requires Atlas UI setup: {error}", "mongodb")
 
 
 def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
@@ -103,9 +104,9 @@ def ingest_document(document_id: str, project_id: str, filename: str, content: s
             collection.insert_one(chunk_doc)
             inserted_count += 1
         except Exception as error:
-            print(f"Error processing chunk {i}: {error}")
+            log_error(f"Error processing chunk {i}", "mongodb", error)
 
-    print(f"Ingested {inserted_count} chunks for document {filename}")
+    log_info(f"Ingested {inserted_count} chunks for document {filename}", "mongodb")
     return inserted_count
 
 
@@ -113,16 +114,16 @@ def search_knowledge_base(project_id: str, query: str, limit: int = 5) -> List[D
     database = connect_mongodb()
     collection = database[CHUNKS_COLLECTION]
 
-    print(f"[KB Search] Searching globally, query: \"{query[:100]}...\"")
+    log_debug(f"Searching knowledge base, query: \"{query[:100]}...\"", "kb_search")
 
     total_chunks = collection.count_documents({})
-    print(f"[KB Search] Total chunks in knowledge base: {total_chunks}")
+    log_debug(f"Total chunks in knowledge base: {total_chunks}", "kb_search")
 
     keywords = [w for w in query.lower().split() if len(w) > 2]
-    print(f"[KB Search] Keywords extracted: {', '.join(keywords[:10])}{'...' if len(keywords) > 10 else ''}")
+    log_debug(f"Keywords extracted: {', '.join(keywords[:10])}{'...' if len(keywords) > 10 else ''}", "kb_search")
 
     if not keywords:
-        print("[KB Search] No keywords, returning recent chunks")
+        log_debug("No keywords, returning recent chunks", "kb_search")
         results = list(collection.find({}).limit(limit))
         return [
             {
@@ -140,7 +141,7 @@ def search_knowledge_base(project_id: str, query: str, limit: int = 5) -> List[D
             "$or": [{"content": pattern} for pattern in regex_patterns]
         }).limit(limit * 2))
 
-        print(f"[KB Search] Found {len(results)} matching chunks")
+        log_debug(f"Found {len(results)} matching chunks", "kb_search")
 
         scored_results = []
         for doc in results:
@@ -154,10 +155,10 @@ def search_knowledge_base(project_id: str, query: str, limit: int = 5) -> List[D
 
         final_results = sorted(scored_results, key=lambda x: x["score"], reverse=True)[:limit]
         
-        print(f"[KB Search] Returning {len(final_results)} results from files: {', '.join([r['filename'] for r in final_results])}")
+        log_debug(f"Returning {len(final_results)} results from files: {', '.join([r['filename'] for r in final_results])}", "kb_search")
         return final_results
     except Exception as error:
-        print(f"[KB Search] Text search error: {error}")
+        log_error("Text search error in knowledge base", "kb_search", error)
         return []
 
 

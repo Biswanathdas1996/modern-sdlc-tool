@@ -193,16 +193,13 @@ export default function BRDPage() {
     try {
       const featureDescription = `${brd.title}\n\n${brd.content.overview}\n\nObjectives:\n${brd.content.objectives.join("\n")}`;
       
-      console.log("Checking for related JIRA stories...");
       const response = await apiRequest("POST", "/api/jira/find-related", {
         featureDescription,
       });
       const data = await response.json();
-      console.log("Related stories response:", data);
       
       const stories = data.relatedStories || [];
       if (stories.length > 0) {
-        console.log("Found related stories:", stories.length);
         const mapped = stories.map((s: any) => ({
           story: {
             key: s.key || s.story?.key || "",
@@ -217,7 +214,6 @@ export default function BRDPage() {
         }));
         setRelatedStories(mapped);
       } else {
-        console.log("No related stories found");
         setRelatedStories([]);
       }
       setCreationMode("new");
