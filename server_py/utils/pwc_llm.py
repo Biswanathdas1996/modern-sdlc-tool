@@ -30,6 +30,7 @@ from typing import Dict, Any, Optional
 from pathlib import Path
 from dotenv import load_dotenv
 from core.logging import log_debug
+from core.langfuse import start_generation, flush as langfuse_flush
 
 env_path = Path(__file__).parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
@@ -138,12 +139,13 @@ async def call_pwc_genai_async(
     enable_continuation: bool = False,
     max_continuations: int = 3,
     task_name: Optional[str] = None,
+    user_input: Optional[str] = None,
 ) -> str:
     """
     Make an async call to PwC GenAI API.
     
     Args:
-        prompt: The prompt to send to the LLM
+        prompt: The full assembled prompt (system + history + current query)
         temperature: Sampling temperature (0.0-1.0). None = use config/defaults
         max_tokens: Maximum tokens in response. None = use config/defaults
         model: Model to use. None = resolved from llm_config.yml
@@ -151,6 +153,8 @@ async def call_pwc_genai_async(
         enable_continuation: Whether to handle response continuation
         max_continuations: Maximum number of continuations to attempt
         task_name: Key in llm_config.yml to auto-resolve model/temp/tokens
+        user_input: Raw current user message (guardrails keyword check scans
+                    only this so conversation history does not cause false blocks)
         
     Returns:
         str: The LLM response text
@@ -176,6 +180,29 @@ async def call_pwc_genai_async(
         "pwc_llm",
     )
 
+    # --- NeMo Guardrails: screen every prompt before it reaches the LLM ---
+    # Lazy import avoids circular dependency:
+    # core.guardrails → services.langchain_llm → utils.pwc_llm
+    try:
+        from core.guardrails import check_input_async as _guardrails_check  # noqa: PLC0415
+        await _guardrails_check(prompt, task_name, user_input)
+    except Exception as _gr_exc:
+        # Re-raise GuardrailsViolationError; swallow any other guardrails init errors
+        from core.guardrails import GuardrailsViolationError as _GVE  # noqa: PLC0415
+        if isinstance(_gr_exc, _GVE):
+            raise
+        log_debug(f"Guardrails check skipped due to error: {_gr_exc}", "pwc_llm")
+
+    # --- Langfuse generation span ---
+    generation = start_generation(
+        task_name=task_name or "adhoc",
+        model=resolved_model,
+        prompt=prompt,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        metadata={"continuation": enable_continuation},
+    )
+
     request_body = _build_request_body(prompt, temperature, max_tokens, model)
     headers = _build_headers()
     timeout_value = timeout or _config.default_timeout
@@ -185,7 +212,8 @@ async def call_pwc_genai_async(
     
     attempts = max_continuations + 1 if enable_continuation else 1
     
-    for attempt in range(attempts):
+    try:
+      for attempt in range(attempts):
         if attempt > 0:
             # Build continuation prompt
             continuation_prompt = (
@@ -219,7 +247,14 @@ async def call_pwc_genai_async(
                 break
         else:
             break
-    
+
+      generation.end(output=accumulated_text[:8000])
+      langfuse_flush()
+    except Exception as _exc:
+      generation.end(output=f"ERROR: {_exc}")
+      langfuse_flush()
+      raise
+
     return accumulated_text
 
 
@@ -232,12 +267,13 @@ def call_pwc_genai_sync(
     enable_continuation: bool = True,
     max_continuations: int = 3,
     task_name: Optional[str] = None,
+    user_input: Optional[str] = None,
 ) -> str:
     """
     Make a synchronous call to PwC GenAI API with automatic continuation support.
     
     Args:
-        prompt: The prompt to send to the LLM
+        prompt: The full assembled prompt (system + history + current query)
         temperature: Sampling temperature (0.0-1.0). None = use config/defaults
         max_tokens: Maximum tokens in response. None = use config/defaults
         model: Model to use. None = resolved from llm_config.yml
@@ -245,6 +281,8 @@ def call_pwc_genai_sync(
         enable_continuation: Whether to handle response continuation
         max_continuations: Maximum number of continuations to attempt
         task_name: Key in llm_config.yml to auto-resolve model/temp/tokens
+        user_input: Raw current user message (guardrails keyword check scans
+                    only this so conversation history does not cause false blocks)
         
     Returns:
         str: The LLM response text
@@ -270,6 +308,28 @@ def call_pwc_genai_sync(
         "pwc_llm",
     )
 
+    # --- NeMo Guardrails: screen every prompt before it reaches the LLM ---
+    # Lazy import avoids circular dependency:
+    # core.guardrails → services.langchain_llm → utils.pwc_llm
+    try:
+        from core.guardrails import check_input_sync as _guardrails_check_sync  # noqa: PLC0415
+        _guardrails_check_sync(prompt, task_name, user_input)
+    except Exception as _gr_exc:
+        from core.guardrails import GuardrailsViolationError as _GVE  # noqa: PLC0415
+        if isinstance(_gr_exc, _GVE):
+            raise
+        log_debug(f"Guardrails check skipped due to error: {_gr_exc}", "pwc_llm")
+
+    # --- Langfuse generation span ---
+    generation = start_generation(
+        task_name=task_name or "adhoc",
+        model=resolved_model,
+        prompt=prompt,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        metadata={"continuation": enable_continuation},
+    )
+
     request_body = _build_request_body(prompt, temperature, max_tokens, model)
     headers = _build_headers()
     timeout_value = timeout or _config.default_timeout
@@ -279,7 +339,8 @@ def call_pwc_genai_sync(
     
     attempts = max_continuations + 1 if enable_continuation else 1
     
-    for attempt in range(attempts):
+    try:
+      for attempt in range(attempts):
         if attempt > 0:
             # Build continuation prompt
             continuation_prompt = (
@@ -313,7 +374,14 @@ def call_pwc_genai_sync(
                 break
         else:
             break
-    
+
+      generation.end(output=accumulated_text[:8000])
+      langfuse_flush()
+    except Exception as _exc:
+      generation.end(output=f"ERROR: {_exc}")
+      langfuse_flush()
+      raise
+
     return accumulated_text
 
 

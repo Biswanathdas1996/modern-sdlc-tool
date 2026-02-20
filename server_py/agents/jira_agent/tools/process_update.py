@@ -45,7 +45,8 @@ async def process_update_ticket(
             prompt=extract_prompt,
             temperature=0.1,
             max_tokens=500,
-            task_name="jira_ticket_extraction"
+            task_name="jira_ticket_extraction",
+            user_input=user_prompt,
         )
 
         json_match = re.search(r'\{[^}]+\}', extracted, re.DOTALL)

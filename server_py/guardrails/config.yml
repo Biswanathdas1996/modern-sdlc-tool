@@ -1,0 +1,33 @@
+# =============================================================================
+# NVIDIA NeMo Guardrails Configuration - Defuse 2.O
+# =============================================================================
+# Applied centrally to ALL LLM input queries before they reach the PwC GenAI
+# endpoint. This acts as the first line of defence for every prompt.
+# =============================================================================
+
+models:
+  - type: main
+    engine: langchain
+    model: pwc_genai  # registered at runtime via GuardrailsService
+
+# ---------------------------------------------------------------------------
+# Input Rails  – run before every prompt reaches the LLM
+# Output Rails – screen each LLM response before it is returned
+# ---------------------------------------------------------------------------
+rails:
+  input:
+    flows:
+      - self check input         # LLM-based policy check (uses prompts.yml)
+      - check jailbreak          # Colang pattern matching
+      - check prompt injection   # Colang pattern matching
+      - check harmful request    # Colang pattern matching
+
+  output:
+    flows:
+      - self check output        # LLM-based output screening
+
+# ---------------------------------------------------------------------------
+# Logging & Tracing
+# ---------------------------------------------------------------------------
+tracing:
+  enabled: true

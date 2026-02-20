@@ -74,10 +74,14 @@ app.include_router(confluence.router, prefix="/api")        # Confluence publish
 async def startup_event():
     """Application startup event."""
     from core.logging import log_info, log_error
+    from core.langfuse import _init as langfuse_init
     
     log_info(f"{settings.app_name} v{settings.app_version} starting", "app")
     log_info(f"Environment: {settings.environment}", "app")
     log_info(f"Server: http://{settings.host}:{settings.port}", "app")
+
+    # Initialise Langfuse observability (silently no-ops if not configured)
+    langfuse_init()
     
     # Initialize PostgreSQL schema and seed admin
     try:
@@ -102,8 +106,11 @@ async def startup_event():
 async def shutdown_event():
     """Application shutdown event."""
     from core.logging import log_info
+    from core.langfuse import shutdown as langfuse_shutdown
     log_info("Application shutting down", "app")
     mongo_db.disconnect()
+    langfuse_shutdown()
+    log_info("Langfuse flushed and closed", "app")
 
 
 @app.get("/health")

@@ -24,11 +24,15 @@ class AIService:
         temperature: Optional[float] = None, 
         max_tokens: Optional[int] = None,
         task_name: Optional[str] = None,
+        user_input: Optional[str] = None,
     ) -> str:
         """Call PwC GenAI API using centralized utility.
         
         If task_name is provided, model/temperature/max_tokens are read
         from llm_config.yml (explicit overrides still win).
+        
+        user_input: raw current user message – passed to guardrails so the
+        keyword blocklist only scans the active turn, not conversation history.
         """
         cfg = self._llm_config.get(task_name) if task_name else None
         resolved_temp = temperature if temperature is not None else (cfg.temperature if cfg else 0.2)
@@ -43,6 +47,7 @@ class AIService:
                 temperature=temperature,
                 max_tokens=max_tokens,
                 task_name=task_name,
+                user_input=user_input,
             )
             log_info("PwC GenAI response received successfully", "ai")
             return response

@@ -73,7 +73,8 @@ async def process_search_tickets(
             prompt=analysis_prompt,
             temperature=0.3,
             max_tokens=2000,
-            task_name="jira_search"
+            task_name="jira_search",
+            user_input=user_prompt,
         )
     else:
         response = result

@@ -1,0 +1,8 @@
+# Extend Colang with a pass-through response so NeMo never calls the main LLM
+# for response generation (we handle generation ourselves in pwc_llm.py).
+
+define bot indicate pass
+  "GUARDRAILS_INPUT_APPROVED"
+
+define flow default response
+  bot indicate pass

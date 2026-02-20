@@ -31,3 +31,6 @@ nest-asyncio==1.6.0
 
 # LLM Observability (Langfuse)
 langfuse==2.51.3
+
+# NVIDIA NeMo Guardrails – central input/output policy enforcement
+nemoguardrails>=0.10.0
