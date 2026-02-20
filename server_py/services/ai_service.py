@@ -106,8 +106,9 @@ class AIService:
         )
 
     async def transcribe_audio(self, audio_buffer: bytes) -> str:
-        """Transcribe audio to text (currently not available)."""
-        raise ValueError("Audio transcription is not currently available. Please use text input instead.")
+        """Transcribe audio to text using PwC GenAI whisper model."""
+        from utils.pwc_llm import call_pwc_transcribe_async
+        return await call_pwc_transcribe_async(audio_buffer, task_name="audio_transcription")
 
     async def generate_brd(
         self,
