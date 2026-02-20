@@ -130,56 +130,119 @@ def parse_json_response(text: str) -> Any:
         )
 
 
-def _split_into_sections(text: str) -> list[str]:
-    """Split text into logical sections based on headings and titled lines.
+def _split_into_paragraphs(text: str) -> list[str]:
+    """Split text into paragraphs using structural cues.
     
-    Detects section boundaries at:
-    - Markdown headings (# Title)
-    - Title-case lines followed by newlines (e.g. "Customer Onboarding Workflow")
-    - Lines ending with "Workflow", "Process", "Procedure", etc.
+    Detects paragraph boundaries at:
+    1. Blank lines (standard paragraph separator)
+    2. Section title lines - a non-bullet, non-indented line that appears
+       after a bullet/list item, indicating a new topic/section starts
+    3. Markdown headings (# Title)
+    
+    This handles documents where sections aren't separated by blank lines
+    (common with PDF extraction).
     """
     lines = text.split('\n')
-    sections = []
-    current_section_lines = []
+    paragraphs = []
+    current_lines = []
     
-    heading_pattern = re.compile(
-        r'^(#{1,6}\s+.+|'
-        r'[A-Z][A-Za-z0-9\s/()&,\-]+\s+(Workflow|Process|Procedure|Policy|Standard|Audit|Review|Assessment|Check|Module|Phase|Stage|Step)s?\s*$|'
-        r'[A-Z][A-Za-z0-9\s/()&,\-]+(Workflow|Process|Procedure|Policy|Standard|Audit|Review|Assessment|Check|Module|Phase|Stage|Step)s?\s*$)',
-        re.MULTILINE
-    )
+    prev_was_list_item = False
     
     for line in lines:
         stripped = line.strip()
-        if stripped and heading_pattern.match(stripped) and current_section_lines:
-            section_text = '\n'.join(current_section_lines).strip()
-            if section_text:
-                sections.append(section_text)
-            current_section_lines = [line]
+        
+        if stripped == '':
+            if current_lines:
+                para = '\n'.join(current_lines).strip()
+                if para:
+                    paragraphs.append(para)
+                current_lines = []
+            prev_was_list_item = False
+            continue
+        
+        is_list_item = stripped.startswith(('- ', '* ', '• ')) or re.match(r'^\d+[\.\)]\s', stripped)
+        is_heading = stripped.startswith('#')
+        is_title_line = (
+            not is_list_item 
+            and not is_heading
+            and len(stripped) > 3
+            and not stripped[0].islower()
+        )
+        
+        if current_lines and (is_heading or (prev_was_list_item and is_title_line)):
+            para = '\n'.join(current_lines).strip()
+            if para:
+                paragraphs.append(para)
+            current_lines = [line]
         else:
-            current_section_lines.append(line)
+            current_lines.append(line)
+        
+        prev_was_list_item = is_list_item
     
-    if current_section_lines:
-        section_text = '\n'.join(current_section_lines).strip()
-        if section_text:
-            sections.append(section_text)
+    if current_lines:
+        para = '\n'.join(current_lines).strip()
+        if para:
+            paragraphs.append(para)
     
-    return sections
+    return paragraphs
+
+
+def _split_long_paragraph(text: str, chunk_size: int) -> list[str]:
+    """Split a single long paragraph at sentence boundaries.
+    
+    For paragraphs that exceed chunk_size, break at sentence endings
+    (. ? !) or newlines, keeping each piece under the limit.
+    """
+    if len(text) <= chunk_size:
+        return [text]
+    
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    
+    chunks = []
+    current = ""
+    
+    for sentence in sentences:
+        if not sentence.strip():
+            continue
+        
+        if len(sentence) > chunk_size:
+            if current.strip():
+                chunks.append(current.strip())
+                current = ""
+            for i in range(0, len(sentence), chunk_size):
+                piece = sentence[i:i + chunk_size].strip()
+                if piece:
+                    chunks.append(piece)
+            continue
+        
+        if current and len(current) + len(sentence) + 1 > chunk_size:
+            chunks.append(current.strip())
+            current = sentence
+        else:
+            current = (current + " " + sentence).strip() if current else sentence
+    
+    if current.strip():
+        chunks.append(current.strip())
+    
+    return chunks
 
 
 def chunk_text(text: str, chunk_size: int = 500, overlap: int = 100) -> list[str]:
-    """Split text into chunks that respect section/heading boundaries.
+    """Split text into chunks using paragraph-based strategy.
     
     Strategy:
-    1. First split text into logical sections (by headings/titles)
-    2. If a section fits in chunk_size, keep it as one chunk
-    3. If a section is too large, split it at paragraph/sentence boundaries
-    4. Merge small consecutive sections into one chunk if they fit together
+    1. Split text into paragraphs (by blank lines)
+    2. Each paragraph stays intact as one chunk if it fits
+    3. Long paragraphs are split at sentence boundaries
+    4. Small consecutive paragraphs are merged together (up to chunk_size)
+    
+    This keeps related content together and avoids cutting
+    mid-sentence or mid-topic.
     
     Args:
         text: The full document text to chunk
-        chunk_size: Target size for each chunk in characters (default: 500)
-        overlap: Number of overlapping characters between chunks (default: 100)
+        chunk_size: Max size for each chunk in characters (default: 500)
+        overlap: Not used in paragraph mode (kept for API compatibility)
     
     Returns:
         List of text chunks covering the entire document
@@ -192,84 +255,29 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 100) -> list[str
     if len(text) <= chunk_size:
         return [text]
     
-    sections = _split_into_sections(text)
+    paragraphs = _split_into_paragraphs(text)
     
-    if len(sections) <= 1:
-        return _chunk_by_size(text, chunk_size, overlap)
+    if not paragraphs:
+        return [text]
+    
+    units = []
+    for para in paragraphs:
+        if len(para) > chunk_size:
+            units.extend(_split_long_paragraph(para, chunk_size))
+        else:
+            units.append(para)
     
     chunks = []
     buffer = ""
     
-    for section in sections:
-        if len(section) > chunk_size:
-            if buffer.strip():
-                chunks.append(buffer.strip())
-                buffer = ""
-            sub_chunks = _chunk_by_size(section, chunk_size, overlap)
-            chunks.extend(sub_chunks)
-        elif len(buffer) + len(section) + 2 <= chunk_size:
-            buffer = (buffer + "\n\n" + section).strip() if buffer else section
+    for unit in units:
+        if buffer and len(buffer) + len(unit) + 2 > chunk_size:
+            chunks.append(buffer.strip())
+            buffer = unit
         else:
-            if buffer.strip():
-                chunks.append(buffer.strip())
-            buffer = section
+            buffer = (buffer + "\n\n" + unit).strip() if buffer else unit
     
     if buffer.strip():
         chunks.append(buffer.strip())
-    
-    return chunks
-
-
-def _chunk_by_size(text: str, chunk_size: int, overlap: int) -> list[str]:
-    """Fallback: split text by size with overlap, breaking at natural boundaries."""
-    if not text or not text.strip():
-        return []
-    
-    text = text.strip()
-    if len(text) <= chunk_size:
-        return [text]
-    
-    chunks = []
-    start = 0
-    text_len = len(text)
-    
-    while start < text_len:
-        end = min(start + chunk_size, text_len)
-        
-        if end >= text_len:
-            chunk = text[start:].strip()
-            if chunk:
-                chunks.append(chunk)
-            break
-        
-        best_break = -1
-        search_start = start + chunk_size // 3
-        search_region = text[search_start:end]
-        
-        idx = search_region.rfind('\n\n')
-        if idx != -1:
-            best_break = search_start + idx + 2
-        
-        if best_break == -1:
-            idx = search_region.rfind('\n')
-            if idx != -1:
-                best_break = search_start + idx + 1
-        
-        if best_break == -1:
-            for sep in ['. ', '? ', '! ']:
-                idx = search_region.rfind(sep)
-                if idx != -1:
-                    candidate = search_start + idx + len(sep)
-                    if best_break == -1 or candidate > best_break:
-                        best_break = candidate
-        
-        if best_break > start:
-            end = best_break
-        
-        chunk = text[start:end].strip()
-        if chunk:
-            chunks.append(chunk)
-        
-        start = max(end - overlap, start + 1)
     
     return chunks

@@ -90,8 +90,15 @@ class KnowledgeBaseService:
         filename: str, 
         content: str
     ) -> int:
-        """Ingest a document with section-aware chunking and embedding generation."""
+        """Ingest a document with paragraph-based chunking and embedding generation."""
         collection = self._get_chunks_collection(project_id)
+        docs_col = self._get_docs_collection(project_id)
+        
+        docs_col.update_one(
+            {"id": document_id},
+            {"$set": {"rawContent": content}},
+            upsert=False
+        )
         
         collection.delete_many({"documentId": document_id})
         
@@ -456,7 +463,7 @@ class KnowledgeBaseService:
         }
     
     def reingest_document(self, document_id: str, project_id: str) -> Dict[str, Any]:
-        """Re-ingest an existing document with improved section-aware chunking."""
+        """Re-ingest an existing document with improved paragraph-based chunking."""
         chunks_col = self._get_chunks_collection(project_id)
         docs_col = self._get_docs_collection(project_id)
         
@@ -464,15 +471,20 @@ class KnowledgeBaseService:
         if not doc_record:
             return {"success": False, "error": "Document not found"}
         
-        existing_chunks = list(chunks_col.find(
-            {"documentId": document_id},
-            {"content": 1, "chunkIndex": 1}
-        ).sort("chunkIndex", 1))
+        full_content = doc_record.get("rawContent", "")
         
-        if not existing_chunks:
-            return {"success": False, "error": "No existing chunks found"}
+        if not full_content:
+            existing_chunks = list(chunks_col.find(
+                {"documentId": document_id},
+                {"content": 1, "chunkIndex": 1}
+            ).sort("chunkIndex", 1))
+            
+            if not existing_chunks:
+                return {"success": False, "error": "No existing chunks found"}
+            
+            full_content = "\n".join(c.get("content", "") for c in existing_chunks)
         
-        full_content = "\n".join(c.get("content", "") for c in existing_chunks)
+        old_count = chunks_col.count_documents({"documentId": document_id})
         
         filename = doc_record.get("filename", doc_record.get("originalName", "unknown"))
         
@@ -489,7 +501,7 @@ class KnowledgeBaseService:
             "success": True,
             "documentId": document_id,
             "filename": filename,
-            "oldChunks": len(existing_chunks),
+            "oldChunks": old_count,
             "newChunks": chunk_count
         }
 
