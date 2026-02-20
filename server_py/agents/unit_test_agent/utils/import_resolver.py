@@ -59,7 +59,7 @@ Example: `import { helperFunction } from '../utils/helper';`"""
         test_location = tech_stack.get("test_location", "separate-dir")
 
         source_path = Path(filepath)
-        guidance = f"""JavaScript/TypeScript imports for this project:
+        guidance = """JavaScript/TypeScript imports for this project:
 """
 
         if path_alias and import_style == "alias":
