@@ -19,7 +19,7 @@ def build_generation_report(
     unvalidated_count = sum(1 for t in all_tests if not t.get("validated"))
     total_count = len(all_tests)
 
-    response = f"## Unit Test Generation Complete\n\n"
+    response = "## Unit Test Generation Complete\n\n"
     response += f"**Repository:** {session['repo_name']}\n"
     response += f"**Language:** {language.title()} | **Framework:** {config['framework']}\n"
 
