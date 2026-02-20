@@ -162,6 +162,11 @@ def create_user(username: str, email: str, password: str, role: str = "user", fe
                    VALUES (%s, %s, %s, %s)""",
                 (str(uuid.uuid4()), user_id, fk, fk in granted_features)
             )
+        if project_id:
+            cur.execute(
+                "INSERT INTO user_projects (id, user_id, project_id, role, created_at) VALUES (%s, %s, %s, 'member', NOW())",
+                (str(uuid.uuid4()), user_id, project_id)
+            )
         conn.commit()
         user["permissions"] = granted_features
         return user
@@ -187,6 +192,11 @@ def get_all_users() -> List[Dict[str, Any]]:
                 (user["id"],)
             )
             user["permissions"] = [row["feature_key"] for row in cur.fetchall()]
+            cur.execute(
+                "SELECT project_id FROM user_projects WHERE user_id = %s",
+                (user["id"],)
+            )
+            user["project_ids"] = [row["project_id"] for row in cur.fetchall()]
         return users
     finally:
         cur.close()

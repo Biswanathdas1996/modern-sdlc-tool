@@ -1,19 +1,25 @@
 """Projects API router."""
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
 from typing import List
 from schemas import AnalyzeRequest
 from repositories import storage
 from utils.exceptions import not_found, internal_error
 from utils.response import success_response
 from core.logging import log_info, log_error
+from api.v1.auth import get_current_user
+from repositories.user_project_repository import get_user_projects
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
 @router.get("")
-async def get_projects():
-    """Get all projects."""
+async def get_projects(request: Request):
+    """Get all projects. Admins see all, non-admins see only their assigned projects."""
     try:
+        user = get_current_user(request)
+        if user and user.get("role") != "admin":
+            member_projects = get_user_projects(user["id"])
+            return member_projects
         projects = storage.get_all_projects()
         return projects
     except Exception as e:

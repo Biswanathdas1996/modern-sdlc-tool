@@ -31,7 +31,9 @@ from api.v1 import (
     documentation,
     database_schema,
     requirements,
-    confluence
+    confluence,
+    sessions as sessions_router,
+    user_projects as user_projects_router,
 )
 
 # Setup logging
@@ -68,6 +70,8 @@ app.include_router(documentation.router, prefix="/api")     # Repository analysi
 app.include_router(database_schema.router, prefix="/api")   # PostgreSQL schema extraction
 app.include_router(requirements.router, prefix="/api")      # BRD, test cases, user stories
 app.include_router(confluence.router, prefix="/api")        # Confluence publishing
+app.include_router(sessions_router.router, prefix="/api")   # Workflow sessions & artifacts
+app.include_router(user_projects_router.router, prefix="/api")  # User-project membership
 
 
 @app.on_event("startup")

@@ -10,6 +10,8 @@ from . import documentation
 from . import database_schema
 from . import requirements
 from . import confluence
+from . import sessions
+from . import user_projects
 
 __all__ = [
     "auth",
@@ -22,4 +24,6 @@ __all__ = [
     "database_schema",
     "requirements",
     "confluence",
+    "sessions",
+    "user_projects",
 ]
