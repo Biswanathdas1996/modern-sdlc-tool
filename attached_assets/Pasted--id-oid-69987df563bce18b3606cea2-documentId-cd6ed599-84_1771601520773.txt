@@ -1,0 +1,16 @@
+{
+  "_id": {
+    "$oid": "69987df563bce18b3606cea2"
+  },
+  "documentId": "cd6ed599-8487-4e35-994c-b4877e6e2256",
+  "projectId": "378d2cdc-554a-4dfc-ad8e-ef427a137dda",
+  "content": "Workflows\nCustomer Onboarding Workflow\n- Collect customer information\n- Verify identity documents\n- Create customer profile in system\n- Provide welcome materials\n- Assign relationship manager\nCredit Card Processing Workflow\n- Receive application\n- Validate applicant information\n- Perform credit check\n- Approve or reject application\n- Issue card and PIN\n- Activate card\nKYC (Know Your Customer) Workflow\n- Collect identity documents\n- Verify authenticity of documents\n- Cross-check with government databases\n- Assess risk profile\n- Approve or reject customer onboarding\nLoan Approval Workflow\n- Receive loan application\n- Verify applicant details\n- Perform creditworthiness assessment\n- Evaluate collateral (if any)\n- Approve or reject loan\n- Disburse funds\nPayroll Processing Workflow\n- Collect employee timesheets\n- Calculate gross pay\n- Deduct taxes and contributions\n- Generate payslips\n- Transfer salaries to bank accounts\nCompliance Audit Workflow\n- Define audit scope\n- Collect compliance data\n- Review policies and procedures\n- Test compliance controls\n- Document findings\n- Report to management",
+  "chunkIndex": 0,
+  "totalChunks": 1,
+  "metadata": {
+    "filename": "workflows_document.pdf",
+    "section": "Chunk 1 of 1",
+    "charCount": 1104
+  },
+  "contentLower": "workflows\ncustomer onboarding workflow\n- collect customer information\n- verify identity documents\n- create customer profile in system\n- provide welcome materials\n- assign relationship manager\ncredit card processing workflow\n- receive application\n- validate applicant information\n- perform credit check\n- approve or reject application\n- issue card and pin\n- activate card\nkyc (know your customer) workflow\n- collect identity documents\n- verify authenticity of documents\n- cross-check with government databases\n- assess risk profile\n- approve or reject customer onboarding\nloan approval workflow\n- receive loan application\n- verify applicant details\n- perform creditworthiness assessment\n- evaluate collateral (if any)\n- approve or reject loan\n- disburse funds\npayroll processing workflow\n- collect employee timesheets\n- calculate gross pay\n- deduct taxes and contributions\n- generate payslips\n- transfer salaries to bank accounts\ncompliance audit workflow\n- define audit scope\n- collect compliance data\n- review policies and procedures\n- test compliance controls\n- document findings\n- report to management"
+}

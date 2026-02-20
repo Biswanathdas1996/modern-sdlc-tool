@@ -130,7 +130,7 @@ def parse_json_response(text: str) -> Any:
         )
 
 
-def chunk_text(text: str, chunk_size: int = 1500, overlap: int = 200) -> list[str]:
+def chunk_text(text: str, chunk_size: int = 500, overlap: int = 100) -> list[str]:
     """Split text into overlapping chunks with section-aware boundaries.
     
     Preserves document structure by preferring to break at:

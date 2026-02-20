@@ -4,7 +4,7 @@ from pymongo.database import Database
 from core.database import get_db
 from core.logging import log_info, log_error
 from utils.text import chunk_text
-from utils.embeddings import compute_corpus_similarity
+from utils.embeddings import generate_embeddings_batch, generate_embedding, cosine_similarity
 import re
 
 
@@ -90,7 +90,7 @@ class KnowledgeBaseService:
         filename: str, 
         content: str
     ) -> int:
-        """Ingest a document with section-aware chunking."""
+        """Ingest a document with section-aware chunking and embedding generation."""
         collection = self._get_chunks_collection(project_id)
         
         collection.delete_many({"documentId": document_id})
@@ -99,6 +99,11 @@ class KnowledgeBaseService:
         total_chunks = len(chunks)
         avg_chars = sum(len(c) for c in chunks) // max(total_chunks, 1)
         log_info(f"Document '{filename}' split into {total_chunks} chunks (avg {avg_chars} chars)", "kb")
+        
+        log_info(f"Generating embeddings for {total_chunks} chunks...", "kb")
+        embeddings = generate_embeddings_batch(chunks)
+        embedded_count = sum(1 for e in embeddings if e is not None)
+        log_info(f"Generated {embedded_count}/{total_chunks} embeddings successfully", "kb")
         
         inserted_count = 0
         
@@ -118,12 +123,17 @@ class KnowledgeBaseService:
                     "contentLower": chunk.lower(),
                 }
                 
+                if embeddings[i] is not None:
+                    chunk_doc["embedding"] = embeddings[i]
+                    chunk_doc["embeddingModel"] = "BAAI/bge-small-en-v1.5"
+                    chunk_doc["embeddingDimension"] = len(embeddings[i])
+                
                 collection.insert_one(chunk_doc)
                 inserted_count += 1
             except Exception as error:
                 log_error(f"Error processing chunk {i}", "kb", error)
         
-        log_info(f"Ingested {inserted_count} chunks for '{filename}' into {self._chunks_collection_name(project_id)}", "kb")
+        log_info(f"Ingested {inserted_count} chunks ({embedded_count} with embeddings) for '{filename}' into {self._chunks_collection_name(project_id)}", "kb")
         return inserted_count
     
     def search_knowledge_base(
@@ -132,51 +142,67 @@ class KnowledgeBaseService:
         query: str, 
         limit: int = 5
     ) -> List[Dict[str, Any]]:
-        """Search using TF-IDF semantic similarity with keyword fallback."""
+        """Search using vector similarity (primary) with keyword fallback."""
         collection = self._get_chunks_collection(project_id)
         
         log_info(f"Searching KB collection {self._chunks_collection_name(project_id)}: \"{query[:100]}\"", "kb")
         
-        all_chunks = list(collection.find(
-            {},
-            {"content": 1, "metadata": 1, "chunkIndex": 1, "documentId": 1}
-        ))
-        
-        if not all_chunks:
+        total_chunks = collection.count_documents({})
+        if total_chunks == 0:
             log_info(f"No chunks found in project {project_id} collection", "kb")
             return []
         
-        log_info(f"Computing TF-IDF similarity across {len(all_chunks)} chunks", "kb")
+        has_embeddings = collection.count_documents({"embedding": {"$exists": True}}) > 0
         
-        corpus_texts = [doc.get("content", "") for doc in all_chunks]
-        
-        try:
-            similarities = compute_corpus_similarity(query, corpus_texts)
-            
-            scored = []
-            for i, doc in enumerate(all_chunks):
-                scored.append({
-                    "content": doc.get("content", ""),
-                    "filename": doc.get("metadata", {}).get("filename", "Unknown"),
-                    "score": round(similarities[i], 4),
-                    "chunkIndex": doc.get("chunkIndex", 0),
-                    "searchMethod": "semantic"
-                })
-            
-            scored.sort(key=lambda x: x["score"], reverse=True)
-            results = scored[:limit]
-            
-            for i, r in enumerate(results[:3]):
-                log_info(f"Semantic result {i+1}: {r['filename']} chunk#{r['chunkIndex']} (score: {r['score']:.4f})", "kb")
-            
-            if results and results[0]["score"] > 0:
+        if has_embeddings:
+            results = self._vector_search(collection, query, limit)
+            if results:
+                log_info(f"Vector search returned {len(results)} results", "kb")
                 return results
-            
-            log_info("Semantic search found no matches, falling back to keyword search", "kb")
-        except Exception as e:
-            log_error(f"Semantic search error, falling back to keyword: {e}", "kb")
+            log_info("Vector search returned no results, falling back to keyword search", "kb")
+        else:
+            log_info("No embeddings found in chunks, using keyword search", "kb")
         
         return self._keyword_search(collection, query, limit)
+    
+    def _vector_search(self, collection, query: str, limit: int) -> List[Dict[str, Any]]:
+        """Search using cosine similarity against stored embeddings."""
+        query_embedding = generate_embedding(query)
+        if query_embedding is None:
+            log_error("Failed to generate query embedding", "kb")
+            return []
+        
+        all_chunks = list(collection.find(
+            {"embedding": {"$exists": True}},
+            {"content": 1, "metadata": 1, "embedding": 1, "chunkIndex": 1}
+        ))
+        
+        if not all_chunks:
+            return []
+        
+        scored = []
+        for doc in all_chunks:
+            doc_embedding = doc.get("embedding")
+            if not doc_embedding:
+                continue
+            
+            similarity = cosine_similarity(query_embedding, doc_embedding)
+            
+            scored.append({
+                "content": doc.get("content", ""),
+                "filename": doc.get("metadata", {}).get("filename", "Unknown"),
+                "score": round(similarity, 4),
+                "chunkIndex": doc.get("chunkIndex", 0),
+                "searchMethod": "vector"
+            })
+        
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        results = scored[:limit]
+        
+        for i, r in enumerate(results[:3]):
+            log_info(f"Vector result {i+1}: {r['filename']} chunk#{r['chunkIndex']} (similarity: {r['score']:.4f})", "kb")
+        
+        return results
     
     def _keyword_search(self, collection, query: str, limit: int) -> List[Dict[str, Any]]:
         """Fallback keyword-based search."""
@@ -269,12 +295,15 @@ class KnowledgeBaseService:
         result = list(collection.aggregate(pipeline))
         
         if not result:
-            return {"documentCount": 0, "chunkCount": 0}
+            return {"documentCount": 0, "chunkCount": 0, "embeddedChunks": 0}
+        
+        embedded_count = collection.count_documents({"embedding": {"$exists": True}})
         
         return {
             "documentCount": result[0].get("documentCount", 0),
             "chunkCount": result[0].get("chunkCount", 0),
-            "searchMethod": "semantic_tfidf"
+            "embeddedChunks": embedded_count,
+            "embeddingModel": "BAAI/bge-small-en-v1.5"
         }
     
     def get_knowledge_documents(self, project_id: str) -> List[Dict[str, Any]]:
@@ -399,15 +428,20 @@ class KnowledgeBaseService:
         chunks_indexes = list(chunks_col.list_indexes())
         docs_indexes = list(docs_col.list_indexes())
         
+        total_chunks = chunks_col.count_documents({})
+        embedded_count = chunks_col.count_documents({"embedding": {"$exists": True}})
+        
         return {
             "projectId": project_id,
             "chunksCollection": chunks_name,
             "documentsCollection": docs_name,
             "chunksIndexes": [idx.get("name") for idx in chunks_indexes],
             "documentsIndexes": [idx.get("name") for idx in docs_indexes],
-            "chunksCount": chunks_col.count_documents({}),
+            "chunksCount": total_chunks,
+            "embeddedChunks": embedded_count,
             "documentsCount": docs_col.count_documents({}),
-            "searchMethod": "semantic_tfidf"
+            "embeddingModel": "BAAI/bge-small-en-v1.5",
+            "embeddingDimension": 384
         }
     
     def reingest_document(self, document_id: str, project_id: str) -> Dict[str, Any]:
