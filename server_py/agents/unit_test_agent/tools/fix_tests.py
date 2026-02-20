@@ -3,7 +3,7 @@ from typing import Dict, Any
 
 from ..ai_service import ai_service
 from prompts import prompt_loader
-from ..constants import LANGUAGE_TEST_CONFIG, MAX_FIX_ATTEMPTS
+from ..constants import MAX_FIX_ATTEMPTS
 from ..utils.error_classifier import classify_test_error, get_error_specific_guidance
 from ..helpers.mocking_guide import get_mocking_guidance
 from ..helpers.npm_runner import is_cra_project
@@ -22,7 +22,6 @@ def fix_failing_tests(
     repo_path: str = "",
 ) -> Dict[str, Any]:
     logger.info(f"Attempting to fix failing tests for {filepath} (attempt {attempt}/{MAX_FIX_ATTEMPTS})")
-    config = LANGUAGE_TEST_CONFIG.get(language, LANGUAGE_TEST_CONFIG["python"])
 
     error_classification = classify_test_error(error_output, language)
     error_type = error_classification["type"]
