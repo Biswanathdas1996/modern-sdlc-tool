@@ -100,10 +100,7 @@ export default function UserStoriesPage() {
     mutationFn: async (parentKey?: string) => {
       const body: Record<string, any> = {};
       if (parentKey) body.parentJiraKey = parentKey;
-      const cachedBrd = getSessionArtifact("brd");
-      if (cachedBrd) body.brdData = cachedBrd;
-      const cachedDocumentation = getSessionArtifact("documentation");
-      if (cachedDocumentation) body.documentation = cachedDocumentation;
+      if (brd?.id) body.brdId = brd.id;
       const response = await apiRequest("POST", "/api/user-stories/generate", body);
       return response.json();
     },

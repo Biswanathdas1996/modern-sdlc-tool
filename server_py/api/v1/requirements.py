@@ -287,7 +287,11 @@ async def get_user_stories(brd_id: str):
 async def generate_user_stories_endpoint(request: GenerateUserStoriesRequest):
     """Generate user stories from BRD."""
     try:
-        brd = restore_brd(request.brdData)
+        brd = None
+        if request.brdId:
+            brd = storage.brds_repo.get_by_id(request.brdId)
+        if not brd:
+            brd = restore_brd(request.brdData)
         if not brd:
             raise bad_request("No BRD found. Please generate a BRD first.")
 

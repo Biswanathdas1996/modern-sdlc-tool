@@ -5,6 +5,7 @@ from typing import Optional, List, Dict, Any
 
 class GenerateUserStoriesRequest(BaseModel):
     """Request for generating user stories."""
+    brdId: Optional[str] = None
     brdData: Optional[dict] = None
     documentation: Optional[dict] = None
     parentJiraKey: Optional[str] = None
