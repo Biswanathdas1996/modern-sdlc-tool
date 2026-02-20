@@ -18,7 +18,7 @@ The backend is a Python 3.11 FastAPI application. It features RESTful JSON APIs,
 
 ### Backend Module Structure (Refactored)
 Large backend modules have been split into focused sub-modules for maintainability:
-- **server_py/agents/unit_test_agent/**: Agentic architecture with `agent.py` (slim orchestrator, 600 lines), `tools/` (8 capability modules: analyze_repo, collect_sources, discover_tests, coverage_mapper, generate_tests, fix_tests, run_tests, write_files), `utils/` (3 pure utilities: error_classifier, import_resolver, pattern_matcher), `helpers/` (4 domain helpers: deps_context, mocking_guide, npm_runner, test_path). One-way dependency: tools → helpers/utils only.
+- **server_py/agents/unit_test_agent/**: Agentic architecture with `agent.py` (slim orchestrator, ~365 lines), `tools/` (10 capability modules: analyze_repo, collect_sources, discover_tests, coverage_mapper, generate_tests, fix_tests, run_tests, write_files, validate_and_fix, task_reporter), `utils/` (3 pure utilities: error_classifier, import_resolver, pattern_matcher), `helpers/` (4 domain helpers: deps_context, mocking_guide, npm_runner, test_path). One-way dependency: tools → helpers/utils only.
 - **server_py/agents/jira_agent/**: `ticket_actions.py`, `issue_actions.py`, `direct_processor.py` (orchestrator)
 - **server_py/agents/shannon_security_agent/**: `security_analyzers.py`, `assessment.py`, `agent.py` (coordinator)
 - **server_py/services/**: `github_fetcher.py`, `generators.py`, `ai_service.py` (core + delegation wrappers)
