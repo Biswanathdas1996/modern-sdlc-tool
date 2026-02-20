@@ -133,10 +133,10 @@ def create_jira_tools(jira_service, context: TicketToolsContext) -> List[Tool]:
             5. Focus on the specific user request - extract only relevant portions
             6. Format professionally with proper spacing and structure
             
-            Note: Searches across all projects (both 'default' and 'global').
+            Note: Searches within the current project's knowledge base collection.
             """,
-            func=make_async_sync(lambda q: search_knowledge_base_tool(q, "global", 10)),
-            coroutine=lambda q: search_knowledge_base_tool(q, "global", 10)
+            func=make_async_sync(lambda q: search_knowledge_base_tool(q, context.project_id or "global", 10)),
+            coroutine=lambda q: search_knowledge_base_tool(q, context.project_id or "global", 10)
         ),
         Tool(
             name="get_knowledge_stats",
@@ -148,8 +148,8 @@ def create_jira_tools(jira_service, context: TicketToolsContext) -> List[Tool]:
             
             No input required (or use "default" for default project).
             """,
-            func=make_async_sync(lambda p: get_knowledge_stats_tool("default")),
-            coroutine=lambda p: get_knowledge_stats_tool("default")
+            func=make_async_sync(lambda p: get_knowledge_stats_tool(context.project_id or "global")),
+            coroutine=lambda p: get_knowledge_stats_tool(context.project_id or "global")
         ),
         Tool(
             name="query_mongodb",
@@ -161,13 +161,14 @@ def create_jira_tools(jira_service, context: TicketToolsContext) -> List[Tool]:
             
             Input should be a JSON string with: collection (required), query (required as JSON string), limit (optional, default: 10)
             
-            IMPORTANT: For knowledge_chunks collection, use these field names:
+            IMPORTANT: Knowledge base data is stored in project-specific collections.
+            For the current project, chunks are in the collection named with the project ID suffix.
+            Field names in chunk collections:
             - "content" (not "text") - the actual text content
-            - "projectId" (not "project_id") - the project identifier
             - "documentId" - the document identifier
             - "metadata.filename" - the source file name
             
-            Example: {"collection": "knowledge_chunks", "query": "{\\"content\\": {\\"$regex\\": \\"Compliance\\", \\"$options\\": \\"i\\"}}", "limit": 5}
+            Prefer using the search_knowledge_base tool instead of raw MongoDB queries for knowledge base searches.
             """,
             func=make_async_sync(_create_query_mongodb_wrapper()),
             coroutine=_create_query_mongodb_wrapper()

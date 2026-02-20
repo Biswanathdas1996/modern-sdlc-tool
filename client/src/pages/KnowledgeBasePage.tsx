@@ -101,7 +101,7 @@ export default function KnowledgeBasePage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`/api/knowledge-base/${id}`, {
+      const response = await fetch(`/api/knowledge-base/${id}?project_id=${currentProjectId}`, {
         method: "DELETE",
       });
       

@@ -14,12 +14,15 @@ router = APIRouter(prefix="/knowledge-base", tags=["knowledge-base"])
 
 @router.get("")
 async def get_knowledge_documents(project_id: Optional[str] = Query(None)):
-    """Get all knowledge documents, optionally scoped by project."""
+    """Get all knowledge documents for a project."""
     try:
+        if not project_id:
+            raise bad_request("project_id is required")
         kb_service = get_kb_service()
-        scope = project_id or "global"
-        documents = kb_service.get_knowledge_documents(scope)
+        documents = kb_service.get_knowledge_documents(project_id)
         return documents
+    except HTTPException:
+        raise
     except Exception as e:
         log_error("Error fetching knowledge documents", "api", e)
         raise internal_error("Failed to fetch knowledge documents")
@@ -27,31 +30,45 @@ async def get_knowledge_documents(project_id: Optional[str] = Query(None)):
 
 @router.get("/stats")
 async def get_knowledge_stats(project_id: Optional[str] = Query(None)):
-    """Get knowledge base statistics, optionally scoped by project."""
+    """Get knowledge base statistics for a project."""
     try:
+        if not project_id:
+            raise bad_request("project_id is required")
         kb_service = get_kb_service()
-        scope = project_id or "global"
-        stats = kb_service.get_knowledge_stats(scope)
+        stats = kb_service.get_knowledge_stats(project_id)
         return stats
+    except HTTPException:
+        raise
     except Exception as e:
         log_error("Error fetching knowledge stats", "api", e)
         raise internal_error("Failed to fetch knowledge stats")
 
 
+@router.get("/collection-info")
+async def get_collection_info(project_id: str = Query(...)):
+    """Get MongoDB collection info and indexes for a project."""
+    try:
+        kb_service = get_kb_service()
+        info = kb_service.get_project_collection_info(project_id)
+        return success_response(data=info)
+    except Exception as e:
+        log_error("Error fetching collection info", "api", e)
+        raise internal_error("Failed to fetch collection info")
+
+
 @router.post("/upload", status_code=201)
 async def upload_knowledge_document(file: UploadFile = File(...), project_id: Optional[str] = Form(None)):
-    """Upload a document to the knowledge base, optionally scoped to a project."""
+    """Upload a document to the project-specific knowledge base collection."""
     try:
         if not file:
             raise bad_request("No file provided")
         
-        project_id = project_id or "global"
+        if not project_id:
+            raise bad_request("project_id is required")
         
-        # Read file content
         file_content = await file.read()
         content = ""
         
-        # Parse different file types
         try:
             if file.content_type in ["text/plain", "text/markdown", "text/csv"]:
                 content = file_content.decode("utf-8", errors="ignore")
@@ -80,7 +97,6 @@ async def upload_knowledge_document(file: UploadFile = File(...), project_id: Op
                 "File content too short or could not be extracted"
             )
         
-        # Create document record
         kb_service = get_kb_service()
         doc = kb_service.create_knowledge_document({
             "projectId": project_id,
@@ -90,7 +106,6 @@ async def upload_knowledge_document(file: UploadFile = File(...), project_id: Op
             "size": len(file_content),
         })
         
-        # Ingest document
         try:
             kb_service = get_kb_service()
             chunk_count = kb_service.ingest_document(
@@ -101,6 +116,7 @@ async def upload_knowledge_document(file: UploadFile = File(...), project_id: Op
             )
             kb_service.update_knowledge_document(
                 doc["id"],
+                project_id,
                 {"chunkCount": chunk_count, "status": "ready"}
             )
             doc["chunkCount"] = chunk_count
@@ -109,6 +125,7 @@ async def upload_knowledge_document(file: UploadFile = File(...), project_id: Op
             log_error("Error ingesting document", "api", ingest_error)
             kb_service.update_knowledge_document(
                 doc["id"],
+                project_id,
                 {"status": "error", "errorMessage": str(ingest_error)}
             )
             doc["status"] = "error"
@@ -123,27 +140,23 @@ async def upload_knowledge_document(file: UploadFile = File(...), project_id: Op
 
 
 @router.delete("/{id}")
-async def delete_knowledge_document(id: str):
-    """Delete a knowledge document completely from MongoDB cluster.
-    
-    This endpoint ensures complete removal of:
-    - All text chunks from the knowledge_chunks collection (search index)
-    - The document record from knowledge_documents collection
-    - All associated data from the MongoDB cluster
-    """
+async def delete_knowledge_document(id: str, project_id: Optional[str] = Query(None)):
+    """Delete a knowledge document completely from its project collection."""
     try:
+        if not project_id:
+            raise bad_request("project_id is required")
+        
         kb_service = get_kb_service()
         
-        # Perform complete deletion with verification
-        result = kb_service.delete_knowledge_document_complete(id)
+        result = kb_service.delete_knowledge_document_complete(id, project_id)
         
         if not result["success"]:
             raise HTTPException(status_code=404, detail="Document not found")
         
-        log_info(f"Document deletion completed: {result['chunksDeleted']} chunks + 1 document removed", "api")
+        log_info(f"Document deletion completed: {result['chunksDeleted']} chunks + 1 document removed from project {project_id}", "api")
         
         return success_response(
-            message=f"Document deleted successfully. Removed {result['chunksDeleted']} chunks and 1 document from MongoDB cluster.",
+            message=f"Document deleted successfully. Removed {result['chunksDeleted']} chunks and 1 document.",
             data=result
         )
     except HTTPException:
@@ -154,43 +167,44 @@ async def delete_knowledge_document(id: str):
 
 
 @router.post("/cleanup-orphaned")
-async def cleanup_orphaned_chunks():
-    """Clean up orphaned chunks from MongoDB cluster.
-    
-    Removes chunks that have no corresponding document record.
-    This can happen if document records were deleted but chunks weren't,
-    or if uploads partially failed.
-    """
+async def cleanup_orphaned_chunks(project_id: Optional[str] = Query(None)):
+    """Clean up orphaned chunks from a project's collection."""
     try:
+        if not project_id:
+            raise bad_request("project_id is required")
+        
         kb_service = get_kb_service()
-        deleted_count = kb_service.cleanup_orphaned_chunks()
+        deleted_count = kb_service.cleanup_orphaned_chunks(project_id)
         
         return success_response(
-            message=f"Cleanup completed. Removed {deleted_count} orphaned chunks from MongoDB cluster.",
+            message=f"Cleanup completed. Removed {deleted_count} orphaned chunks.",
             data={"orphanedChunksDeleted": deleted_count}
         )
+    except HTTPException:
+        raise
     except Exception as e:
         log_error("Error cleaning up orphaned chunks", "api", e)
         raise internal_error("Failed to cleanup orphaned chunks")
 
 
 @router.get("/verify-deletion/{id}")
-async def verify_document_deletion(id: str):
-    """Verify that a document is completely deleted from MongoDB cluster.
-    
-    Checks both the document record and all associated chunks to ensure
-    complete removal from the MongoDB cluster.
-    """
+async def verify_document_deletion(id: str, project_id: Optional[str] = Query(None)):
+    """Verify that a document is completely deleted from its project collection."""
     try:
+        if not project_id:
+            raise bad_request("project_id is required")
+        
         kb_service = get_kb_service()
-        result = kb_service.verify_document_deletion(id)
+        result = kb_service.verify_document_deletion(id, project_id)
         
         if result["isCompletelyDeleted"]:
-            message = f"Document {id} is completely deleted from MongoDB cluster"
+            message = f"Document {id} is completely deleted"
         else:
-            message = f"Document {id} still has data in MongoDB: {result['remainingChunks']} chunks, document exists: {result['documentExists']}"
+            message = f"Document {id} still has data: {result['remainingChunks']} chunks, document exists: {result['documentExists']}"
         
         return success_response(message=message, data=result)
+    except HTTPException:
+        raise
     except Exception as e:
         log_error("Error verifying document deletion", "api", e)
         raise internal_error("Failed to verify document deletion")
@@ -198,16 +212,20 @@ async def verify_document_deletion(id: str):
 
 @router.post("/search")
 async def search_knowledge(request: KnowledgeSearchRequest):
-    """Search the knowledge base, optionally scoped by project."""
+    """Search the knowledge base within a project's collection."""
     try:
+        if not request.project_id:
+            raise bad_request("project_id is required")
+        
         kb_service = get_kb_service()
-        scope = getattr(request, "project_id", None) or "global"
         results = kb_service.search_knowledge_base(
-            scope,
+            request.project_id,
             request.query,
             request.limit
         )
         return results
+    except HTTPException:
+        raise
     except Exception as e:
         log_error("Error searching knowledge base", "api", e)
         raise internal_error("Failed to search knowledge base")
