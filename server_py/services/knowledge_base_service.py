@@ -219,7 +219,8 @@ class KnowledgeBaseService:
         query: str, 
         limit: int = 5
     ) -> List[Dict[str, Any]]:
-        """Search using vector similarity (primary) with keyword fallback."""
+        """Search using vector similarity only. Returns only chunks above the similarity threshold.
+        No keyword fallback - if chunks don't meet the threshold, they are excluded entirely."""
         collection = self._get_chunks_collection(project_id)
         
         log_info(f"Searching KB collection {self._chunks_collection_name(project_id)}: \"{query[:100]}\"", "kb")
@@ -234,13 +235,13 @@ class KnowledgeBaseService:
         if has_embeddings:
             results = self._vector_search(collection, query, limit)
             if results:
-                log_info(f"Vector search returned {len(results)} results", "kb")
+                log_info(f"Vector search returned {len(results)} results (all above threshold)", "kb")
                 return results
-            log_info("Vector search returned no results, falling back to keyword search", "kb")
-        else:
-            log_info("No embeddings found in chunks, using keyword search", "kb")
+            log_info("No chunks met the similarity threshold — excluding all from context", "kb")
+            return []
         
-        return self._keyword_search(collection, query, limit)
+        log_info("No embeddings found in chunks, cannot perform semantic search — no results returned", "kb")
+        return []
     
     MIN_SIMILARITY_SCORE = 0.55
     ATLAS_MIN_SCORE = 0.78

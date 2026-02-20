@@ -135,7 +135,7 @@ async def generate_brd_endpoint(request: GenerateBRDRequest):
                     for r in kb_results
                 ]
             else:
-                log_info("No relevant knowledge base content found for this feature request", "requirements")
+                log_info("No knowledge chunks met similarity threshold — KB context excluded from BRD generation", "requirements")
                 
         except Exception as kb_error:
             log_error("Knowledge base search error", "requirements", kb_error)
