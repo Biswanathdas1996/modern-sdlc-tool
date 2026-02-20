@@ -3,14 +3,22 @@
 # =============================================================================
 
 # Available Models:
-#   - vertex_ai.gemini-2.5-flash-image   (fast, cost-effective)
-#   - vertex_ai.gemini-2.5-pro           (strong reasoning, higher cost)
-#   - azure.gpt-5.2                      (strong reasoning, higher cost)
-#   - vertex_ai.anthropic.claude-sonnet-4-6  (strong coding & analysis)
-#   - azure.grok-4-fast-reasoning        (fast reasoning)
-#   - openai.whisper                     (audio transcription)
-#   - vertex_ai.text-embedding-005       (text embeddings)
-#   - vertex_ai.gemini-embedding         (text embeddings)
+#
+#   Multimodal (text + image):
+#   - vertex_ai.gemini-2.5-flash-image      (fast, cost-effective, text + image in/out)
+#   - vertex_ai.gemini-2.5-pro              (strong reasoning, text + image input)
+#
+#   Text only:
+#   - azure.gpt-5.2                         (strong reasoning, text only)
+#   - vertex_ai.anthropic.claude-sonnet-4-6 (strong coding & analysis, text only)
+#   - azure.grok-4-fast-reasoning           (fast reasoning, text only)
+#
+#   Audio:
+#   - openai.whisper                        (audio transcription)
+#
+#   Embeddings:
+#   - vertex_ai.text-embedding-005          (text embeddings, 768-dim)
+#   - vertex_ai.gemini-embedding            (text embeddings)
 # =============================================================================
 
 defaults:
