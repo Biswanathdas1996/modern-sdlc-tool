@@ -1,7 +1,7 @@
 import os
 import logging
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ def calculate_correct_import_path(test_file_path: str, source_file_path: str, te
         return f"./{source_path.stem}"
 
 
-def get_import_guidance(filepath: str, language: str, repo_path: str, tech_stack: Dict[str, Any] = None) -> str:
+def get_import_guidance(filepath: str, language: str, repo_path: str, tech_stack: Optional[Dict[str, Any]] = None) -> str:
     if language == "python":
         return """Python imports:
 - Use absolute imports from the project root (e.g., 'from module_name import function')
