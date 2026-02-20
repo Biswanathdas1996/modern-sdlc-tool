@@ -130,6 +130,7 @@ async def _handle_pending_action(
     if any(word in response_lower for word in ['yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'please', 'go ahead']):
         conversation_ctx.collected_data['summary'] = conversation_ctx.collected_data.get('issue_description', user_prompt)
         conversation_ctx.collected_data.pop('pending_action_choice', None)
+        conversation_ctx.action_type = "create"
         return await process_create_ticket(user_prompt, conversation_ctx, jira_service, ai_service, context)
 
     elif any(word in response_lower for word in ['no', 'nope', 'cancel', 'nevermind', 'never mind']):
@@ -149,6 +150,7 @@ async def _handle_pending_action(
     elif any(word in response_lower for word in ['create', 'new', 'open', 'file', 'raise']):
         conversation_ctx.collected_data['summary'] = conversation_ctx.collected_data.get('issue_description', user_prompt)
         conversation_ctx.collected_data.pop('pending_action_choice', None)
+        conversation_ctx.action_type = "create"
         return await process_create_ticket(user_prompt, conversation_ctx, jira_service, ai_service, context)
 
     elif any(word in response_lower for word in ['update', 'add', 'comment']):
@@ -166,6 +168,7 @@ async def _handle_pending_action(
                 "tickets": context.last_search_results if context else []
             }
         conversation_ctx.collected_data.pop('pending_action_choice', None)
+        conversation_ctx.action_type = "update"
         return await process_update_ticket(user_prompt, conversation_ctx, jira_service, ai_service, context)
 
     elif any(word in response_lower for word in ['view', 'details', 'show', 'see']):
@@ -218,4 +221,5 @@ async def _handle_pending_action(
 
     conversation_ctx.collected_data['summary'] = conversation_ctx.collected_data.get('issue_description', user_prompt)
     conversation_ctx.collected_data.pop('pending_action_choice', None)
+    conversation_ctx.action_type = "create"
     return await process_create_ticket(user_prompt, conversation_ctx, jira_service, ai_service, context)
