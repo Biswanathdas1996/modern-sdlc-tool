@@ -2,6 +2,7 @@ import os
 import re
 import subprocess
 import logging
+import platform
 from pathlib import Path
 from typing import Dict, Any
 
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 def install_test_deps(repo_path: str, language: str) -> Dict[str, Any]:
     logger.info(f"Starting test dependency installation for language: {language}")
     logger.info(f"Repository path: {repo_path}")
+    logger.info(f"Operating System: {platform.system()}")
     root = Path(repo_path)
     try:
         if language == "python":
@@ -55,11 +57,13 @@ def install_test_deps(repo_path: str, language: str) -> Dict[str, Any]:
 
         elif language in ("javascript", "typescript"):
             logger.info("Checking for npm installation...")
+            logger.info(f"Platform: {platform.system()}")
             if not check_command_exists("npm"):
-                logger.error("npm command not found in PATH")
+                logger.error(f"npm command not found in PATH on {platform.system()}")
+                platform_hint = "Make sure Node.js is installed and added to PATH. You may need to restart your terminal/IDE after installation." if platform.system() == "Windows" else ""
                 return {
                     "success": False,
-                    "message": "npm not found. Please install Node.js from https://nodejs.org/ (includes npm)"
+                    "message": f"npm not found on {platform.system()}. Please install Node.js from https://nodejs.org/ (includes npm). {platform_hint}"
                 }
             logger.info("npm found successfully")
 

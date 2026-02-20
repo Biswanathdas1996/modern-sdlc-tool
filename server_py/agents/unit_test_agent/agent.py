@@ -67,8 +67,8 @@ class UnitTestAgent:
             "language": language,
             "tech_stack": tech_stack,
         })
-        print(f"🧪 Unit Test Agent linked to repo: {repo_name} at {repo_path}")
-        print(f"📦 Detected tech stack: {tech_stack}")
+        print(f"Unit Test Agent linked to repo: {repo_name} at {repo_path}")
+        print(f" Detected tech stack: {tech_stack}")
         return True
 
     def _detect_intent(self, query: str) -> str:
