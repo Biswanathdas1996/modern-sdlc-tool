@@ -100,8 +100,12 @@ class StorageManager:
     def update_brd(self, id: str, updates: dict) -> Optional[Dict]:
         return self.brds_repo.update(id, updates)
 
-    def get_current_brd(self, project_id: str = None) -> Optional[Dict]:
+    def get_current_brd(self, project_id: str = None, user_id: str = None) -> Optional[Dict]:
         if project_id:
+            if user_id:
+                brds = self.brds_repo.get_by_fields({"projectId": project_id, "createdBy": user_id})
+                if brds:
+                    return brds[0]
             brds = self.brds_repo.get_by_project(project_id)
             return brds[0] if brds else None
         if not self.current_brd_id:

@@ -1,12 +1,13 @@
 """Requirements, BRD, test cases, test data, and user stories API router."""
 import json
-from fastapi import APIRouter, HTTPException, File, UploadFile, Form, Query
+from fastapi import APIRouter, HTTPException, File, UploadFile, Form, Query, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 from typing import Optional
 
 from repositories import storage
 from services import ai_service
+from api.v1.auth import get_current_user
 from services.jira_service import jira_service
 from services.knowledge_base_service import get_kb_service
 from services.session_restore_service import (
@@ -30,6 +31,7 @@ router = APIRouter(tags=["requirements"])
 
 @router.post("/requirements")
 async def create_requirements(
+    request: Request,
     title: str = Form(...),
     description: Optional[str] = Form(None),
     inputType: str = Form(...),
@@ -40,6 +42,9 @@ async def create_requirements(
 ):
     """Create a new feature request/requirement."""
     try:
+        user = get_current_user(request)
+        user_id = user["id"] if user else None
+
         if not project_id:
             projects = storage.get_all_projects()
             if not projects:
@@ -63,6 +68,7 @@ async def create_requirements(
             "inputType": inputType,
             "requestType": requestType,
             "rawInput": final_description,
+            "createdBy": user_id,
         })
 
         log_info(f"Feature request created: {title}", "requirements")
@@ -76,13 +82,15 @@ async def create_requirements(
 # ==================== BRD ENDPOINTS ====================
 
 @router.get("/brd/current")
-async def get_current_brd(project_id: Optional[str] = Query(None), brd_id: Optional[str] = Query(None)):
+async def get_current_brd_endpoint(request: Request, project_id: Optional[str] = Query(None), brd_id: Optional[str] = Query(None)):
     """Get the current BRD, optionally scoped to a project or by specific ID."""
     try:
         if brd_id:
             brd = storage.get_brd(brd_id)
         else:
-            brd = storage.get_current_brd(project_id=project_id)
+            user = get_current_user(request)
+            user_id = user["id"] if user else None
+            brd = storage.get_current_brd(project_id=project_id, user_id=user_id)
         if not brd:
             raise not_found("No BRD found")
         return brd
@@ -94,9 +102,12 @@ async def get_current_brd(project_id: Optional[str] = Query(None), brd_id: Optio
 
 
 @router.post("/brd/generate")
-async def generate_brd_endpoint(request: GenerateBRDRequest):
+async def generate_brd_endpoint(http_request: Request, request: GenerateBRDRequest):
     """Generate a Business Requirements Document (BRD) via SSE streaming."""
     try:
+        user = get_current_user(http_request)
+        user_id = user["id"] if user else None
+
         feature_request = restore_feature_request(request.featureRequest)
         if not feature_request:
             raise bad_request("No feature request found")
@@ -158,6 +169,7 @@ async def generate_brd_endpoint(request: GenerateBRDRequest):
                 )
 
                 brd["knowledgeSources"] = knowledge_sources if knowledge_sources else None
+                brd["createdBy"] = user_id
                 storage.create_brd(brd)
 
                 yield {"data": json.dumps({"content": json.dumps(brd.get("content", {}))})}
@@ -178,13 +190,18 @@ async def generate_brd_endpoint(request: GenerateBRDRequest):
 # ==================== TEST CASES ENDPOINTS ====================
 
 @router.get("/test-cases")
-async def get_test_cases(project_id: Optional[str] = Query(None), brd_id: Optional[str] = Query(None)):
+async def get_test_cases(request: Request, project_id: Optional[str] = Query(None), brd_id: Optional[str] = Query(None)):
     """Get all test cases, optionally scoped to a project or BRD."""
     try:
         if brd_id:
             return storage.get_test_cases(brd_id)
         if project_id:
-            return storage.get_test_cases_by_project(project_id)
+            user = get_current_user(request)
+            user_id = user["id"] if user else None
+            brd = storage.get_current_brd(project_id=project_id, user_id=user_id)
+            if not brd:
+                return storage.get_test_cases_by_project(project_id)
+            return storage.get_test_cases(brd["id"])
         brd = storage.get_current_brd()
         if not brd:
             return []

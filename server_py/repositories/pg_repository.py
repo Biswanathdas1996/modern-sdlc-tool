@@ -187,6 +187,23 @@ class GenericPgRepository:
         results = self.get_by_field(field_name, value)
         return results[0] if results else None
 
+    def get_by_fields(self, filters: Dict[str, str]) -> List[Dict]:
+        """Query by multiple field=value pairs (AND logic)."""
+        conditions = []
+        values = []
+        for camel_key, val in filters.items():
+            col = self.field_map.get(camel_key, camel_key)
+            conditions.append(f"{col} = %s")
+            values.append(val)
+        where = " AND ".join(conditions)
+        conn = get_postgres_connection()
+        try:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute(f"SELECT * FROM {self.table} WHERE {where} ORDER BY created_at DESC", values)
+            return [self._to_dict(r) for r in cur.fetchall()]
+        finally:
+            conn.close()
+
     def get_all(self) -> List[Dict]:
         conn = get_postgres_connection()
         try:
@@ -374,6 +391,7 @@ def _build_feature_request_repo():
             "inputType": "input_type",
             "requestType": "request_type",
             "rawInput": "raw_input",
+            "createdBy": "created_by",
             "createdAt": "created_at",
         },
         json_fields=set(),
@@ -394,6 +412,7 @@ def _build_brd_repo():
             "sourceDocumentation": "source_documentation",
             "knowledgeSources": "knowledge_sources",
             "content": "content",
+            "createdBy": "created_by",
             "createdAt": "created_at",
             "updatedAt": "updated_at",
         },

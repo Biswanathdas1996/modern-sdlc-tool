@@ -148,6 +148,7 @@ def init_postgres_database():
                 input_type TEXT NOT NULL DEFAULT 'text',
                 request_type TEXT NOT NULL DEFAULT 'feature',
                 raw_input TEXT,
+                created_by TEXT,
                 created_at TIMESTAMP NOT NULL DEFAULT NOW()
             );
         """)
@@ -164,6 +165,7 @@ def init_postgres_database():
                 source_documentation TEXT,
                 knowledge_sources JSONB,
                 content JSONB NOT NULL DEFAULT '{}'::jsonb,
+                created_by TEXT,
                 created_at TIMESTAMP NOT NULL DEFAULT NOW(),
                 updated_at TIMESTAMP NOT NULL DEFAULT NOW()
             );
@@ -279,6 +281,20 @@ def init_postgres_database():
         cur.execute("CREATE INDEX IF NOT EXISTS idx_user_stories_brd ON user_stories(brd_id);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_db_schemas_project ON database_schemas(project_id);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_kb_docs_project ON knowledge_documents(project_id);")
+
+        for tbl in ["feature_requests", "brds"]:
+            cur.execute(f"""
+                DO $$ BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name = '{tbl}' AND column_name = 'created_by'
+                    ) THEN
+                        ALTER TABLE {tbl} ADD COLUMN created_by TEXT;
+                    END IF;
+                END $$;
+            """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_feature_requests_created_by ON feature_requests(created_by);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_brds_created_by ON brds(created_by);")
 
         fk_constraints = [
             ("brds", "fk_brds_feature_request", "feature_request_id", "feature_requests", "id", "CASCADE"),
