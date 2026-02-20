@@ -31,10 +31,12 @@ from services.jira_service import JiraService
 from services.ai_service import AIService
 from services.langchain_llm import PwCGenAILLM
 from core.logging import log_info, log_error, log_warning
+from core.llm_config import get_llm_config
 from .tools import TicketToolsContext, create_jira_tools
 from .utils import (
     handle_parsing_error,
     analyze_intent,
+    analyze_intent_with_llm,
     validate_prompt,
     InputValidationError,
 )
@@ -52,8 +54,6 @@ from .utils.langfuse_integration import (
 AGENT_MAX_ITERATIONS = 5
 AGENT_MAX_EXECUTION_TIME = 120  # seconds
 AGENT_RUN_TIMEOUT = 90  # seconds — asyncio timeout for a single _run_agent call
-LLM_TEMPERATURE = 0.2
-LLM_MAX_TOKENS = 6096
 
 
 class JiraAgent:
@@ -69,7 +69,12 @@ class JiraAgent:
     def __init__(self):
         self.jira_service = JiraService()
         self.ai_service = AIService()
-        self.llm = PwCGenAILLM(temperature=LLM_TEMPERATURE, max_tokens=LLM_MAX_TOKENS)
+        _jira_cfg = get_llm_config().get("jira_agent")
+        self.llm = PwCGenAILLM(
+            temperature=_jira_cfg.temperature,
+            max_tokens=_jira_cfg.max_tokens,
+            task_name="jira_agent",
+        )
         self.context = TicketToolsContext()
         self.tools = create_jira_tools(self.jira_service, self.context)
         self.agent = self._create_agent() if HAS_LANGCHAIN_AGENTS else None
@@ -119,6 +124,8 @@ class JiraAgent:
 
             log_info(f"Processing query (legacy): {user_prompt[:120]}", "jira_agent")
             intent = analyze_intent(user_prompt)
+            if intent["action"].value == "unknown":
+                intent = await analyze_intent_with_llm(user_prompt)
             log_info(f"Detected intent: {intent['action'].value}", "jira_agent")
 
             try:
@@ -188,6 +195,8 @@ class JiraAgent:
 
             log_info(f"Processing interactive query: {user_prompt[:120]}", "jira_agent")
             intent = analyze_intent(user_prompt)
+            if intent["action"].value == "unknown":
+                intent = await analyze_intent_with_llm(user_prompt)
             log_info(f"Detected intent: {intent['action'].value}", "jira_agent")
 
             result = await direct_process(

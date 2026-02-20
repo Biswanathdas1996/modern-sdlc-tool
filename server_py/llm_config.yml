@@ -144,6 +144,19 @@ unit_test_fix:
   max_tokens: 8192
 
 # ---------------------------------------------------------------------------
+# Code Generation Agent
+# ---------------------------------------------------------------------------
+code_gen_plan:
+  model: vertex_ai.gemini-2.0-flash
+  temperature: 0.3
+  max_tokens: 6096
+
+code_gen_implementation:
+  model: vertex_ai.gemini-2.0-flash
+  temperature: 0.2
+  max_tokens: 6096
+
+# ---------------------------------------------------------------------------
 # Security Agent (Shannon)
 # ---------------------------------------------------------------------------
 security_analysis:

@@ -72,3 +72,22 @@ agent_prompt: |
 
   Question: {input}
   {agent_scratchpad}
+
+intent_extraction: |
+  Classify the intent of the following JIRA-related user query.
+  Respond ONLY with valid JSON in this exact format (no markdown, no extra text):
+  {"action": "<action>", "ticket_key": "<key or null>"}
+
+  Action must be exactly one of:
+  - "create"       — user wants to create a new ticket, task, bug, or story
+  - "update"       — user wants to update/change an existing ticket
+  - "search"       — user wants to find, list, or show tickets
+  - "get_details"  — user wants full details about a specific ticket
+  - "subtask"      — user wants to create a subtask under an existing ticket
+  - "link"         — user wants to link two tickets together
+  - "issue_report" — user is describing a problem that should become a ticket
+  - "unknown"      — intent cannot be determined
+
+  ticket_key: extract the JIRA key (e.g. "PROJ-123") if present, otherwise null.
+
+  User query: {user_prompt}

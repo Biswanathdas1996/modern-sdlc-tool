@@ -1,5 +1,6 @@
 """Intent analysis for user prompts."""
 import re
+import json
 from typing import Dict, Any
 
 from .action_types import ActionType
@@ -72,3 +73,44 @@ def analyze_intent(user_prompt: str) -> Dict[str, Any]:
         return {"action": ActionType.ISSUE_REPORT, "ticket_key": specific_ticket}
     else:
         return {"action": ActionType.UNKNOWN, "ticket_key": specific_ticket}
+
+
+async def analyze_intent_with_llm(user_prompt: str) -> Dict[str, Any]:
+    """LLM-based intent classification using the jira_intent_extraction task config.
+
+    Used as a fallback when the rule-based analyze_intent returns UNKNOWN.
+    Reads model/temperature/max_tokens from llm_config.yml key ``jira_intent_extraction``.
+    """
+    from prompts import prompt_loader
+    from utils.pwc_llm import call_pwc_genai_async
+
+    try:
+        prompt = prompt_loader.get_prompt("jira_agent.yml", "intent_extraction").format(
+            user_prompt=user_prompt
+        )
+        raw = await call_pwc_genai_async(prompt=prompt, task_name="jira_intent_extraction")
+
+        # Strip markdown code fences if present
+        raw = raw.strip()
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[-1]
+        if raw.endswith("```"):
+            raw = raw[:-3].rstrip()
+
+        data = json.loads(raw)
+        action_str = data.get("action", "unknown").lower()
+        action_map = {
+            "create": ActionType.CREATE,
+            "update": ActionType.UPDATE,
+            "search": ActionType.SEARCH,
+            "get_details": ActionType.GET_DETAILS,
+            "subtask": ActionType.SUBTASK,
+            "link": ActionType.LINK,
+            "issue_report": ActionType.ISSUE_REPORT,
+        }
+        action = action_map.get(action_str, ActionType.UNKNOWN)
+        ticket_key = data.get("ticket_key") or None
+        return {"action": action, "ticket_key": ticket_key}
+
+    except Exception:
+        return {"action": ActionType.UNKNOWN, "ticket_key": None}

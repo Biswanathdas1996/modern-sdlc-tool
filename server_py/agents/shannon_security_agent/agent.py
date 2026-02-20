@@ -143,6 +143,10 @@ class ShannonSecurityAgent:
         prompt = prompt_loader.get_prompt("shannon_security_agent.yml", "general_response").format(
             query=query
         )
+        try:
+            return self.ai_service.call_genai(prompt, task_name="security_analysis")
+        except Exception as e:
+            return f"Error processing request: {str(e)}"
 
     def clear_session(self, session_id: str) -> Dict[str, Any]:
         if session_id in self.sessions:
