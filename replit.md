@@ -49,7 +49,7 @@ The application uses a GitHub-inspired color palette, JetBrains Mono for code bl
 
 ### AI Services
 - **PWC GenAI**: Primary AI provider for all text generation tasks.
-  - Available models: `vertex_ai.gemini-2.0-flash`, `vertex_ai.gemini-2.0-flash-001`, `azure.gpt-4o`, `vertex_ai.anthropic.claude-sonnet-4`, `bedrock.anthropic.claude-sonnet-4`
+  - Available models: `vertex_ai.gemini-2.5-flash-image`, `vertex_ai.gemini-2.5-pro`, `azure.gpt-5.2`, `vertex_ai.anthropic.claude-sonnet-4-6`, `azure.grok-4-fast-reasoning`
   - Model selection controlled via `server_py/llm_config.yml` (26 task-specific entries)
   - Config loader: `server_py/core/llm_config.py` → `get_llm_config().get(task_name)`
   - All LLM calls route through `utils/pwc_llm.py` which resolves model from YAML config via `task_name` parameter

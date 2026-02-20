@@ -3,15 +3,18 @@
 # =============================================================================
 
 # Available Models:
-#   - vertex_ai.gemini-2.0-flash        (fast, cost-effective)
-#   - vertex_ai.gemini-2.0-flash-001    (pinned version of above)
-#   - azure.gpt-4o                      (strong reasoning, higher cost)
-#   - vertex_ai.anthropic.claude-sonnet-4  (strong coding & analysis)
-#   - bedrock.anthropic.claude-sonnet-4    (same model via AWS Bedrock)
+#   - vertex_ai.gemini-2.5-flash-image   (fast, cost-effective)
+#   - vertex_ai.gemini-2.5-pro           (strong reasoning, higher cost)
+#   - azure.gpt-5.2                      (strong reasoning, higher cost)
+#   - vertex_ai.anthropic.claude-sonnet-4-6  (strong coding & analysis)
+#   - azure.grok-4-fast-reasoning        (fast reasoning)
+#   - openai.whisper                     (audio transcription)
+#   - vertex_ai.text-embedding-005       (text embeddings)
+#   - vertex_ai.gemini-embedding         (text embeddings)
 # =============================================================================
 
 defaults:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.2
   max_tokens: 6096
   timeout: 180
@@ -20,12 +23,12 @@ defaults:
 # Repository Analysis & Documentation
 # ---------------------------------------------------------------------------
 repo_analysis:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.2
   max_tokens: 6096
 
 documentation_generation:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.3
   max_tokens: 6096
 
@@ -33,27 +36,27 @@ documentation_generation:
 # BRD & Business Artifacts
 # ---------------------------------------------------------------------------
 brd_generation:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.3
   max_tokens: 8000
 
 bpmn_diagram:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.2
   max_tokens: 6096
 
 user_story_generation:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.3
   max_tokens: 8192
 
 copilot_prompt:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.2
   max_tokens: 8192
 
 related_stories:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.2
   max_tokens: 4096
 
@@ -61,12 +64,12 @@ related_stories:
 # Test Generation
 # ---------------------------------------------------------------------------
 test_case_generation:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.2
   max_tokens: 8192
 
 test_data_generation:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.3
   max_tokens: 6096
 
@@ -74,42 +77,42 @@ test_data_generation:
 # JIRA Agent
 # ---------------------------------------------------------------------------
 jira_agent:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.2
   max_tokens: 6096
 
 jira_intent_extraction:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.1
   max_tokens: 500
 
 jira_ticket_extraction:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.1
   max_tokens: 500
 
 jira_search:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.1
   max_tokens: 500
 
 jira_knowledge_base:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.2
   max_tokens: 4096
 
 jira_context_enrichment:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.1
   max_tokens: 500
 
 jira_description_enhance:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.3
   max_tokens: 1500
 
 jira_response_format:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.3
   max_tokens: 2000
 
@@ -117,27 +120,27 @@ jira_response_format:
 # Unit Test Agent
 # ---------------------------------------------------------------------------
 unit_test_analysis:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.1
   max_tokens: 1000
 
 unit_test_coverage:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.1
   max_tokens: 2000
 
 unit_test_discovery:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.1
   max_tokens: 2000
 
 unit_test_generation:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.1
   max_tokens: 8192
 
 unit_test_fix:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.15
   max_tokens: 8192
 
@@ -145,12 +148,12 @@ unit_test_fix:
 # Code Generation Agent
 # ---------------------------------------------------------------------------
 code_gen_plan:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.3
   max_tokens: 6096
 
 code_gen_implementation:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.2
   max_tokens: 6096
 
@@ -158,12 +161,12 @@ code_gen_implementation:
 # Security Agent (Shannon)
 # ---------------------------------------------------------------------------
 security_analysis:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.2
   max_tokens: 6096
 
 security_assessment:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.5
   max_tokens: 6096
 
@@ -171,11 +174,11 @@ security_assessment:
 # Web Test Agent
 # ---------------------------------------------------------------------------
 web_test_generation:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.3
   max_tokens: 8192
 
 web_test_analysis:
-  model: vertex_ai.gemini-2.0-flash
+  model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.4
   max_tokens: 8192

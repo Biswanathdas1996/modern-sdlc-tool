@@ -11,7 +11,7 @@ from core.logging import log_info, log_warning
 _CONFIG_PATH = Path(__file__).parent.parent / "llm_config.yml"
 
 _DEFAULTS = {
-    "model": "vertex_ai.gemini-2.0-flash",
+    "model": "vertex_ai.gemini-2.5-flash-image",
     "temperature": 0.2,
     "max_tokens": 6096,
     "timeout": 180,

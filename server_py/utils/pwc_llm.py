@@ -13,7 +13,7 @@ Usage:
     response = await call_pwc_genai_async(prompt, task_name="brd_generation")
 
     # Manual override still works
-    response = await call_pwc_genai_async(prompt, model="azure.gpt-4o", temperature=0.2)
+    response = await call_pwc_genai_async(prompt, model="azure.gpt-5.2", temperature=0.2)
     
     # Sync call
     response = call_pwc_genai_sync(prompt, task_name="unit_test_generation")
@@ -46,7 +46,7 @@ class PWCLLMConfig:
             "GEMINI_API_ENDPOINT",
             "https://genai-sharedservice-americas.pwc.com/completions"
         )
-        self.default_model = "vertex_ai.gemini-2.0-flash"
+        self.default_model = "vertex_ai.gemini-2.5-flash-image"
         self.default_timeout = 180
     
     def validate(self):
