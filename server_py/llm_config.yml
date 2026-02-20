@@ -6,19 +6,41 @@
 #
 #   Multimodal (text + image):
 #   - vertex_ai.gemini-2.5-flash-image      (fast, cost-effective, text + image in/out)
+#       Best for: BRD generation, documentation, test cases, JIRA tasks,
+#                 BPMN diagrams, code generation, image analysis, general tasks
+#       Strengths: Speed, low cost, multimodal input/output, large context
+#
 #   - vertex_ai.gemini-2.5-pro              (strong reasoning, text + image input)
+#       Best for: Complex BRD generation, deep code analysis, security assessments,
+#                 architecture reviews, multi-step reasoning tasks
+#       Strengths: Superior reasoning, accuracy on complex tasks, large context
 #
 #   Text only:
 #   - azure.gpt-5.2                         (strong reasoning, text only)
+#       Best for: Detailed documentation, nuanced writing, complex prompts,
+#                 code review, test scenario design
+#       Strengths: Strong instruction following, structured output, creative writing
+#
 #   - vertex_ai.anthropic.claude-sonnet-4-6 (strong coding & analysis, text only)
+#       Best for: Code generation, unit test writing, bug fixing, refactoring,
+#                 technical analysis, code review
+#       Strengths: Code quality, safety-aware, precise editing, long context
+#
 #   - azure.grok-4-fast-reasoning           (fast reasoning, text only)
+#       Best for: Quick intent classification, search queries, short extractions,
+#                 real-time chat responses, lightweight reasoning
+#       Strengths: Speed, low latency, efficient for small tasks
 #
 #   Audio:
-#   - openai.whisper                        (audio transcription)
+#   - openai.whisper                        (audio-to-text transcription)
+#       Best for: Voice input transcription for requirements capture
 #
 #   Embeddings:
 #   - vertex_ai.text-embedding-005          (text embeddings, 768-dim)
+#       Best for: Knowledge base vector search, semantic similarity
+#
 #   - vertex_ai.gemini-embedding            (text embeddings)
+#       Best for: Semantic search, document retrieval, clustering
 # =============================================================================
 
 defaults:
