@@ -18,8 +18,9 @@ from .jira_operations import (
 class TicketToolsContext:
     """Context for ticket tools to share state."""
     
-    def __init__(self):
+    def __init__(self, project_id: str = "global"):
         self.last_search_results: List[Dict[str, Any]] = []
+        self.project_id: str = project_id
 
 
 def make_async_sync(async_func):

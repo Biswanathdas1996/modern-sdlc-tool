@@ -58,6 +58,7 @@ class KnowledgeSearchRequest(BaseModel):
     """Request to search knowledge base."""
     query: str = Field(..., description="Search query")
     limit: int = Field(default=5, ge=1, le=50)
+    project_id: Optional[str] = Field(default=None, description="Project ID for scoped search")
 
 
 class JiraFindRelatedRequest(BaseModel):
@@ -89,6 +90,7 @@ class JiraAgentRequest(BaseModel):
     prompt: str = Field(..., description="User's natural language query")
     session_id: Optional[str] = Field(default=None, description="Session ID for multi-turn conversations")
     context_data: Optional[Dict[str, Any]] = Field(default=None, description="Additional context data from previous turns")
+    project_id: Optional[str] = Field(default=None, description="Project ID for project-scoped KB search")
 
 
 class JiraAgentResponse(BaseModel):

@@ -26,10 +26,8 @@ class KnowledgeBaseService:
         """Ingest a document into the knowledge base."""
         collection = self.db[self.CHUNKS_COLLECTION]
         
-        # Delete existing chunks
         collection.delete_many({"documentId": document_id})
         
-        # Create chunks
         chunks = chunk_text(content)
         inserted_count = 0
         
@@ -52,8 +50,14 @@ class KnowledgeBaseService:
             except Exception as error:
                 log_error(f"Error processing chunk {i}", "kb", error)
         
-        log_info(f"Ingested {inserted_count} chunks for {filename}", "kb")
+        log_info(f"Ingested {inserted_count} chunks for {filename} (project: {project_id})", "kb")
         return inserted_count
+    
+    def _project_filter(self, project_id: str) -> Dict[str, Any]:
+        """Build a MongoDB filter for project scoping."""
+        if project_id and project_id != "global":
+            return {"projectId": project_id}
+        return {}
     
     def search_knowledge_base(
         self, 
@@ -61,23 +65,27 @@ class KnowledgeBaseService:
         query: str, 
         limit: int = 5
     ) -> List[Dict[str, Any]]:
-        """Search the knowledge base with enhanced relevance scoring."""
+        """Search the knowledge base with project-scoped relevance scoring."""
         collection = self.db[self.CHUNKS_COLLECTION]
         
-        log_info(f"Searching KB: \"{query[:100]}...\"", "kb")
+        project_filter = self._project_filter(project_id)
         
-        total_chunks = collection.count_documents({})
-        log_info(f"Total chunks in KB: {total_chunks}", "kb")
+        log_info(f"Searching KB (project: {project_id}): \"{query[:100]}...\"", "kb")
         
-        # Extract keywords with better filtering
-        # Remove common stop words and focus on meaningful terms
+        total_chunks = collection.count_documents(project_filter)
+        log_info(f"Total chunks in KB for project {project_id}: {total_chunks}", "kb")
+        
+        if total_chunks == 0:
+            log_info(f"No chunks found for project {project_id}", "kb")
+            return []
+        
         stop_words = {'the', 'and', 'for', 'with', 'this', 'that', 'from', 'are', 'was', 'were', 'been', 'have', 'has'}
         keywords = [w for w in query.lower().split() if len(w) > 2 and w not in stop_words]
         log_info(f"Extracted keywords: {', '.join(keywords[:10])}", "kb")
         
         if not keywords:
-            log_info("No keywords, returning recent chunks", "kb")
-            results = list(collection.find({}).limit(limit))
+            log_info("No keywords, returning recent project chunks", "kb")
+            results = list(collection.find(project_filter).limit(limit))
             return [
                 {
                     "content": doc.get("content", ""),
@@ -88,41 +96,33 @@ class KnowledgeBaseService:
             ]
         
         try:
-            # Use MongoDB regex patterns for search
-            # Escape special regex characters in keywords
             escaped_keywords = [re.escape(kw) for kw in keywords]
             
-            results = list(collection.find({
+            search_filter = {
+                **project_filter,
                 "$or": [{"content": {"$regex": kw, "$options": "i"}} for kw in escaped_keywords]
-            }).limit(limit * 3))  # Fetch more for better scoring
+            }
             
-            log_info(f"Found {len(results)} matching chunks", "kb")
+            results = list(collection.find(search_filter).limit(limit * 3))
             
-            # Enhanced scoring algorithm
+            log_info(f"Found {len(results)} matching chunks for project {project_id}", "kb")
+            
             scored_results = []
             for doc in results:
                 content = doc.get("content", "")
                 content_lower = content.lower()
                 
-                # Calculate multiple relevance factors
-                # 1. Keyword match count
                 match_count = sum(1 for kw in keywords if kw in content_lower)
-                
-                # 2. Keyword frequency (how many times keywords appear)
                 total_occurrences = sum(content_lower.count(kw) for kw in keywords)
                 
-                # 3. Position bonus (keywords appearing earlier are more relevant)
                 position_score = 0
                 for kw in keywords:
                     idx = content_lower.find(kw)
                     if idx != -1:
-                        # Normalize position between 0 and 1 (earlier = higher score)
                         position_score += (1 - (idx / max(len(content_lower), 1)))
                 
-                # 4. Phrase matching bonus (keywords appearing together)
                 phrase_score = 0
                 query_lower = query.lower()
-                # Check for 2-word and 3-word phrases
                 words = query_lower.split()
                 for i in range(len(words) - 1):
                     two_word_phrase = f"{words[i]} {words[i+1]}"
@@ -133,11 +133,10 @@ class KnowledgeBaseService:
                     if three_word_phrase in content_lower:
                         phrase_score += 3
                 
-                # Calculate weighted composite score
                 base_score = match_count / len(keywords) if keywords else 0
-                frequency_bonus = min(total_occurrences * 0.1, 0.5)  # Cap at 0.5
+                frequency_bonus = min(total_occurrences * 0.1, 0.5)
                 position_bonus = (position_score / len(keywords)) * 0.3 if keywords else 0
-                phrase_bonus = min(phrase_score * 0.1, 0.4)  # Cap at 0.4
+                phrase_bonus = min(phrase_score * 0.1, 0.4)
                 
                 final_score = base_score + frequency_bonus + position_bonus + phrase_bonus
                 
@@ -149,14 +148,12 @@ class KnowledgeBaseService:
                     "occurrences": total_occurrences
                 })
             
-            # Sort by score and limit
             final_results = sorted(
                 scored_results, 
                 key=lambda x: x["score"], 
                 reverse=True
             )[:limit]
             
-            # Log detailed results
             for i, r in enumerate(final_results[:3]):
                 log_info(f"Top result {i+1}: {r['filename']} (score: {r['score']:.3f}, matches: {r['matches']}, occurrences: {r['occurrences']})", "kb")
             
@@ -167,22 +164,15 @@ class KnowledgeBaseService:
             return []
     
     def delete_document_chunks(self, document_id: str) -> int:
-        """Delete all chunks for a document from the MongoDB cluster.
-        
-        Returns:
-            Number of chunks deleted
-        """
+        """Delete all chunks for a document from the MongoDB cluster."""
         collection = self.db[self.CHUNKS_COLLECTION]
         
-        # First, count how many chunks exist
         chunk_count = collection.count_documents({"documentId": document_id})
         log_info(f"Found {chunk_count} chunks to delete for document {document_id}", "kb")
         
-        # Delete all chunks from the index
         result = collection.delete_many({"documentId": document_id})
         deleted_count = result.deleted_count
         
-        # Verify deletion
         remaining = collection.count_documents({"documentId": document_id})
         if remaining > 0:
             log_error(f"Failed to delete all chunks. {remaining} chunks still remain for document {document_id}", "kb", None)
@@ -192,10 +182,13 @@ class KnowledgeBaseService:
         return deleted_count
     
     def get_knowledge_stats(self, project_id: str) -> Dict[str, int]:
-        """Get knowledge base statistics."""
+        """Get knowledge base statistics scoped to a project."""
         collection = self.db[self.CHUNKS_COLLECTION]
         
+        project_filter = self._project_filter(project_id)
+        
         pipeline = [
+            {"$match": project_filter} if project_filter else {"$match": {}},
             {"$group": {"_id": "$documentId", "chunks": {"$sum": 1}}},
             {
                 "$group": {
@@ -217,11 +210,12 @@ class KnowledgeBaseService:
         }
     
     def get_knowledge_documents(self, project_id: str) -> List[Dict[str, Any]]:
-        """Get all knowledge documents."""
+        """Get knowledge documents scoped to a project."""
         collection = self.db[self.DOCUMENTS_COLLECTION]
-        documents = list(collection.find({}).sort("uploadedAt", -1))
         
-        # Remove MongoDB's _id field (ObjectId) and ensure we have an id field
+        project_filter = self._project_filter(project_id)
+        documents = list(collection.find(project_filter).sort("uploadedAt", -1))
+        
         for doc in documents:
             if "id" not in doc and "_id" in doc:
                 doc["id"] = str(doc["_id"])
@@ -242,7 +236,6 @@ class KnowledgeBaseService:
             **doc_data
         }
         collection.insert_one(doc)
-        # Remove MongoDB's _id field (ObjectId) that can't be JSON serialized
         if "_id" in doc:
             del doc["_id"]
         return doc
@@ -257,20 +250,14 @@ class KnowledgeBaseService:
         return result.modified_count > 0
 
     def delete_knowledge_document(self, document_id: str) -> bool:
-        """Delete a knowledge document from the MongoDB cluster.
-        
-        Returns:
-            True if document was deleted, False if not found
-        """
+        """Delete a knowledge document from the MongoDB cluster."""
         collection = self.db[self.DOCUMENTS_COLLECTION]
         
-        # Check if document exists
         doc = collection.find_one({"id": document_id})
         if not doc:
             log_info(f"Document {document_id} not found in collection", "kb")
             return False
         
-        # Delete the document record
         result = collection.delete_one({"id": document_id})
         deleted = result.deleted_count > 0
         
@@ -282,29 +269,17 @@ class KnowledgeBaseService:
         return deleted
     
     def delete_knowledge_document_complete(self, document_id: str) -> Dict[str, Any]:
-        """Complete deletion of a knowledge document including all chunks and indexes.
-        
-        This ensures:
-        1. All chunks are deleted from the knowledge_chunks collection
-        2. The document record is deleted from knowledge_documents collection
-        3. All data is removed from the MongoDB cluster
-        
-        Returns:
-            Dictionary with deletion statistics
-        """
+        """Complete deletion of a knowledge document including all chunks and indexes."""
         log_info(f"Starting complete deletion for document {document_id}", "kb")
         
-        # Step 1: Delete all chunks from the index
         chunks_deleted = self.delete_document_chunks(document_id)
-        
-        # Step 2: Delete the document record
         doc_deleted = self.delete_knowledge_document(document_id)
         
         result = {
             "documentId": document_id,
             "chunksDeleted": chunks_deleted,
             "documentDeleted": doc_deleted,
-            "success": doc_deleted  # Success if document was found and deleted
+            "success": doc_deleted
         }
         
         if doc_deleted:
@@ -315,26 +290,16 @@ class KnowledgeBaseService:
         return result
     
     def cleanup_orphaned_chunks(self) -> int:
-        """Clean up chunks that have no corresponding document record.
-        
-        This can happen if a document record was deleted but chunks weren't,
-        or if an upload partially failed.
-        
-        Returns:
-            Number of orphaned chunks deleted
-        """
+        """Clean up chunks that have no corresponding document record."""
         chunks_collection = self.db[self.CHUNKS_COLLECTION]
         docs_collection = self.db[self.DOCUMENTS_COLLECTION]
         
-        # Get all unique document IDs from chunks
         chunk_doc_ids = chunks_collection.distinct("documentId")
         log_info(f"Found {len(chunk_doc_ids)} unique document IDs in chunks", "kb")
         
-        # Get all document IDs from documents collection
         valid_doc_ids = set(doc["id"] for doc in docs_collection.find({}, {"id": 1}))
         log_info(f"Found {len(valid_doc_ids)} valid documents", "kb")
         
-        # Find orphaned document IDs
         orphaned_ids = [doc_id for doc_id in chunk_doc_ids if doc_id not in valid_doc_ids]
         
         if not orphaned_ids:
@@ -343,7 +308,6 @@ class KnowledgeBaseService:
         
         log_info(f"Found {len(orphaned_ids)} orphaned document IDs with chunks", "kb")
         
-        # Delete all orphaned chunks
         total_deleted = 0
         for doc_id in orphaned_ids:
             result = chunks_collection.delete_many({"documentId": doc_id})
@@ -354,18 +318,11 @@ class KnowledgeBaseService:
         return total_deleted
     
     def verify_document_deletion(self, document_id: str) -> Dict[str, Any]:
-        """Verify that a document and all its chunks are completely deleted.
-        
-        Returns:
-            Dictionary with verification results
-        """
+        """Verify that a document and all its chunks are completely deleted."""
         chunks_collection = self.db[self.CHUNKS_COLLECTION]
         docs_collection = self.db[self.DOCUMENTS_COLLECTION]
         
-        # Check for document record
         doc_exists = docs_collection.count_documents({"id": document_id}) > 0
-        
-        # Check for chunks
         chunk_count = chunks_collection.count_documents({"documentId": document_id})
         
         is_clean = not doc_exists and chunk_count == 0

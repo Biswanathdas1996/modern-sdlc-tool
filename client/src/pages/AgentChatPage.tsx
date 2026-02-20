@@ -8,6 +8,7 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Bot, User, Send, Sparkles, RefreshCw, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
+import { useProject } from "@/hooks/useProject";
 
 interface Message {
   id: string;
@@ -45,6 +46,7 @@ export default function AgentChatPage() {
   const [input, setInput] = useState("");
   const [sessionId, setSessionId] = useState(() => generateSessionId());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { currentProjectId } = useProject();
 
   useEffect(() => {
     document.title = "AI Agent Chat | Defuse 2.O";
@@ -55,6 +57,7 @@ export default function AgentChatPage() {
       const response = await apiRequest("POST", "/api/v1/jira-agent/chat", {
         prompt,
         session_id: sessionId,
+        project_id: currentProjectId,
       });
       return response.json();
     },

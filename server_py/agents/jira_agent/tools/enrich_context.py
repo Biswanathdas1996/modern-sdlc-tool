@@ -29,8 +29,9 @@ async def enrich_with_context(
         db = get_db()
         kb_service = KnowledgeBaseService(db)
 
+        project_id = context.project_id if context else "global"
         kb_results = kb_service.search_knowledge_base(
-            project_id="global",
+            project_id=project_id,
             query=user_prompt,
             limit=5
         )

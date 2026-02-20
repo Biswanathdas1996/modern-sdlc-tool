@@ -62,7 +62,8 @@ async def chat_with_agent(request: JiraAgentRequest):
         result = await jira_agent.process_query_interactive(
             validated_prompt,
             conversation_ctx=conversation_ctx,
-            context_data=request.context_data or {}
+            context_data=request.context_data or {},
+            project_id=request.project_id,
         )
         
         # Add agent response to conversation

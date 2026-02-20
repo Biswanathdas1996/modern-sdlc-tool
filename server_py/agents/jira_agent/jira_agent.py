@@ -184,10 +184,14 @@ class JiraAgent:
         user_prompt: str,
         conversation_ctx: Optional[ConversationContext] = None,
         context_data: Optional[Dict[str, Any]] = None,
+        project_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Interactive multi-turn processing with validation, timeouts, and metrics."""
         start = time.monotonic()
         self._metrics["requests_total"] += 1
+
+        if project_id:
+            self.context.project_id = project_id
 
         try:
             # --- Input validation ---
