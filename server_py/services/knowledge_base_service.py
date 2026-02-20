@@ -165,8 +165,11 @@ class KnowledgeBaseService:
         
         return self._keyword_search(collection, query, limit)
     
+    MIN_SIMILARITY_SCORE = 0.55
+
     def _vector_search(self, collection, query: str, limit: int) -> List[Dict[str, Any]]:
-        """Search using cosine similarity against stored embeddings."""
+        """Search using cosine similarity against stored embeddings.
+        Only returns chunks with similarity >= MIN_SIMILARITY_SCORE."""
         query_embedding = generate_embedding(query)
         if query_embedding is None:
             log_error("Failed to generate query embedding", "kb")
@@ -188,6 +191,9 @@ class KnowledgeBaseService:
             
             similarity = cosine_similarity(query_embedding, doc_embedding)
             
+            if similarity < self.MIN_SIMILARITY_SCORE:
+                continue
+            
             scored.append({
                 "content": doc.get("content", ""),
                 "filename": doc.get("metadata", {}).get("filename", "Unknown"),
@@ -198,6 +204,11 @@ class KnowledgeBaseService:
         
         scored.sort(key=lambda x: x["score"], reverse=True)
         results = scored[:limit]
+        
+        if scored:
+            log_info(f"Vector search: {len(scored)} chunks above threshold ({self.MIN_SIMILARITY_SCORE}), returning top {len(results)}", "kb")
+        else:
+            log_info(f"Vector search: no chunks met minimum similarity threshold ({self.MIN_SIMILARITY_SCORE})", "kb")
         
         for i, r in enumerate(results[:3]):
             log_info(f"Vector result {i+1}: {r['filename']} chunk#{r['chunkIndex']} (similarity: {r['score']:.4f})", "kb")
