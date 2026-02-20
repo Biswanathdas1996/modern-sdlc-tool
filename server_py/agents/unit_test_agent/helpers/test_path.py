@@ -1,19 +1,16 @@
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from ..constants import LANGUAGE_TEST_CONFIG
 
 
-def determine_test_path(source_file: str, language: str, repo_path: str, tech_stack: Dict[str, Any] = None) -> str:
+def determine_test_path(source_file: str, language: str, repo_path: str, tech_stack: Optional[Dict[str, Any]] = None) -> str:
     config = LANGUAGE_TEST_CONFIG.get(language, LANGUAGE_TEST_CONFIG["python"])
     source_path = Path(source_file)
     stem = source_path.stem
     ext = config.get("file_ext", source_path.suffix)
 
     test_location = tech_stack.get("test_location", "separate-dir") if tech_stack else "separate-dir"
-    has_src_dir = tech_stack.get("has_src_dir", False) if tech_stack else False
-    is_react = tech_stack.get("is_react", False) if tech_stack else False
-    is_nextjs = tech_stack.get("is_nextjs", False) if tech_stack else False
 
     if language == "python":
         test_filename = f"{config.get('file_prefix', 'test_')}{stem}{ext}"
