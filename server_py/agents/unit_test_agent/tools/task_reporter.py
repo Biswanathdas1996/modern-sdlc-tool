@@ -30,7 +30,7 @@ def build_generation_report(
     else:
         response += f"**{total_count} test files generated**\n\n"
         if not deps_installed and "npm not found" in deps_message:
-            response += f"⚠️ **Tests not validated** - npm not installed. Install Node.js from https://nodejs.org/ then regenerate tests.\n\n"
+            response += "⚠️ **Tests not validated** - npm not installed. Install Node.js from https://nodejs.org/ then regenerate tests.\n\n"
 
     if existing_tests:
         response += f"**Existing tests found:** {len(existing_tests)} files (patterns analyzed and followed)\n\n"
