@@ -129,7 +129,7 @@ async def generate_brd_endpoint(request: GenerateBRDRequest):
                 knowledge_sources = [
                     {
                         "filename": r["filename"],
-                        "chunkPreview": r["content"][:200] + ("..." if len(r["content"]) > 200 else ""),
+                        "chunkPreview": r["content"],
                         "relevanceScore": r.get("score", 0)
                     }
                     for r in kb_results
