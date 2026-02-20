@@ -279,6 +279,34 @@ def init_postgres_database():
         cur.execute("CREATE INDEX IF NOT EXISTS idx_user_stories_brd ON user_stories(brd_id);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_db_schemas_project ON database_schemas(project_id);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_kb_docs_project ON knowledge_documents(project_id);")
+
+        fk_constraints = [
+            ("brds", "fk_brds_feature_request", "feature_request_id", "feature_requests", "id", "CASCADE"),
+            ("test_cases", "fk_test_cases_brd", "brd_id", "brds", "id", "CASCADE"),
+            ("user_stories", "fk_user_stories_brd", "brd_id", "brds", "id", "CASCADE"),
+            ("test_data", "fk_test_data_test_case", "test_case_id", "test_cases", "id", "CASCADE"),
+        ]
+        for table, fk_name, col, ref_table, ref_col, on_delete in fk_constraints:
+            cur.execute(f"""
+                DO $$ BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.table_constraints
+                        WHERE constraint_name = '{fk_name}' AND table_name = '{table}'
+                    ) THEN
+                        DELETE FROM {table}
+                        WHERE {col} IS NOT NULL
+                          AND {col} != ''
+                          AND {col} NOT IN (SELECT {ref_col} FROM {ref_table});
+                        DELETE FROM {table}
+                        WHERE {col} IS NULL OR {col} = '';
+                        ALTER TABLE {table}
+                            ADD CONSTRAINT {fk_name}
+                            FOREIGN KEY ({col}) REFERENCES {ref_table}({ref_col})
+                            ON DELETE {on_delete};
+                    END IF;
+                END $$;
+            """)
+
         conn.commit()
     finally:
         cur.close()
