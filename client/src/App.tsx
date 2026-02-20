@@ -1,5 +1,5 @@
 import { Switch, Route, useLocation, Redirect } from "wouter";
-import { queryClient, hydrateFromLocalStorage } from "./lib/queryClient";
+import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -27,8 +27,6 @@ import SecurityAgentPage from "@/pages/SecurityAgentPage";
 import UnitTestAgentPage from "@/pages/UnitTestAgentPage";
 import WebTestAgentPage from "@/pages/WebTestAgentPage";
 import CodeGenerationPage from "@/pages/CodeGenerationPage";
-
-hydrateFromLocalStorage();
 
 const featureRouteMap: Record<string, string> = {
   "/": "analyze",
@@ -145,11 +143,11 @@ function AuthGate() {
   }
 
   return (
-    <SessionWrapper>
-      <ProjectProvider>
+    <ProjectProvider>
+      <SessionWrapper>
         <AppLayout />
-      </ProjectProvider>
-    </SessionWrapper>
+      </SessionWrapper>
+    </ProjectProvider>
   );
 }
 

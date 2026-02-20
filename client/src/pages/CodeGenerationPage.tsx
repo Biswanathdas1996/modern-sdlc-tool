@@ -105,20 +105,13 @@ function parseProgressSteps(progress: string, thinkingSteps: ThinkingStep[]): Pr
 export default function CodeGenerationPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const { getSessionArtifact, saveSessionArtifact } = useSession();
+  const { session, getSessionArtifact, saveSessionArtifact } = useSession();
   const { currentProjectId } = useProject();
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [taskId, setTaskId] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string>(() => {
-    const current = typeof window !== 'undefined' ? localStorage.getItem("docugen_session_current") : null;
-    if (current) {
-      try {
-        const parsed = JSON.parse(current);
-        if (parsed.sessionId) return parsed.sessionId;
-      } catch {}
-    }
-    return crypto.randomUUID();
+    return session?.sessionId || session?.id || crypto.randomUUID();
   });
   const [progressSteps, setProgressSteps] = useState<ProgressStep[]>([]);
   const [thinkingSteps, setThinkingSteps] = useState<ThinkingStep[]>([]);

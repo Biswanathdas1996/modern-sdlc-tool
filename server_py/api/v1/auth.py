@@ -93,6 +93,10 @@ async def login(request: LoginRequest, raw_request: Request):
         session_id = create_session(user["id"])
         permissions = get_user_permissions(user["id"])
         
+        from repositories.user_project_repository import get_user_projects
+        user_project_list = get_user_projects(user["id"])
+        project_ids = [p["id"] for p in user_project_list]
+        
         response = JSONResponse(content={
             "user": {
                 "id": user["id"],
@@ -100,6 +104,7 @@ async def login(request: LoginRequest, raw_request: Request):
                 "email": user["email"],
                 "role": user["role"],
                 "projectId": user.get("project_id"),
+                "projectIds": project_ids,
             },
             "permissions": permissions,
         })
@@ -162,6 +167,10 @@ async def get_me(request: Request):
     
     permissions = get_user_permissions(user["id"])
     
+    from repositories.user_project_repository import get_user_projects
+    user_project_list = get_user_projects(user["id"])
+    project_ids = [p["id"] for p in user_project_list]
+    
     return {
         "user": {
             "id": user["id"],
@@ -169,6 +178,7 @@ async def get_me(request: Request):
             "email": user["email"],
             "role": user["role"],
             "projectId": user.get("project_id"),
+            "projectIds": project_ids,
         },
         "permissions": permissions,
     }

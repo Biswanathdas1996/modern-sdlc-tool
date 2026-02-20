@@ -60,6 +60,7 @@ interface UserData {
   created_at: string;
   permissions: string[];
   project_id: string | null;
+  project_ids: string[];
 }
 
 export default function AdminPage() {
@@ -391,11 +392,11 @@ export default function AdminPage() {
                             </Button>
                           </div>
                         </div>
-                        {users.filter(u => u.project_id === p.id).length > 0 && (
+                        {users.filter(u => u.project_ids?.includes(p.id)).length > 0 && (
                           <div className="mt-2 pt-2 border-t border-border/50">
                             <p className="text-xs text-muted-foreground mb-1.5">Assigned Users:</p>
                             <div className="flex flex-wrap gap-2">
-                              {users.filter(u => u.project_id === p.id).map(u => (
+                              {users.filter(u => u.project_ids?.includes(p.id)).map(u => (
                                 <Badge key={u.id} variant="secondary" className="text-xs" data-testid={`badge-user-${u.username}-project-${p.id}`}>
                                   {u.username}
                                 </Badge>
@@ -465,9 +466,9 @@ export default function AdminPage() {
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground truncate">{u.email}</p>
-                        {u.project_id && (
+                        {u.project_ids && u.project_ids.length > 0 && (
                           <p className="text-xs text-muted-foreground truncate">
-                            Project: {projects.find(p => p.id === u.project_id)?.name || u.project_id}
+                            Projects: {u.project_ids.map(pid => projects.find(p => p.id === pid)?.name || pid).join(", ")}
                           </p>
                         )}
                         <div className="flex items-center gap-1 mt-1 flex-wrap">

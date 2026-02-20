@@ -7,6 +7,7 @@ interface AuthUser {
   email: string;
   role: "admin" | "user";
   projectId: string | null;
+  projectIds: string[];
 }
 
 interface AuthContextType {

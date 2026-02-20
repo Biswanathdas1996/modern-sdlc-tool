@@ -14,41 +14,34 @@ interface ProjectContextValue {
 
 const ProjectContext = createContext<ProjectContextValue | null>(null);
 
-const STORAGE_KEY = "defuse_selected_project_id";
-
 export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const { user, isAdmin } = useAuth();
 
-  const [selectedId, setSelectedId] = useState<string | null>(() => {
-    return localStorage.getItem(STORAGE_KEY);
-  });
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const { data: projects = [], isLoading } = useQuery<Project[]>({
-    queryKey: ["/api/projects"],
+    queryKey: ["/api/user-projects"],
     enabled: !!user,
   });
 
-  const isProjectLocked = !isAdmin && !!user?.projectId;
+  const isProjectLocked = !isAdmin && (user?.projectIds?.length === 1);
 
   const selectProject = useCallback((projectId: string) => {
     if (isProjectLocked) return;
     setSelectedId(projectId);
-    localStorage.setItem(STORAGE_KEY, projectId);
   }, [isProjectLocked]);
 
   useEffect(() => {
-    if (user && !isAdmin && user.projectId) {
-      setSelectedId(user.projectId);
-      localStorage.setItem(STORAGE_KEY, user.projectId);
+    if (user && !isAdmin && user.projectIds?.length === 1) {
+      setSelectedId(user.projectIds[0]);
     }
   }, [user, isAdmin]);
 
   useEffect(() => {
-    if (!isLoading && projects.length > 0 && !selectedId && isAdmin) {
+    if (!isLoading && projects.length > 0 && !selectedId) {
       setSelectedId(projects[0].id);
-      localStorage.setItem(STORAGE_KEY, projects[0].id);
     }
-  }, [isLoading, projects, selectedId, isAdmin]);
+  }, [isLoading, projects, selectedId]);
 
   const currentProject = projects.find(p => p.id === selectedId) || null;
 
