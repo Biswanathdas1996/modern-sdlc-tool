@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 from core.logging import log_error, log_info
 from prompts import prompt_loader
 from .ticket_tools import TicketToolsContext, search_tickets_tool, get_details_tool
-from ..conversation_manager import ConversationContext, ConversationState
+from ..helpers.conversation_manager import ConversationContext, ConversationState
 
 
 async def process_issue_report(

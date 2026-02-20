@@ -5,7 +5,7 @@ from typing import Dict, Any, Optional
 
 from core.logging import log_info
 from .ticket_tools import TicketToolsContext, link_issues_tool
-from ..conversation_manager import ConversationContext, ConversationState, InfoRequest
+from ..helpers.conversation_manager import ConversationContext, ConversationState, InfoRequest
 
 
 async def process_link_issues(

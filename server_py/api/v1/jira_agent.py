@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, HTTPException
 
 from agents.jira_agent.jira_agent import jira_agent
-from agents.jira_agent.conversation_manager import conversation_manager
+from agents.jira_agent.helpers.conversation_manager import conversation_manager
 from schemas.requests import JiraAgentRequest, JiraAgentResponse, MissingInfoField
 from schemas.requests_jira import SearchJiraResponse, ProcessQueryRequest
 from core.logging import log_info, log_error

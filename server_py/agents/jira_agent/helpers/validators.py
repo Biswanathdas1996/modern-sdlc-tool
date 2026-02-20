@@ -1,7 +1,7 @@
 """Validation functions for JIRA ticket data completeness."""
 from typing import Dict, Any, List, Optional
 
-from ..conversation_manager import InfoRequest
+from .conversation_manager import InfoRequest
 
 
 def validate_create_ticket_data(

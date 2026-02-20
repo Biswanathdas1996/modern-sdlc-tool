@@ -2,8 +2,8 @@
 from typing import Dict, Any, Optional
 
 from core.logging import log_error, log_info
-from .utils import ActionType
-from .tools import (
+from ..utils import ActionType
+from . import (
     TicketToolsContext,
     get_details_tool,
     enrich_with_context,
@@ -16,8 +16,8 @@ from .tools import (
     handle_info_response,
     process_without_conversation,
 )
-from .conversation_manager import ConversationContext, ConversationState
-from .helpers import extract_ticket_data_from_prompt
+from ..helpers.conversation_manager import ConversationContext, ConversationState
+from ..helpers import extract_ticket_data_from_prompt
 
 _enrich_with_context = enrich_with_context
 

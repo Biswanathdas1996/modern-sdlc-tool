@@ -6,7 +6,7 @@ from prompts import prompt_loader
 from .ticket_tools import TicketToolsContext, search_tickets_tool
 from .helpers import format_tickets_for_agent
 from .enrich_context import enrich_with_context
-from ..conversation_manager import ConversationContext, ConversationState
+from ..helpers.conversation_manager import ConversationContext, ConversationState
 from ..helpers import validate_search_query, generate_info_request_message
 
 

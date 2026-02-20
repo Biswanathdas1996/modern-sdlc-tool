@@ -2,7 +2,7 @@
 import re
 from typing import Dict, Any, List
 
-from ..conversation_manager import InfoRequest
+from .conversation_manager import InfoRequest
 
 
 def extract_ticket_data_from_prompt(user_prompt: str) -> Dict[str, Any]:

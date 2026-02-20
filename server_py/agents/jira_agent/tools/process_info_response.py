@@ -4,7 +4,7 @@ from typing import Dict, Any
 from core.logging import log_info
 from ..utils import ActionType
 from .ticket_tools import TicketToolsContext
-from ..conversation_manager import ConversationContext, ConversationState
+from ..helpers.conversation_manager import ConversationContext, ConversationState
 from ..helpers import merge_user_response, generate_info_request_message
 
 

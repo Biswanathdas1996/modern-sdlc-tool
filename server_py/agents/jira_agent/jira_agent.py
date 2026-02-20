@@ -23,9 +23,9 @@ from services.langchain_llm import PwCGenAILLM
 from core.logging import log_info, log_error
 from .tools import TicketToolsContext, create_jira_tools
 from .utils import handle_parsing_error, analyze_intent
-from .direct_processor import direct_process
+from .tools.direct_processor import direct_process
 from prompts import prompt_loader
-from .conversation_manager import ConversationContext
+from .helpers.conversation_manager import ConversationContext
 
 
 class JiraAgent:
