@@ -65,7 +65,8 @@ async def search_knowledge_base_tool(query: str, project_id: str = "default", li
         formatted_response = await ai_service.call_genai(
             prompt=synthesis_prompt,
             temperature=0.3,
-            max_tokens=2048
+            max_tokens=2048,
+            task_name="jira_knowledge_base"
         )
         
         log_info(f"✅ Successfully formatted knowledge base results using LLM", "kb_tool")

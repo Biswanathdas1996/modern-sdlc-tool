@@ -1,8 +1,10 @@
 """AI service for GenAI interactions and document generation."""
 import os
+from functools import partial
 from typing import Optional, Callable, Dict, Any, List
 from core.config import get_settings
 from core.logging import log_info, log_error, log_debug
+from core.llm_config import get_llm_config
 from utils.text import parse_json_response
 from utils.pwc_llm import call_pwc_genai_async, build_pwc_prompt
 from prompts import prompt_loader
@@ -14,24 +16,31 @@ class AIService:
     
     def __init__(self):
         self.settings = get_settings()
+        self._llm_config = get_llm_config()
         
     async def call_genai(
         self, 
         prompt: str, 
-        temperature: float = 0.2, 
-        max_tokens: int = 6096
+        temperature: Optional[float] = None, 
+        max_tokens: Optional[int] = None,
+        task_name: Optional[str] = None,
     ) -> str:
-        """Call PwC GenAI API using centralized utility."""
-        log_info(f"Calling PwC GenAI (prompt length: {len(prompt)} chars)", "ai")
-        log_debug(f"AI parameters: temp={temperature}, max_tokens={max_tokens}", "ai")
-        log_debug(f"Using model: vertex_ai.gemini-2.0-flash", "ai")
+        """Call PwC GenAI API using centralized utility.
+        
+        If task_name is provided, model/temperature/max_tokens are read
+        from llm_config.yml (explicit overrides still win).
+        """
+        cfg = self._llm_config.get(task_name) if task_name else None
+        model_label = cfg.model if cfg else "defaults"
+        log_info(f"Calling PwC GenAI [task={task_name or 'adhoc'}] (prompt length: {len(prompt)} chars)", "ai")
+        log_debug(f"AI parameters: model={model_label}, temp={temperature}, max_tokens={max_tokens}", "ai")
         
         try:
             response = await call_pwc_genai_async(
                 prompt=prompt,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                timeout=120
+                task_name=task_name,
             )
             log_info("PwC GenAI response received successfully", "ai")
             return response
@@ -39,6 +48,12 @@ class AIService:
             error_msg = f"PwC GenAI API Error: {str(e)}"
             log_error(error_msg, "ai")
             raise
+
+    def _task_caller(self, task_name: str):
+        """Return a call_genai wrapper pre-bound to a specific task_name."""
+        async def _call(prompt: str, temperature: float = None, max_tokens: int = None) -> str:
+            return await self.call_genai(prompt, temperature, max_tokens, task_name=task_name)
+        return _call
     
     def build_prompt(self, system_message: str, user_message: str) -> str:
         """Build a formatted prompt."""
@@ -62,7 +77,7 @@ class AIService:
         )
         
         prompt = self.build_prompt(system_prompt, user_prompt)
-        response_text = await self.call_genai(prompt)
+        response_text = await self.call_genai(prompt, task_name="repo_analysis")
         
         analysis_data = parse_json_response(response_text)
         
@@ -74,13 +89,13 @@ class AIService:
     async def generate_documentation(self, analysis: Dict[str, Any], project: Dict[str, Any]) -> Dict[str, Any]:
         """Generate technical documentation for a project."""
         return await generators.generate_documentation(
-            self.call_genai, self.build_prompt, analysis, project, self.fetch_repo_contents
+            self._task_caller("documentation_generation"), self.build_prompt, analysis, project, self.fetch_repo_contents
         )
 
     async def generate_bpmn_diagram(self, documentation: Dict[str, Any], analysis: Dict[str, Any]) -> Dict[str, Any]:
         """Generate BPMN diagrams from documentation."""
         return await generators.generate_bpmn_diagram(
-            self.call_genai, self.build_prompt, documentation, analysis
+            self._task_caller("bpmn_diagram"), self.build_prompt, documentation, analysis
         )
 
     async def transcribe_audio(self, audio_buffer: bytes) -> str:
@@ -98,7 +113,7 @@ class AIService:
     ) -> Dict[str, Any]:
         """Generate Business Requirements Document with comprehensive context."""
         return await generators.generate_brd(
-            self.call_genai, self.build_prompt,
+            self._task_caller("brd_generation"), self.build_prompt,
             feature_request, analysis, documentation, database_schema,
             knowledge_context, on_chunk
         )
@@ -106,13 +121,13 @@ class AIService:
     async def generate_test_cases(self, brd: Dict[str, Any], analysis: Optional[Dict[str, Any]], documentation: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Generate test cases from BRD."""
         return await generators.generate_test_cases(
-            self.call_genai, self.build_prompt, brd, analysis, documentation
+            self._task_caller("test_case_generation"), self.build_prompt, brd, analysis, documentation
         )
 
     async def generate_test_data(self, test_cases: List[Dict[str, Any]], brd: Dict[str, Any], documentation: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Generate test data for test cases."""
         return await generators.generate_test_data(
-            self.call_genai, self.build_prompt, test_cases, brd, documentation
+            self._task_caller("test_data_generation"), self.build_prompt, test_cases, brd, documentation
         )
 
     async def generate_user_stories(
@@ -125,7 +140,7 @@ class AIService:
     ) -> List[Dict[str, Any]]:
         """Generate user stories from BRD."""
         return await generators.generate_user_stories(
-            self.call_genai, self.build_prompt,
+            self._task_caller("user_story_generation"), self.build_prompt,
             brd, documentation, database_schema, parent_context, knowledge_context
         )
 
@@ -139,14 +154,14 @@ class AIService:
     ) -> str:
         """Generate a detailed GitHub Copilot prompt."""
         return await generators.generate_copilot_prompt(
-            self.call_genai, self.build_prompt,
+            self._task_caller("copilot_prompt"), self.build_prompt,
             user_stories, documentation, analysis, database_schema, feature_request
         )
 
     async def find_related_stories(self, feature_description: str, jira_stories: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Find related JIRA stories based on feature description."""
         return await generators.find_related_stories(
-            self.call_genai, self.build_prompt, feature_description, jira_stories
+            self._task_caller("related_stories"), self.build_prompt, feature_description, jira_stories
         )
 
 

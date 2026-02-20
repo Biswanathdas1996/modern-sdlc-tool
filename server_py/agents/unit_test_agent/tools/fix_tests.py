@@ -60,7 +60,7 @@ IMPORTANT: This is a Create React App (CRA) project using react-scripts.
 
     try:
         logger.info("Calling AI service to fix failing tests...")
-        fixed_code = ai_service.call_genai(prompt, temperature=0.15, max_tokens=8192)
+        fixed_code = ai_service.call_genai(prompt, temperature=0.15, max_tokens=8192, task_name="unit_test_fix")
         fixed_code = fixed_code.strip()
         if fixed_code.startswith("```"):
             lines = fixed_code.split('\n')
@@ -92,7 +92,7 @@ def extract_passing_tests_only(
     )
 
     try:
-        cleaned_code = ai_service.call_genai(prompt, temperature=0.1, max_tokens=8192)
+        cleaned_code = ai_service.call_genai(prompt, temperature=0.1, max_tokens=8192, task_name="unit_test_fix")
         cleaned_code = cleaned_code.strip()
         if cleaned_code.startswith("```"):
             lines = cleaned_code.split('\n')

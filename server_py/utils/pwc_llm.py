@@ -4,12 +4,19 @@ This module provides a unified interface for making LLM calls to PwC GenAI
 across the entire application. It supports both synchronous and asynchronous calls,
 automatic continuation for long responses, and consistent error handling.
 
+Model selection is driven by llm_config.yml via the `task_name` parameter.
+Pass a task name (e.g. "brd_generation") to automatically use the model,
+temperature and max_tokens defined in the YAML config.
+
 Usage:
-    # Async call
-    response = await call_pwc_genai_async(prompt, temperature=0.2, max_tokens=6096)
+    # Task-based call (reads model from llm_config.yml)
+    response = await call_pwc_genai_async(prompt, task_name="brd_generation")
+
+    # Manual override still works
+    response = await call_pwc_genai_async(prompt, model="azure.gpt-4o", temperature=0.2)
     
     # Sync call
-    response = call_pwc_genai_sync(prompt, temperature=0.2, max_tokens=6096)
+    response = call_pwc_genai_sync(prompt, task_name="unit_test_generation")
     
     # Build formatted prompt
     prompt = build_pwc_prompt(system_message="You are a helpful assistant", 
@@ -23,7 +30,6 @@ from typing import Dict, Any, Optional
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment variables
 env_path = Path(__file__).parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
 
@@ -50,8 +56,18 @@ class PWCLLMConfig:
             )
 
 
-# Global configuration instance
 _config = PWCLLMConfig()
+
+
+def _resolve_task_config(task_name: Optional[str] = None):
+    """Resolve model/temperature/max_tokens from llm_config.yml for a task."""
+    if not task_name:
+        return None
+    try:
+        from core.llm_config import get_llm_config
+        return get_llm_config().get(task_name)
+    except Exception:
+        return None
 
 
 def _build_request_body(
@@ -114,24 +130,26 @@ def _get_finish_reason(result: Dict[str, Any]) -> Optional[str]:
 
 async def call_pwc_genai_async(
     prompt: str,
-    temperature: float = 0.2,
-    max_tokens: int = 6096,
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None,
     model: Optional[str] = None,
-    timeout: int = None,
+    timeout: Optional[int] = None,
     enable_continuation: bool = False,
-    max_continuations: int = 3
+    max_continuations: int = 3,
+    task_name: Optional[str] = None,
 ) -> str:
     """
     Make an async call to PwC GenAI API.
     
     Args:
         prompt: The prompt to send to the LLM
-        temperature: Sampling temperature (0.0 to 1.0)
-        max_tokens: Maximum tokens in response
-        model: Model to use (default: vertex_ai.gemini-2.0-flash)
-        timeout: Request timeout in seconds (default: 180)
+        temperature: Sampling temperature (0.0-1.0). None = use config/defaults
+        max_tokens: Maximum tokens in response. None = use config/defaults
+        model: Model to use. None = resolved from llm_config.yml
+        timeout: Request timeout in seconds. None = use config/defaults
         enable_continuation: Whether to handle response continuation
         max_continuations: Maximum number of continuations to attempt
+        task_name: Key in llm_config.yml to auto-resolve model/temp/tokens
         
     Returns:
         str: The LLM response text
@@ -140,6 +158,16 @@ async def call_pwc_genai_async(
         ValueError: If credentials are not configured or API returns error
     """
     _config.validate()
+
+    task_cfg = _resolve_task_config(task_name)
+    if task_cfg:
+        model = model or task_cfg.model
+        temperature = temperature if temperature is not None else task_cfg.temperature
+        max_tokens = max_tokens if max_tokens is not None else task_cfg.max_tokens
+        timeout = timeout if timeout is not None else task_cfg.timeout
+
+    temperature = temperature if temperature is not None else 0.2
+    max_tokens = max_tokens if max_tokens is not None else 6096
     
     request_body = _build_request_body(prompt, temperature, max_tokens, model)
     headers = _build_headers()
@@ -190,24 +218,26 @@ async def call_pwc_genai_async(
 
 def call_pwc_genai_sync(
     prompt: str,
-    temperature: float = 0.2,
-    max_tokens: int = 6096,
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None,
     model: Optional[str] = None,
-    timeout: int = None,
+    timeout: Optional[int] = None,
     enable_continuation: bool = True,
-    max_continuations: int = 3
+    max_continuations: int = 3,
+    task_name: Optional[str] = None,
 ) -> str:
     """
     Make a synchronous call to PwC GenAI API with automatic continuation support.
     
     Args:
         prompt: The prompt to send to the LLM
-        temperature: Sampling temperature (0.0 to 1.0)
-        max_tokens: Maximum tokens in response
-        model: Model to use (default: vertex_ai.gemini-2.0-flash)
-        timeout: Request timeout in seconds (default: 180)
+        temperature: Sampling temperature (0.0-1.0). None = use config/defaults
+        max_tokens: Maximum tokens in response. None = use config/defaults
+        model: Model to use. None = resolved from llm_config.yml
+        timeout: Request timeout in seconds. None = use config/defaults
         enable_continuation: Whether to handle response continuation
         max_continuations: Maximum number of continuations to attempt
+        task_name: Key in llm_config.yml to auto-resolve model/temp/tokens
         
     Returns:
         str: The LLM response text
@@ -216,6 +246,16 @@ def call_pwc_genai_sync(
         ValueError: If credentials are not configured or API returns error
     """
     _config.validate()
+
+    task_cfg = _resolve_task_config(task_name)
+    if task_cfg:
+        model = model or task_cfg.model
+        temperature = temperature if temperature is not None else task_cfg.temperature
+        max_tokens = max_tokens if max_tokens is not None else task_cfg.max_tokens
+        timeout = timeout if timeout is not None else task_cfg.timeout
+
+    temperature = temperature if temperature is not None else 0.2
+    max_tokens = max_tokens if max_tokens is not None else 6096
     
     request_body = _build_request_body(prompt, temperature, max_tokens, model)
     headers = _build_headers()

@@ -27,7 +27,8 @@ async def generate_jql_from_query(ai_service, query: str, project_key: Optional[
         jql = await ai_service.call_genai(
             prompt=prompt,
             temperature=0.1,
-            max_tokens=200
+            max_tokens=200,
+            task_name="jira_search"
         )
         
         # Clean the response

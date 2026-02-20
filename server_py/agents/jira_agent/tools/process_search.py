@@ -72,7 +72,8 @@ async def process_search_tickets(
         response = await ai_service.call_genai(
             prompt=analysis_prompt,
             temperature=0.3,
-            max_tokens=2000
+            max_tokens=2000,
+            task_name="jira_search"
         )
     else:
         response = result

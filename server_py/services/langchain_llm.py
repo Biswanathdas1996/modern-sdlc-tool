@@ -13,6 +13,7 @@ class PwCGenAILLM(LLM):
     
     temperature: float = 0.2
     max_tokens: int = 6096
+    task_name: str = "jira_agent"
     
     class Config:
         arbitrary_types_allowed = True
@@ -32,16 +33,13 @@ class PwCGenAILLM(LLM):
         """Call the PwC GenAI API."""
         import asyncio
         
-        # Get or create event loop
         try:
             loop = asyncio.get_event_loop()
         except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
         
-        # Run async call in sync context
         if loop.is_running():
-            # If we're already in an async context, create a task
             import nest_asyncio
             nest_asyncio.apply()
             result = loop.run_until_complete(self._acall_async(prompt, stop, run_manager, **kwargs))
@@ -64,7 +62,7 @@ class PwCGenAILLM(LLM):
             prompt=prompt,
             temperature=kwargs.get("temperature", self.temperature),
             max_tokens=kwargs.get("max_tokens", self.max_tokens),
-            timeout=120
+            task_name=kwargs.get("task_name", self.task_name),
         )
         
         return response

@@ -55,7 +55,7 @@ def identify_testable_modules(
     )
 
     try:
-        result = ai_service.call_genai(prompt, temperature=0.1, max_tokens=2000)
+        result = ai_service.call_genai(prompt, temperature=0.1, max_tokens=2000, task_name="unit_test_coverage")
         result = result.strip()
         json_match = re.search(r'\[.*\]', result, re.DOTALL)
         if json_match:

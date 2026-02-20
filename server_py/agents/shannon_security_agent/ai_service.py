@@ -1,3 +1,4 @@
+from typing import Optional
 from utils.pwc_llm import call_pwc_genai_sync, build_pwc_prompt
 
 
@@ -7,7 +8,7 @@ class AIService:
     def __init__(self):
         pass
 
-    def call_genai(self, prompt: str, temperature: float = 0.4, max_tokens: int = 8192) -> str:
+    def call_genai(self, prompt: str, temperature: Optional[float] = None, max_tokens: Optional[int] = None, task_name: str = "security_analysis") -> str:
         """Call PwC GenAI using centralized utility with continuation support."""
         return call_pwc_genai_sync(
             prompt=prompt,
@@ -15,7 +16,7 @@ class AIService:
             max_tokens=max_tokens,
             enable_continuation=True,
             max_continuations=3,
-            timeout=180
+            task_name=task_name,
         )
     
     def build_prompt(self, system_message: str, user_message: str) -> str:

@@ -56,7 +56,8 @@ async def process_create_ticket(
             extracted = await ai_service.call_genai(
                 prompt=extract_prompt,
                 temperature=0.1,
-                max_tokens=500
+                max_tokens=500,
+                task_name="jira_ticket_extraction"
             )
 
             json_match = re.search(r'\{[^}]*\}', extracted, re.DOTALL)
@@ -93,7 +94,8 @@ async def process_create_ticket(
             enhanced_description = await ai_service.call_genai(
                 prompt=enhance_prompt,
                 temperature=0.3,
-                max_tokens=1500
+                max_tokens=1500,
+                task_name="jira_description_enhance"
             )
 
             if enhanced_description and len(enhanced_description) > 50:

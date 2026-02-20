@@ -66,7 +66,8 @@ async def enrich_with_context(
                 relevant_keys = await ai_service.call_genai(
                     prompt=relevance_prompt,
                     temperature=0.1,
-                    max_tokens=100
+                    max_tokens=100,
+                    task_name="jira_context_enrichment"
                 )
 
                 relevant_keys = relevant_keys.strip()

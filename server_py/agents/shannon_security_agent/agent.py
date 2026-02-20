@@ -135,7 +135,7 @@ class ShannonSecurityAgent:
         )
 
         try:
-            return self.ai_service.call_genai(prompt, temperature=0.5, max_tokens=6096)
+            return self.ai_service.call_genai(prompt, temperature=0.5, max_tokens=6096, task_name="security_assessment")
         except Exception as e:
             return f"Error processing question: {str(e)}"
 

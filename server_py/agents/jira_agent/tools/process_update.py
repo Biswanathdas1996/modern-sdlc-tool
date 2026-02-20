@@ -44,7 +44,8 @@ async def process_update_ticket(
         extracted = await ai_service.call_genai(
             prompt=extract_prompt,
             temperature=0.1,
-            max_tokens=500
+            max_tokens=500,
+            task_name="jira_ticket_extraction"
         )
 
         json_match = re.search(r'\{[^}]+\}', extracted, re.DOTALL)

@@ -185,7 +185,7 @@ def llm_analyze(url: str, web_ctx: Dict, web_summary: str, all_forms: List, all_
         comments_json=json.dumps(web_ctx.get('comments', []), indent=2)
     )
 
-    llm_response = ai_service.call_genai(prompt, temperature=0.2, max_tokens=6096)
+    llm_response = ai_service.call_genai(prompt, temperature=0.2, max_tokens=6096, task_name="security_analysis")
 
     if "NO ADDITIONAL FINDINGS" in llm_response.upper():
         return []

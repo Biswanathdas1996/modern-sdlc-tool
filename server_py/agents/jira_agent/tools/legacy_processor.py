@@ -41,7 +41,8 @@ async def process_without_conversation(
                 response = await ai_service.call_genai(
                     prompt=analysis_prompt,
                     temperature=0.3,
-                    max_tokens=2000
+                    max_tokens=2000,
+                    task_name="jira_response_format"
                 )
             else:
                 response = result
@@ -62,7 +63,8 @@ async def process_without_conversation(
             extracted = await ai_service.call_genai(
                 prompt=extract_prompt,
                 temperature=0.1,
-                max_tokens=500
+                max_tokens=500,
+                task_name="jira_ticket_extraction"
             )
 
             try:
@@ -96,7 +98,8 @@ async def process_without_conversation(
             extracted = await ai_service.call_genai(
                 prompt=extract_prompt,
                 temperature=0.1,
-                max_tokens=500
+                max_tokens=500,
+                task_name="jira_ticket_extraction"
             )
 
             try:

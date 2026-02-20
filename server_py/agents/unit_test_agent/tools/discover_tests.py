@@ -69,7 +69,7 @@ def analyze_test_patterns(existing_tests: Dict[str, Dict[str, Any]], language: s
 
     try:
         logger.info("Calling AI service to analyze test patterns...")
-        style_guide = ai_service.call_genai(prompt, temperature=0.1, max_tokens=2000)
+        style_guide = ai_service.call_genai(prompt, temperature=0.1, max_tokens=2000, task_name="unit_test_discovery")
         logger.info(f"Successfully generated style guide ({len(style_guide)} chars)")
         return style_guide.strip()
     except Exception as e:

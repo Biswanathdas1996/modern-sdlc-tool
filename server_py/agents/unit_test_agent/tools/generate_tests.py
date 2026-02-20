@@ -92,7 +92,7 @@ IMPORT GUIDELINES FOR THIS PROJECT:
         )
 
     try:
-        test_code = ai_service.call_genai(prompt, temperature=0.1, max_tokens=8192)
+        test_code = ai_service.call_genai(prompt, temperature=0.1, max_tokens=8192, task_name="unit_test_generation")
         test_code = test_code.strip()
         if test_code.startswith("```"):
             lines = test_code.split('\n')

@@ -36,7 +36,8 @@ async def process_issue_report(
         extracted = await ai_service.call_genai(
             prompt=extract_prompt,
             temperature=0.1,
-            max_tokens=200
+            max_tokens=200,
+            task_name="jira_ticket_extraction"
         )
 
         json_match = re.search(r'\{[^}]*\}', extracted, re.DOTALL)

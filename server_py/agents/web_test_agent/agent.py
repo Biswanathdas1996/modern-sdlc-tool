@@ -202,7 +202,7 @@ class WebTestAgent:
         )
 
         try:
-            result = self.ai_service.call_genai(prompt, temperature=0.3, max_tokens=6096)
+            result = self.ai_service.call_genai(prompt, temperature=0.3, max_tokens=6096, task_name="web_test_generation")
             json_match = re.search(r'\[.*\]', result, re.DOTALL)
             if json_match:
                 features = json.loads(json_match.group(0))
@@ -300,7 +300,7 @@ class WebTestAgent:
             })
 
             try:
-                result = self.ai_service.call_genai(config["prompt"], temperature=0.4, max_tokens=8192)
+                result = self.ai_service.call_genai(config["prompt"], temperature=0.4, max_tokens=8192, task_name="web_test_analysis")
                 result = self._enforce_section_heading(result, config["heading"])
                 sections.append(result)
                 thinking_steps.append({
@@ -359,7 +359,7 @@ class WebTestAgent:
         )
 
         try:
-            result = self.ai_service.call_genai(prompt, temperature=0.4, max_tokens=8192)
+            result = self.ai_service.call_genai(prompt, temperature=0.4, max_tokens=8192, task_name="web_test_analysis")
             return result
         except Exception as e:
             return f"Error processing follow-up: {str(e)}"

@@ -113,7 +113,7 @@ def detect_tech_stack(repo_path: str, language: str) -> Dict[str, Any]:
     )
 
     try:
-        result = ai_service.call_genai(prompt, temperature=0.1, max_tokens=1000)
+        result = ai_service.call_genai(prompt, temperature=0.1, max_tokens=1000, task_name="unit_test_analysis")
         result = result.strip()
         json_match = re.search(r'\{.*\}', result, re.DOTALL)
         if json_match:
