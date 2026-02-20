@@ -60,10 +60,18 @@ function ProtectedRoute({ component: Component, featureKey }: { component: React
   return <Component />;
 }
 
+function AdminRoute({ initialTab }: { initialTab: string }) {
+  const { isAdmin } = useAuth();
+  if (!isAdmin) return <Redirect to="/" />;
+  return <AdminPage initialTab={initialTab} />;
+}
+
 function Router() {
+  const { isAdmin } = useAuth();
+
   return (
     <Switch>
-      <Route path="/">{() => <ProtectedRoute component={AnalyzePage} featureKey="analyze" />}</Route>
+      <Route path="/">{() => isAdmin ? <Redirect to="/admin/projects" /> : <ProtectedRoute component={AnalyzePage} featureKey="analyze" />}</Route>
       <Route path="/documentation">{() => <ProtectedRoute component={DocumentationPage} featureKey="documentation" />}</Route>
       <Route path="/requirements">{() => <ProtectedRoute component={RequirementsPage} featureKey="requirements" />}</Route>
       <Route path="/brd">{() => <ProtectedRoute component={BRDPage} featureKey="brd" />}</Route>
@@ -76,10 +84,10 @@ function Router() {
       <Route path="/agent-security">{() => <ProtectedRoute component={SecurityAgentPage} featureKey="agent_security" />}</Route>
       <Route path="/agent-unit-test">{() => <ProtectedRoute component={UnitTestAgentPage} featureKey="agent_unit_test" />}</Route>
       <Route path="/agent-web-test">{() => <ProtectedRoute component={WebTestAgentPage} featureKey="agent_web_test" />}</Route>
-      <Route path="/admin">{() => {
-        const { isAdmin } = useAuth();
-        return isAdmin ? <AdminPage /> : <Redirect to="/" />;
-      }}</Route>
+      <Route path="/admin/projects">{() => <AdminRoute initialTab="projects" />}</Route>
+      <Route path="/admin/users">{() => <AdminRoute initialTab="users" />}</Route>
+      <Route path="/admin/settings">{() => <AdminRoute initialTab="settings" />}</Route>
+      <Route path="/admin">{() => <Redirect to="/admin/projects" />}</Route>
       <Route component={NotFound} />
     </Switch>
   );

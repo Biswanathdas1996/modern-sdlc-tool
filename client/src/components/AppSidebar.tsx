@@ -20,6 +20,8 @@ import {
   User,
   ChevronsUpDown,
   FolderOpen,
+  Users,
+  FolderKanban,
 } from "lucide-react";
 import {
   Sidebar,
@@ -211,7 +213,7 @@ export function AppSidebar({ completedSteps = [] }: AppSidebarProps) {
   return (
     <Sidebar>
       <SidebarHeader className="border-b border-sidebar-border px-4 py-4">
-        <Link href="/" className="flex items-center gap-3">
+        <Link href={isAdmin ? "/admin/projects" : "/"} className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary">
             <Sparkles className="h-5 w-5 text-primary-foreground" />
           </div>
@@ -223,228 +225,237 @@ export function AppSidebar({ completedSteps = [] }: AppSidebarProps) {
       </SidebarHeader>
 
       <SidebarContent className="px-2">
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
-            Project
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <div className="mx-2">
-              {projects.length === 0 ? (
-                <div className="p-3 rounded-md bg-sidebar-accent/50 border border-sidebar-border text-center">
-                  <FolderOpen className="h-5 w-5 mx-auto text-muted-foreground mb-1" />
-                  <p className="text-xs text-muted-foreground">No projects yet</p>
-                  {isAdmin && (
-                    <Link href="/admin" className="text-xs text-primary hover:underline mt-1 block" data-testid="link-create-project">
-                      Create a project
-                    </Link>
+        {isAdmin ? (
+          <>
+            <SidebarGroup>
+              <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
+                Administration
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {[
+                    { path: "/admin/projects", icon: FolderKanban, title: "Project Management", description: "Create & manage projects", testId: "link-admin-projects" },
+                    { path: "/admin/users", icon: Users, title: "User Management", description: "Manage users & access", testId: "link-admin-users" },
+                    { path: "/admin/settings", icon: Settings, title: "Settings", description: "System configuration", testId: "link-admin-settings" },
+                  ].map((item) => {
+                    const isActive = location === item.path;
+                    const Icon = item.icon;
+                    return (
+                      <SidebarMenuItem key={item.path}>
+                        <SidebarMenuButton
+                          asChild
+                          className={cn(
+                            "group",
+                            isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
+                          )}
+                        >
+                          <Link href={item.path} data-testid={item.testId}>
+                            <div className="flex items-center gap-3 w-full">
+                              <div className={cn(
+                                "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
+                                isActive
+                                  ? "bg-primary border-primary text-primary-foreground"
+                                  : "bg-muted border-border text-muted-foreground"
+                              )}>
+                                <Icon className="h-4 w-4" />
+                              </div>
+                              <div className="flex flex-col flex-1 min-w-0">
+                                <span className="text-sm font-medium truncate">{item.title}</span>
+                                <span className="text-xs text-muted-foreground truncate">{item.description}</span>
+                              </div>
+                              {isActive && (
+                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                              )}
+                            </div>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
+        ) : (
+          <>
+            <SidebarGroup>
+              <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
+                Project
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <div className="mx-2">
+                  {projects.length === 0 ? (
+                    <div className="p-3 rounded-md bg-sidebar-accent/50 border border-sidebar-border text-center">
+                      <FolderOpen className="h-5 w-5 mx-auto text-muted-foreground mb-1" />
+                      <p className="text-xs text-muted-foreground">No projects yet</p>
+                    </div>
+                  ) : isProjectLocked && currentProject ? (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-sidebar-border bg-sidebar-accent/30" data-testid="locked-project-display">
+                      <GitBranch className="h-3.5 w-3.5 shrink-0 text-primary" />
+                      <span className="text-sm font-medium truncate">{currentProject.name}</span>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-[10px] px-1 py-0 ml-auto",
+                          currentProject.status === "completed" && "bg-success/10 text-success border-success/30",
+                          currentProject.status === "analyzing" && "bg-warning/10 text-warning border-warning/30",
+                          currentProject.status === "error" && "bg-destructive/10 text-destructive border-destructive/30"
+                        )}
+                      >
+                        {currentProject.status}
+                      </Badge>
+                    </div>
+                  ) : (
+                    <Select
+                      value={currentProject?.id || ""}
+                      onValueChange={selectProject}
+                    >
+                      <SelectTrigger className="w-full" data-testid="select-project">
+                        <div className="flex items-center gap-2 truncate">
+                          <GitBranch className="h-3.5 w-3.5 shrink-0 text-primary" />
+                          <SelectValue placeholder="Select project" />
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {projects.map((p) => (
+                          <SelectItem key={p.id} value={p.id} data-testid={`option-project-${p.id}`}>
+                            <div className="flex items-center gap-2">
+                              <span className="truncate">{p.name}</span>
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-[10px] px-1 py-0",
+                                  p.status === "completed" && "bg-success/10 text-success border-success/30",
+                                  p.status === "analyzing" && "bg-warning/10 text-warning border-warning/30",
+                                  p.status === "error" && "bg-destructive/10 text-destructive border-destructive/30"
+                                )}
+                              >
+                                {p.status}
+                              </Badge>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   )}
                 </div>
-              ) : isProjectLocked && currentProject ? (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-sidebar-border bg-sidebar-accent/30" data-testid="locked-project-display">
-                  <GitBranch className="h-3.5 w-3.5 shrink-0 text-primary" />
-                  <span className="text-sm font-medium truncate">{currentProject.name}</span>
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "text-[10px] px-1 py-0 ml-auto",
-                      currentProject.status === "completed" && "bg-success/10 text-success border-success/30",
-                      currentProject.status === "analyzing" && "bg-warning/10 text-warning border-warning/30",
-                      currentProject.status === "error" && "bg-destructive/10 text-destructive border-destructive/30"
-                    )}
-                  >
-                    {currentProject.status}
-                  </Badge>
-                </div>
-              ) : (
-                <Select
-                  value={currentProject?.id || ""}
-                  onValueChange={selectProject}
-                >
-                  <SelectTrigger className="w-full" data-testid="select-project">
-                    <div className="flex items-center gap-2 truncate">
-                      <GitBranch className="h-3.5 w-3.5 shrink-0 text-primary" />
-                      <SelectValue placeholder="Select project" />
-                    </div>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projects.map((p) => (
-                      <SelectItem key={p.id} value={p.id} data-testid={`option-project-${p.id}`}>
-                        <div className="flex items-center gap-2">
-                          <span className="truncate">{p.name}</span>
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              "text-[10px] px-1 py-0",
-                              p.status === "completed" && "bg-success/10 text-success border-success/30",
-                              p.status === "analyzing" && "bg-warning/10 text-warning border-warning/30",
-                              p.status === "error" && "bg-destructive/10 text-destructive border-destructive/30"
-                            )}
-                          >
-                            {p.status}
-                          </Badge>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-          </SidebarGroupContent>
-        </SidebarGroup>
+              </SidebarGroupContent>
+            </SidebarGroup>
 
-        {visiblePrereqSteps.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
-              Pre-requisite
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {visiblePrereqSteps.map((step, index) => renderStepItem(step, index, visiblePrereqSteps.length))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+            {visiblePrereqSteps.length > 0 && (
+              <SidebarGroup>
+                <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
+                  Pre-requisite
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {visiblePrereqSteps.map((step, index) => renderStepItem(step, index, visiblePrereqSteps.length))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
 
-        {visibleWorkflowSteps.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
-              Workflow
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {visibleWorkflowSteps.map((step, index) => renderStepItem(step, index, visibleWorkflowSteps.length))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+            {visibleWorkflowSteps.length > 0 && (
+              <SidebarGroup>
+                <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
+                  Workflow
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {visibleWorkflowSteps.map((step, index) => renderStepItem(step, index, visibleWorkflowSteps.length))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
 
-        {hasPermission("knowledge_base") && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
-              Knowledge Base
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    className={cn(
-                      "group",
-                      location === "/knowledge-base" && "bg-sidebar-accent text-sidebar-accent-foreground"
-                    )}
-                  >
-                    <Link href="/knowledge-base" data-testid="link-knowledge-base">
-                      <div className="flex items-center gap-3 w-full">
-                        <div className={cn(
-                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
-                          location === "/knowledge-base" 
-                            ? "bg-primary border-primary text-primary-foreground"
-                            : "bg-muted border-border text-muted-foreground"
-                        )}>
-                          <Library className="h-4 w-4" />
-                        </div>
-                        <div className="flex flex-col flex-1 min-w-0">
-                          <span className="text-sm font-medium truncate">Documents</span>
-                          <span className="text-xs text-muted-foreground truncate">Upload & manage docs</span>
-                        </div>
-                        {location === "/knowledge-base" && (
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                        )}
-                      </div>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-
-        {visibleAgents.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
-              AI Agents
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {visibleAgents.map((agent) => {
-                  const isActive = location === agent.path;
-                  const Icon = agent.icon;
-                  return (
-                    <SidebarMenuItem key={agent.path}>
+            {hasPermission("knowledge_base") && (
+              <SidebarGroup>
+                <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
+                  Knowledge Base
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    <SidebarMenuItem>
                       <SidebarMenuButton
                         asChild
                         className={cn(
                           "group",
-                          isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
+                          location === "/knowledge-base" && "bg-sidebar-accent text-sidebar-accent-foreground"
                         )}
                       >
-                        <Link href={agent.path} data-testid={agent.testId}>
+                        <Link href="/knowledge-base" data-testid="link-knowledge-base">
                           <div className="flex items-center gap-3 w-full">
                             <div className={cn(
                               "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
-                              isActive
+                              location === "/knowledge-base" 
                                 ? "bg-primary border-primary text-primary-foreground"
                                 : "bg-muted border-border text-muted-foreground"
                             )}>
-                              <Icon className="h-4 w-4" />
+                              <Library className="h-4 w-4" />
                             </div>
                             <div className="flex flex-col flex-1 min-w-0">
-                              <span className="text-sm font-medium truncate">{agent.title}</span>
-                              <span className="text-xs text-muted-foreground truncate">{agent.description}</span>
+                              <span className="text-sm font-medium truncate">Documents</span>
+                              <span className="text-xs text-muted-foreground truncate">Upload & manage docs</span>
                             </div>
-                            {isActive && (
+                            {location === "/knowledge-base" && (
                               <ChevronRight className="h-4 w-4 text-muted-foreground" />
                             )}
                           </div>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
 
-        {isAdmin && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
-              Administration
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    className={cn(
-                      "group",
-                      location === "/admin" && "bg-sidebar-accent text-sidebar-accent-foreground"
-                    )}
-                  >
-                    <Link href="/admin" data-testid="link-admin">
-                      <div className="flex items-center gap-3 w-full">
-                        <div className={cn(
-                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
-                          location === "/admin"
-                            ? "bg-primary border-primary text-primary-foreground"
-                            : "bg-muted border-border text-muted-foreground"
-                        )}>
-                          <Settings className="h-4 w-4" />
-                        </div>
-                        <div className="flex flex-col flex-1 min-w-0">
-                          <span className="text-sm font-medium truncate">User Management</span>
-                          <span className="text-xs text-muted-foreground truncate">Manage users & access</span>
-                        </div>
-                        {location === "/admin" && (
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                        )}
-                      </div>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+            {visibleAgents.length > 0 && (
+              <SidebarGroup>
+                <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
+                  AI Agents
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {visibleAgents.map((agent) => {
+                      const isActive = location === agent.path;
+                      const Icon = agent.icon;
+                      return (
+                        <SidebarMenuItem key={agent.path}>
+                          <SidebarMenuButton
+                            asChild
+                            className={cn(
+                              "group",
+                              isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
+                            )}
+                          >
+                            <Link href={agent.path} data-testid={agent.testId}>
+                              <div className="flex items-center gap-3 w-full">
+                                <div className={cn(
+                                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
+                                  isActive
+                                    ? "bg-primary border-primary text-primary-foreground"
+                                    : "bg-muted border-border text-muted-foreground"
+                                )}>
+                                  <Icon className="h-4 w-4" />
+                                </div>
+                                <div className="flex flex-col flex-1 min-w-0">
+                                  <span className="text-sm font-medium truncate">{agent.title}</span>
+                                  <span className="text-xs text-muted-foreground truncate">{agent.description}</span>
+                                </div>
+                                {isActive && (
+                                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                )}
+                              </div>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
+          </>
         )}
       </SidebarContent>
 

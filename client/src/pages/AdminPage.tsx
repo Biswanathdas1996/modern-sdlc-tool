@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,8 @@ import {
   FolderOpen,
   Pencil,
   GitBranch,
+  Settings,
+  Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -63,9 +66,14 @@ interface UserData {
   project_ids: string[];
 }
 
-export default function AdminPage() {
+export default function AdminPage({ initialTab = "projects" }: { initialTab?: string }) {
+  const [, navigate] = useLocation();
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
+
+  const handleTabChange = useCallback((tab: string) => {
+    navigate(`/admin/${tab}`);
+  }, [navigate]);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showPermissionsDialog, setShowPermissionsDialog] = useState(false);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
@@ -293,7 +301,7 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <Tabs defaultValue="projects" className="w-full">
+        <Tabs value={initialTab} onValueChange={handleTabChange} className="w-full">
           <TabsList data-testid="tabs-admin">
             <TabsTrigger value="projects" data-testid="tab-projects">
               <FolderOpen className="h-4 w-4 mr-2" />
@@ -302,6 +310,10 @@ export default function AdminPage() {
             <TabsTrigger value="users" data-testid="tab-users">
               <Users className="h-4 w-4 mr-2" />
               Users ({users.length})
+            </TabsTrigger>
+            <TabsTrigger value="settings" data-testid="tab-settings">
+              <Settings className="h-4 w-4 mr-2" />
+              Settings
             </TabsTrigger>
           </TabsList>
 
@@ -825,6 +837,64 @@ export default function AdminPage() {
           </DialogContent>
         </Dialog>
 
+          </TabsContent>
+
+          <TabsContent value="settings" className="space-y-4 mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Info className="h-4 w-4" />
+                  System Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Application</p>
+                    <p className="text-sm font-medium">Defuse 2.O</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Total Projects</p>
+                    <p className="text-sm font-medium">{projects.length}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Total Users</p>
+                    <p className="text-sm font-medium">{users.length}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Active Users</p>
+                    <p className="text-sm font-medium">{users.filter(u => u.is_active).length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  Feature Configuration
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {Object.entries(groupedFeatures).map(([category, feats]) => (
+                    <div key={category}>
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                        {categoryLabels[category] || category}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {feats.map((f) => (
+                          <Badge key={f.key} variant="secondary" className="text-xs" data-testid={`badge-feature-${f.key}`}>
+                            {f.label}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
 
