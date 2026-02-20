@@ -7,7 +7,7 @@ from utils.exceptions import not_found, internal_error
 from utils.response import success_response
 from core.logging import log_info, log_error
 from api.v1.auth import get_current_user
-from repositories.user_project_repository import get_user_projects
+from repositories.user_project_repository import get_user_projects, add_user_to_project
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -98,9 +98,15 @@ async def delete_project(id: str):
 @router.post("/analyze", status_code=201)
 async def analyze_project(
     request: AnalyzeRequest,
+    http_request: Request,
     background_tasks: BackgroundTasks
 ):
-    """Analyze a GitHub repository."""
+    """Analyze a GitHub repository.
+    
+    If the logged-in user already has an assigned project with the same repo URL,
+    re-analyze that project instead of creating a new one.
+    New projects are automatically linked to the user.
+    """
     import re
     from services import ai_service
     
@@ -115,15 +121,37 @@ async def analyze_project(
             raise HTTPException(status_code=400, detail="Invalid GitHub URL")
         
         repo_name = f"{match.group(1)}/{match.group(2)}".replace(".git", "")
+        normalized_url = f"https://github.com/{repo_name}"
+        
+        user = get_current_user(http_request)
+        user_id = user["id"] if user else None
+        
+        existing_project = None
+        if user_id:
+            user_projects = get_user_projects(user_id)
+            for p in user_projects:
+                p_url = (p.get("repoUrl") or "").rstrip("/").replace(".git", "")
+                if p_url == normalized_url:
+                    existing_project = p
+                    break
         
         from datetime import datetime
-        project = storage.create_project({
-            "name": repo_name,
-            "repoUrl": repo_url,
-            "techStack": [],
-            "status": "analyzing",
-            "analyzedAt": datetime.utcnow().isoformat(),
-        })
+        if existing_project:
+            storage.update_project(existing_project["id"], {
+                "status": "analyzing",
+                "analyzedAt": datetime.utcnow().isoformat(),
+            })
+            project = storage.get_project(existing_project["id"])
+        else:
+            project = storage.create_project({
+                "name": repo_name,
+                "repoUrl": repo_url,
+                "techStack": [],
+                "status": "analyzing",
+                "analyzedAt": datetime.utcnow().isoformat(),
+            })
+            if user_id:
+                add_user_to_project(user_id, project["id"])
         
         async def run_analysis(project_id: str, repo_url: str):
             try:

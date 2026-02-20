@@ -41,26 +41,28 @@ export default function AnalyzePage() {
     }
   }, [currentProject?.id]);
 
-  const { isLoading: projectsLoading } = useQuery<Project[]>({
-    queryKey: ["/api/projects"],
+  const { data: polledProjects } = useQuery<Project[]>({
+    queryKey: ["/api/user-projects"],
     refetchInterval: analyzingProjectId ? 2000 : false,
   });
 
   useEffect(() => {
-    if (analyzingProjectId && projects) {
-      const project = projects.find(p => p.id === analyzingProjectId);
+    const allProjects = polledProjects || projects;
+    if (analyzingProjectId && allProjects) {
+      const project = allProjects.find(p => p.id === analyzingProjectId);
       if (project && project.status === "completed") {
         saveSessionArtifact("project", project);
         setActiveProject(project.id);
         setAnalyzingProjectId(null);
         queryClient.invalidateQueries({ queryKey: ["/api/analysis/current"] });
         queryClient.invalidateQueries({ queryKey: ["/api/documentation/current"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/user-projects"] });
         navigate("/documentation");
       } else if (project && project.status === "error") {
         setAnalyzingProjectId(null);
       }
     }
-  }, [projects, analyzingProjectId, navigate, queryClient, saveSessionArtifact]);
+  }, [polledProjects, projects, analyzingProjectId, navigate, queryClient, saveSessionArtifact]);
 
   const analyzeMutation = useMutation({
     mutationFn: async (url: string) => {
@@ -68,8 +70,8 @@ export default function AnalyzePage() {
       return response.json();
     },
     onSuccess: (data: Project) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      setAnalyzingProjectId(data.id); // Start polling for this project
+      queryClient.invalidateQueries({ queryKey: ["/api/user-projects"] });
+      setAnalyzingProjectId(data.id);
     },
   });
 
@@ -78,14 +80,14 @@ export default function AnalyzePage() {
       await apiRequest("DELETE", `/api/projects/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user-projects"] });
       queryClient.invalidateQueries({ queryKey: ["/api/documentation/current"] });
       queryClient.invalidateQueries({ queryKey: ["/api/analysis/current"] });
     },
   });
 
   const isAnalyzing = analyzeMutation.isPending || !!analyzingProjectId;
-  const analyzingProject = projects?.find(p => p.id === analyzingProjectId);
+  const analyzingProject = (polledProjects || projects)?.find(p => p.id === analyzingProjectId);
   const hasProjectRepo = !!currentProject?.repoUrl;
 
   const handleAnalyze = () => {
@@ -229,7 +231,7 @@ export default function AnalyzePage() {
 
           <div>
             <h2 className="text-lg font-semibold text-foreground mb-4">Recent Projects</h2>
-            {projectsLoading ? (
+            {!projects ? (
               <div className="flex justify-center py-8">
                 <LoadingSpinner text="Loading projects..." />
               </div>
