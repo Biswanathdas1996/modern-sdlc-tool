@@ -67,6 +67,43 @@ def init_postgres_database():
         """)
 
         cur.execute("""
+            CREATE TABLE IF NOT EXISTS user_projects (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                role TEXT NOT NULL DEFAULT 'member',
+                created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                UNIQUE(user_id, project_id)
+            );
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS workflow_sessions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                label TEXT,
+                request_type TEXT,
+                feature_title TEXT,
+                is_active BOOLEAN NOT NULL DEFAULT false,
+                created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            );
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS session_artifacts (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL REFERENCES workflow_sessions(id) ON DELETE CASCADE,
+                project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                artifact_type TEXT NOT NULL,
+                payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+                created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                UNIQUE(session_id, artifact_type)
+            );
+        """)
+
+        cur.execute("""
             CREATE TABLE IF NOT EXISTS repo_analyses (
                 id TEXT PRIMARY KEY,
                 project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -216,22 +253,16 @@ def init_postgres_database():
             );
         """)
 
-        cur.execute("""
-            DO $$
-            BEGIN
-                IF NOT EXISTS (
-                    SELECT 1 FROM information_schema.columns
-                    WHERE table_name = 'users' AND column_name = 'project_id'
-                ) THEN
-                    ALTER TABLE users ADD COLUMN project_id TEXT;
-                END IF;
-            END $$;
-        """)
-
         cur.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_ufa_user ON user_feature_access(user_id);")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_users_project ON users(project_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_user_projects_user ON user_projects(user_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_user_projects_project ON user_projects(project_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_workflow_sessions_user ON workflow_sessions(user_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_workflow_sessions_project ON workflow_sessions(project_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_workflow_sessions_active ON workflow_sessions(user_id, project_id, is_active);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_session_artifacts_session ON session_artifacts(session_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_session_artifacts_type ON session_artifacts(session_id, artifact_type);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_repo_analyses_project ON repo_analyses(project_id);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_documentation_project ON documentation(project_id);")
