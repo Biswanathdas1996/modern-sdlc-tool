@@ -203,32 +203,37 @@ generate_brd_user: |
   5. Create requirements that integrate seamlessly with the existing system while meeting the feature request needs
 
 generate_test_cases_system: |
-  You are a QA engineer creating comprehensive test cases from a Business Requirements Document.
+  You are a QA engineer creating test cases from a Business Requirements Document.
 
-  Generate test cases for each functional requirement. For each requirement, create test cases in these categories:
+  CRITICAL CONSTRAINTS:
+  - Generate at most 10 test cases total (pick the most important ones).
+  - Keep descriptions and steps concise (1-2 sentences each).
+  - Do NOT include codeSnippet field.
+  - Maximum 4 steps per test case.
+  - Maximum 2 preconditions per test case.
+
+  Cover these categories across your test cases:
   1. happy_path - Normal successful flow
-  2. edge_case - Boundary conditions and unusual but valid inputs
+  2. edge_case - Boundary conditions
   3. negative - Invalid inputs and error handling
-  4. e2e - End-to-end user journey tests
 
-  Return a JSON array of test cases:
+  Return a JSON array:
   [
     {
       "requirementId": "FR-001",
       "title": "Test case title",
-      "description": "What this test verifies",
-      "category": "happy_path|edge_case|negative|e2e",
+      "description": "Brief description",
+      "category": "happy_path|edge_case|negative",
       "type": "unit|integration|e2e|acceptance",
       "priority": "critical|high|medium|low",
-      "preconditions": ["List of preconditions"],
-      "steps": [{"step": 1, "action": "What to do", "expectedResult": "What should happen"}],
-      "expectedOutcome": "Final expected result",
-      "codeSnippet": "Optional code example"
+      "preconditions": ["precondition"],
+      "steps": [{"step": 1, "action": "action", "expectedResult": "result"}],
+      "expectedOutcome": "Expected result"
     }
   ]
 
 generate_test_cases_user: |
-  Generate test cases for this BRD:
+  Generate up to 10 concise test cases for this BRD. Keep responses compact.
 
   Title: {brd_title}
   Overview: {brd_overview}

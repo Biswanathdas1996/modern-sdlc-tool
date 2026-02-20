@@ -63,7 +63,7 @@ related_stories:
 test_case_generation:
   model: vertex_ai.gemini-2.0-flash
   temperature: 0.2
-  max_tokens: 16384
+  max_tokens: 8192
 
 test_data_generation:
   model: vertex_ai.gemini-2.0-flash

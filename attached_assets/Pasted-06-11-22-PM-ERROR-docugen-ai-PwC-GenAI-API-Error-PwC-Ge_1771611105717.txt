@@ -1,0 +1,22 @@
+06:11:22 PM [ERROR] [docugen] [ai] PwC GenAI API Error: PwC GenAI API Error: 400 - {"error":{"message":"litellm.BadRequestError: OpenAIException - {\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Unable to submit request because it has a maxOutputTokens value of 16384 but the supported range is from 1 (inclusive) to 8193 (exclusive). Update the value and try again.\",\n    \"status\": \"INVALID_ARGUMENT\"\n  }\n}\n. Received Model Group=vertex_ai.gemini-2.0-flash\nAvailable Model Group Fallbacks=None","type":null,"param":null,"code":"400"}}
+06:11:22 PM [ERROR] [docugen] [requirements] Error generating test cases: PwC GenAI API Error: 400 - {"error":{"message":"litellm.BadRequestError: OpenAIException - {\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Unable to submit request because it has a maxOutputTokens value of 16384 but the supported range is from 1 (inclusive) to 8193 (exclusive). Update the value and try again.\",\n    \"status\": \"INVALID_ARGUMENT\"\n  }\n}\n. Received Model Group=vertex_ai.gemini-2.0-flash\nAvailable Model Group Fallbacks=None","type":null,"param":null,"code":"400"}}
+Traceback (most recent call last):
+  File "/home/runner/workspace/server_py/api/v1/requirements.py", line 208, in generate_test_cases_endpoint
+    test_cases = await ai_service.generate_test_cases(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/ai_service.py", line 130, in generate_test_cases
+    return await generators.generate_test_cases(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/generators.py", line 231, in generate_test_cases
+    response_text = await call_genai(prompt)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/ai_service.py", line 62, in _call
+    return await self.call_genai(prompt, temperature, max_tokens, task_name=task_name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/ai_service.py", line 45, in call_genai
+    response = await call_pwc_genai_async(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/utils/pwc_llm.py", line 235, in call_pwc_genai_async
+    raise ValueError(
+ValueError: PwC GenAI API Error: 400 - {"error":{"message":"litellm.BadRequestError: OpenAIException - {\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Unable to submit request because it has a maxOutputTokens value of 16384 but the supported range is from 1 (inclusive) to 8193 (exclusive). Update the value and try again.\",\n    \"status\": \"INVALID_ARGUMENT\"\n  }\n}\n. Received Model Group=vertex_ai.gemini-2.0-flash\nAvailable Model Group Fallbacks=None","type":null,"param":null,"code":"400"}}
+06:11:22 PM [INFO] [docugen] POST /api/test-cases/generate 500 in 1124ms
