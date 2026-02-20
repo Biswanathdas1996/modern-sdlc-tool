@@ -119,6 +119,7 @@ export type InsertFeatureRequest = z.infer<typeof insertFeatureRequestSchema>;
 export const knowledgeSourceSchema = z.object({
   filename: z.string(),
   chunkPreview: z.string(),
+  relevanceScore: z.number().nullable().optional(),
 });
 
 export type KnowledgeSource = z.infer<typeof knowledgeSourceSchema>;

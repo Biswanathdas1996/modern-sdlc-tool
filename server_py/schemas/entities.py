@@ -108,6 +108,7 @@ class KnowledgeSource(BaseModel):
     """Knowledge source reference."""
     filename: str
     chunkPreview: str
+    relevanceScore: Optional[float] = None
 
 
 class Scope(BaseModel):

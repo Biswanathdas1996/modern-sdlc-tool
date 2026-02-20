@@ -544,6 +544,15 @@ export default function BRDPage() {
                                 Chunk {index + 1}
                               </Badge>
                               <span className="text-sm font-medium text-foreground">{source.filename}</span>
+                              {source.relevanceScore != null && (
+                                <Badge
+                                  variant="secondary"
+                                  className="ml-auto text-xs font-mono"
+                                  data-testid={`badge-match-score-${index}`}
+                                >
+                                  {Math.round(source.relevanceScore * 100)}% match
+                                </Badge>
+                              )}
                             </div>
                             <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                               {source.chunkPreview}
