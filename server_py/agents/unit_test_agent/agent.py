@@ -5,11 +5,16 @@ from typing import Dict, Any, Optional
 from pathlib import Path
 
 from .constants import logger, LANGUAGE_TEST_CONFIG, MAX_FIX_ATTEMPTS
-from . import repo_analyzer
-from . import test_discovery
-from . import test_runner
-from . import test_generator
-from .test_runner import write_test_file, write_test_config
+from .tools.analyze_repo import detect_language, detect_tech_stack
+from .tools.collect_sources import collect_source_files
+from .tools.discover_tests import discover_existing_tests, analyze_test_patterns
+from .tools.coverage_mapper import build_coverage_map, identify_testable_modules
+from .tools.generate_tests import generate_tests_for_file
+from .tools.fix_tests import fix_failing_tests, extract_passing_tests_only
+from .tools.run_tests import run_test_file, install_test_deps
+from .tools.write_files import write_test_file, write_test_config
+from .helpers.deps_context import get_project_deps_context, get_related_imports_context
+from .helpers.test_path import determine_test_path
 
 
 class UnitTestAgent:
@@ -47,11 +52,11 @@ class UnitTestAgent:
             return False
 
         logger.info(f"Detecting language for repo: {repo_path}")
-        language = repo_analyzer.detect_language(repo_path)
+        language = detect_language(repo_path)
         logger.info(f"Detected language: {language}")
         
         logger.info(f"Detecting tech stack for repo: {repo_path}")
-        tech_stack = repo_analyzer.detect_tech_stack(repo_path, language)
+        tech_stack = detect_tech_stack(repo_path, language)
         logger.info(f"Detected tech stack: {tech_stack}")
         
         session["repo_url"] = repo_url
@@ -144,7 +149,7 @@ class UnitTestAgent:
         start_time = time.time()
 
         try:
-            existing_tests = test_discovery.discover_existing_tests(repo_path, language)
+            existing_tests = discover_existing_tests(repo_path, language)
             session["existing_tests"] = existing_tests
             task["thinking_steps"].append({
                 "type": "tool_result",
@@ -161,7 +166,7 @@ class UnitTestAgent:
                 })
                 task["progress"] = "Analyzing existing test patterns..."
 
-                style_guide = test_discovery.analyze_test_patterns(existing_tests, language)
+                style_guide = analyze_test_patterns(existing_tests, language)
                 session["test_style_guide"] = style_guide
 
                 if style_guide:
@@ -182,7 +187,7 @@ class UnitTestAgent:
             })
             task["progress"] = "Collecting source files..."
 
-            source_files = repo_analyzer.collect_source_files(repo_path)
+            source_files = collect_source_files(repo_path)
             task["thinking_steps"].append({"type": "tool_result", "content": f"Found {len(source_files)} source files"})
             task["progress"] = f"Found {len(source_files)} source files"
 
@@ -192,9 +197,9 @@ class UnitTestAgent:
                 task["response"] = "No source files found in the repository to generate tests for."
                 return
 
-            deps_context = repo_analyzer.get_project_deps_context(repo_path, language)
+            deps_context = get_project_deps_context(repo_path, language)
 
-            coverage_map = test_discovery.build_coverage_map(source_files, existing_tests)
+            coverage_map = build_coverage_map(source_files, existing_tests)
             covered_count = sum(1 for v in coverage_map.values() if v["has_existing_tests"])
             uncovered_count = len(coverage_map) - covered_count
 
@@ -210,7 +215,7 @@ class UnitTestAgent:
             })
             task["progress"] = "Identifying coverage gaps..."
 
-            testable_modules = test_discovery.identify_testable_modules(source_files, language, coverage_map)
+            testable_modules = identify_testable_modules(source_files, language, coverage_map)
             task["thinking_steps"].append({"type": "tool_result", "content": f"Identified {len(testable_modules)} modules to process"})
             task["progress"] = f"Identified {len(testable_modules)} modules to process"
 
@@ -222,7 +227,7 @@ class UnitTestAgent:
                 "tool_name": "install_deps"
             })
             task["progress"] = "Installing test dependencies..."
-            deps_result = test_runner.install_test_deps(repo_path, language)
+            deps_result = install_test_deps(repo_path, language)
             deps_installed = deps_result.get("success", False)
             task["thinking_steps"].append({
                 "type": "tool_result",
@@ -265,7 +270,7 @@ class UnitTestAgent:
 
                 content = source_files[filepath]
 
-                imports_context = repo_analyzer.get_related_imports_context(filepath, content, source_files, language)
+                imports_context = get_related_imports_context(filepath, content, source_files, language)
 
                 existing_test_content = ""
                 augment_test_path = None
@@ -279,7 +284,7 @@ class UnitTestAgent:
                     if not existing_test_content:
                         mode = "new"
 
-                test_result = test_generator.generate_tests_for_file(
+                test_result = generate_tests_for_file(
                     filepath, content, language, repo_path,
                     style_guide=style_guide,
                     existing_test_content=existing_test_content,
@@ -293,7 +298,7 @@ class UnitTestAgent:
                     if mode == "augment" and augment_test_path:
                         test_path = augment_test_path
                     else:
-                        test_path = test_generator.determine_test_path(filepath, language, repo_path, session.get("tech_stack"))
+                        test_path = determine_test_path(filepath, language, repo_path, session.get("tech_stack"))
 
                     write_result = write_test_file(repo_path, test_path, test_result["test_code"])
 
@@ -331,7 +336,7 @@ class UnitTestAgent:
                         fix_attempts = 0
                         error_output = ""
 
-                        run_result = test_runner.run_test_file(repo_path, test_path, language)
+                        run_result = run_test_file(repo_path, test_path, language)
 
                         if run_result.get("passed"):
                             test_passed = True
@@ -385,7 +390,7 @@ class UnitTestAgent:
                                 logger.info(f"Sending to LLM for fix attempt {fix_attempts}/{MAX_FIX_ATTEMPTS}")
                                 logger.info(f"Input: test_code={len(current_test_code)} chars, error_output={len(error_output)} chars")
 
-                                fix_result = test_generator.fix_failing_tests(
+                                fix_result = fix_failing_tests(
                                     filepath, content, current_test_code,
                                     error_output, language, fix_attempts,
                                     deps_context=deps_context,
@@ -396,7 +401,7 @@ class UnitTestAgent:
                                     current_test_code = fix_result["test_code"]
                                     write_test_file(repo_path, test_path, current_test_code)
 
-                                    rerun = test_runner.run_test_file(repo_path, test_path, language)
+                                    rerun = run_test_file(repo_path, test_path, language)
                                     if rerun.get("passed"):
                                         test_passed = True
                                         task["thinking_steps"].append({
@@ -428,7 +433,7 @@ class UnitTestAgent:
                             })
                             task["progress"] = f"Extracting passing tests [{i+1}/{len(testable_modules)}]: {filepath}"
 
-                            extract_result = test_generator.extract_passing_tests_only(
+                            extract_result = extract_passing_tests_only(
                                 filepath, content, current_test_code,
                                 error_output, language,
                             )
@@ -436,7 +441,7 @@ class UnitTestAgent:
                             if extract_result["success"]:
                                 cleaned_code = extract_result["test_code"]
                                 write_test_file(repo_path, test_path, cleaned_code)
-                                verify_run = test_runner.run_test_file(repo_path, test_path, language)
+                                verify_run = run_test_file(repo_path, test_path, language)
                                 if verify_run.get("passed"):
                                     test_passed = True
                                     current_test_code = cleaned_code

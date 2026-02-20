@@ -1,53 +1,14 @@
 import os
 import re
-import json
 import subprocess
+import logging
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any
 
-from .constants import logger
+from ..constants import logger as root_logger
+from ..helpers.npm_runner import check_command_exists, run_npm_command, is_cra_project
 
-
-def check_command_exists(command: str) -> bool:
-    """Check if a command exists in the system PATH."""
-    try:
-        if os.name == 'nt':
-            result = subprocess.run(
-                ["where", command],
-                capture_output=True, text=True, timeout=5
-            )
-        else:
-            result = subprocess.run(
-                ["which", command],
-                capture_output=True, text=True, timeout=5
-            )
-        return result.returncode == 0
-    except Exception:
-        return False
-
-
-def run_npm_command(args: List[str], cwd: str, timeout: int = 300, env: Optional[Dict[str, str]] = None) -> subprocess.CompletedProcess:
-    """Run npm/npx command with proper Windows support."""
-    if os.name == 'nt':
-        cmd = ' '.join(args)
-        return subprocess.run(
-            cmd,
-            cwd=cwd, 
-            capture_output=True, 
-            text=True, 
-            timeout=timeout,
-            shell=True,
-            env=env or os.environ.copy()
-        )
-    else:
-        return subprocess.run(
-            args,
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env=env
-        )
+logger = logging.getLogger(__name__)
 
 
 def install_test_deps(repo_path: str, language: str) -> Dict[str, Any]:
@@ -62,7 +23,7 @@ def install_test_deps(repo_path: str, language: str) -> Dict[str, Any]:
                 cwd=str(root), capture_output=True, text=True, timeout=120
             )
             logger.info(f"pytest installation completed with return code: {result.returncode}")
-            
+
             req_file = root / "requirements.txt"
             if req_file.exists():
                 logger.info("Found requirements.txt - installing project dependencies...")
@@ -75,7 +36,7 @@ def install_test_deps(repo_path: str, language: str) -> Dict[str, Any]:
                 except Exception as e:
                     logger.warning(f"Failed to install requirements.txt: {e}")
                     pass
-            
+
             setup_py = root / "setup.py"
             pyproject = root / "pyproject.toml"
             if setup_py.exists() or pyproject.exists():
@@ -101,13 +62,13 @@ def install_test_deps(repo_path: str, language: str) -> Dict[str, Any]:
                     "message": "npm not found. Please install Node.js from https://nodejs.org/ (includes npm)"
                 }
             logger.info("npm found successfully")
-            
+
             node_modules = root / "node_modules"
             pkg = root / "package.json"
-            
+
             logger.info(f"Checking for node_modules directory: {node_modules}")
             logger.info(f"node_modules exists: {node_modules.exists()}")
-            
+
             if pkg.exists() and not node_modules.exists():
                 logger.warning("node_modules directory not found - running npm install...")
                 print("⚠️ node_modules not found - installing dependencies (this may take a few minutes)...")
@@ -133,11 +94,11 @@ def install_test_deps(repo_path: str, language: str) -> Dict[str, Any]:
                     }
             else:
                 logger.info("node_modules directory found - skipping npm install")
-            
+
             logger.info("Detecting if project is Create React App...")
             is_cra = is_cra_project(str(root))
             logger.info(f"Is Create React App: {is_cra}")
-            
+
             if is_cra:
                 test_deps = ["@testing-library/react", "@testing-library/jest-dom", "@testing-library/user-event"]
                 logger.info(f"Installing React Testing Library dependencies: {test_deps}")
@@ -196,25 +157,11 @@ def install_test_deps(repo_path: str, language: str) -> Dict[str, Any]:
         return {"success": False, "message": f"Failed to install deps: {str(e)[:200]}"}
 
 
-def is_cra_project(repo_path: str) -> bool:
-    pkg_path = Path(repo_path) / "package.json"
-    if pkg_path.exists():
-        try:
-            with open(pkg_path, 'r') as f:
-                pkg = json.load(f)
-            scripts = pkg.get("scripts", {})
-            deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
-            return "react-scripts" in deps or "react-scripts test" in scripts.get("test", "")
-        except Exception:
-            pass
-    return False
-
-
 def run_test_file(repo_path: str, test_path: str, language: str) -> Dict[str, Any]:
     logger.info(f"Running test file: {test_path}")
     logger.info(f"Repository path: {repo_path}")
     logger.info(f"Language: {language}")
-    
+
     root = Path(repo_path)
     full_test_path = root / test_path
     if not full_test_path.exists():
@@ -290,28 +237,3 @@ def run_test_file(repo_path: str, test_path: str, language: str) -> Dict[str, An
         logger.error(f"Test execution error: {e}")
         print(f"⚠️ Test execution error: {e}")
         return {"success": False, "passed": False, "output": str(e), "returncode": -1}
-
-
-def write_test_file(repo_path: str, test_path: str, test_code: str) -> Dict[str, Any]:
-    logger.info(f"Writing test file: {test_path}")
-    try:
-        full_path = Path(repo_path) / test_path
-        full_path.parent.mkdir(parents=True, exist_ok=True)
-        full_path.write_text(test_code, encoding='utf-8')
-        logger.info(f"Successfully wrote test file: {test_path} ({len(test_code)} chars)")
-        return {"success": True, "path": test_path}
-    except Exception as e:
-        logger.error(f"Failed to write test file {test_path}: {e}")
-        return {"success": False, "error": str(e), "path": test_path}
-
-
-def write_test_config(repo_path: str, language: str):
-    root = Path(repo_path)
-    if language == "python":
-        conftest = root / "tests" / "conftest.py"
-        if not conftest.exists():
-            conftest.parent.mkdir(parents=True, exist_ok=True)
-            conftest.write_text("", encoding='utf-8')
-        init = root / "tests" / "__init__.py"
-        if not init.exists():
-            init.write_text("", encoding='utf-8')
