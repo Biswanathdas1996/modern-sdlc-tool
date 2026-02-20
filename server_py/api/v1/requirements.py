@@ -327,7 +327,7 @@ async def generate_user_stories_endpoint(request: GenerateUserStoriesRequest):
             raise internal_error("Failed to generate user stories - no stories returned")
 
         stories_with_parent = [
-            {**story, "parentJiraKey": request.parentJiraKey}
+            {**story, "parentJiraKey": request.parentJiraKey, "projectId": brd_project_id}
             for story in user_stories
         ]
 
