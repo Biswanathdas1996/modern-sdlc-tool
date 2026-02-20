@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from ..ai_service import ai_service
 from prompts import prompt_loader
@@ -20,7 +20,7 @@ def generate_tests_for_file(
     mode: str = "new",
     deps_context: str = "",
     imports_context: str = "",
-    tech_stack: Dict[str, Any] = None,
+    tech_stack: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     config = LANGUAGE_TEST_CONFIG.get(language, LANGUAGE_TEST_CONFIG["python"])
 
