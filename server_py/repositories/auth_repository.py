@@ -70,7 +70,7 @@ def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any]]:
     conn = get_postgres_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
-        cur.execute("SELECT * FROM users WHERE email = %s AND is_active = true", (email,))
+        cur.execute("SELECT id, username, email, password_hash, role, is_active, project_id, created_at FROM users WHERE email = %s AND is_active = true", (email,))
         user = cur.fetchone()
         if not user or not _verify_password(password, user["password_hash"]):
             return None
@@ -102,7 +102,7 @@ def get_session_user(session_id: str) -> Optional[Dict[str, Any]]:
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         cur.execute(
-            """SELECT u.id, u.username, u.email, u.role, u.is_active, u.created_at
+            """SELECT u.id, u.username, u.email, u.role, u.is_active, u.project_id, u.created_at
                FROM sessions s
                JOIN users u ON s.user_id = u.id
                WHERE s.id = %s AND s.expires_at > NOW() AND u.is_active = true""",
@@ -142,17 +142,17 @@ def get_user_permissions(user_id: str) -> List[str]:
         conn.close()
 
 
-def create_user(username: str, email: str, password: str, role: str = "user", features: List[str] = None) -> Dict[str, Any]:
+def create_user(username: str, email: str, password: str, role: str = "user", features: List[str] = None, project_id: str = None) -> Dict[str, Any]:
     user_id = str(uuid.uuid4())
     pw_hash = _hash_password(password)
     conn = get_postgres_connection()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         cur.execute(
-            """INSERT INTO users (id, username, email, password_hash, role, is_active)
-               VALUES (%s, %s, %s, %s, %s, %s)
-               RETURNING id, username, email, role, is_active, created_at""",
-            (user_id, username, email, pw_hash, role, True)
+            """INSERT INTO users (id, username, email, password_hash, role, is_active, project_id)
+               VALUES (%s, %s, %s, %s, %s, %s, %s)
+               RETURNING id, username, email, role, is_active, project_id, created_at""",
+            (user_id, username, email, pw_hash, role, True, project_id)
         )
         user = dict(cur.fetchone())
         granted_features = features if features else []
@@ -178,7 +178,7 @@ def get_all_users() -> List[Dict[str, Any]]:
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         cur.execute(
-            "SELECT id, username, email, role, is_active, created_at FROM users ORDER BY created_at DESC"
+            "SELECT id, username, email, role, is_active, project_id, created_at FROM users ORDER BY created_at DESC"
         )
         users = [dict(row) for row in cur.fetchall()]
         for user in users:
@@ -207,7 +207,7 @@ def update_user_permissions(user_id: str, features: List[str]) -> Dict[str, Any]
             )
         conn.commit()
         cur.execute(
-            "SELECT id, username, email, role, is_active, created_at FROM users WHERE id = %s",
+            "SELECT id, username, email, role, is_active, project_id, created_at FROM users WHERE id = %s",
             (user_id,)
         )
         user = dict(cur.fetchone())
@@ -223,7 +223,7 @@ def update_user_status(user_id: str, is_active: bool) -> Dict[str, Any]:
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     try:
         cur.execute(
-            "UPDATE users SET is_active = %s, updated_at = NOW() WHERE id = %s RETURNING id, username, email, role, is_active, created_at",
+            "UPDATE users SET is_active = %s, updated_at = NOW() WHERE id = %s RETURNING id, username, email, role, is_active, project_id, created_at",
             (is_active, user_id)
         )
         user = cur.fetchone()

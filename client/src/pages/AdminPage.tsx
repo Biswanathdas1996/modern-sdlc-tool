@@ -59,6 +59,7 @@ interface UserData {
   is_active: boolean;
   created_at: string;
   permissions: string[];
+  project_id: string | null;
 }
 
 export default function AdminPage() {
@@ -76,6 +77,7 @@ export default function AdminPage() {
   const [newPassword, setNewPassword] = useState("");
   const [newRole, setNewRole] = useState("user");
   const [newFeatures, setNewFeatures] = useState<string[]>([]);
+  const [newProjectId, setNewProjectId] = useState<string>("");
   const [resetPassword, setResetPassword] = useState("");
 
   const [showCreateProjectDialog, setShowCreateProjectDialog] = useState(false);
@@ -162,7 +164,7 @@ export default function AdminPage() {
   };
 
   const createUserMutation = useMutation({
-    mutationFn: async (data: { username: string; email: string; password: string; role: string; features: string[] }) => {
+    mutationFn: async (data: { username: string; email: string; password: string; role: string; features: string[]; project_id?: string }) => {
       const res = await apiRequest("POST", "/api/admin/users", data);
       return res.json();
     },
@@ -174,6 +176,7 @@ export default function AdminPage() {
       setNewPassword("");
       setNewRole("user");
       setNewFeatures([]);
+      setNewProjectId("");
       toast({ title: "User created", description: "New user account has been created" });
     },
     onError: (err: Error) => {
@@ -326,57 +329,80 @@ export default function AdminPage() {
                     {projects.map((p) => (
                       <div
                         key={p.id}
-                        className="flex items-center justify-between gap-3 p-4 rounded-md border border-border"
+                        className="p-4 rounded-md border border-border space-y-0"
                         data-testid={`project-row-${p.id}`}
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                            <GitBranch className="h-4 w-4" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-medium text-sm">{p.name}</span>
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  "text-xs",
-                                  p.status === "completed" && "bg-success/10 text-success border-success/30",
-                                  p.status === "analyzing" && "bg-warning/10 text-warning border-warning/30",
-                                  p.status === "error" && "bg-destructive/10 text-destructive border-destructive/30",
-                                  p.status === "pending" && "bg-muted text-muted-foreground"
-                                )}
-                              >
-                                {p.status}
-                              </Badge>
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                              <GitBranch className="h-4 w-4" />
                             </div>
-                            {p.description && (
-                              <p className="text-xs text-muted-foreground truncate mt-0.5">{p.description}</p>
-                            )}
-                            {p.repoUrl && (
-                              <p className="text-xs text-muted-foreground truncate">{p.repoUrl}</p>
-                            )}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium text-sm">{p.name}</span>
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    "text-xs",
+                                    p.status === "completed" && "bg-success/10 text-success border-success/30",
+                                    p.status === "analyzing" && "bg-warning/10 text-warning border-warning/30",
+                                    p.status === "error" && "bg-destructive/10 text-destructive border-destructive/30",
+                                    p.status === "pending" && "bg-muted text-muted-foreground"
+                                  )}
+                                >
+                                  {p.status}
+                                </Badge>
+                              </div>
+                              {p.description && (
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">{p.description}</p>
+                              )}
+                              {p.repoUrl && (
+                                <p className="text-xs text-muted-foreground truncate">{p.repoUrl}</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openEditProject(p)}
+                              title="Edit project"
+                              data-testid={`button-edit-project-${p.id}`}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => { setSelectedProject(p); setShowDeleteProjectDialog(true); }}
+                              title="Delete project"
+                              data-testid={`button-delete-project-${p.id}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => { setNewProjectId(p.id); setNewRole("user"); setShowCreateDialog(true); }}
+                              title="Add user to project"
+                              data-testid={`button-add-user-${p.id}`}
+                            >
+                              <UserPlus className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openEditProject(p)}
-                            title="Edit project"
-                            data-testid={`button-edit-project-${p.id}`}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => { setSelectedProject(p); setShowDeleteProjectDialog(true); }}
-                            title="Delete project"
-                            data-testid={`button-delete-project-${p.id}`}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
+                        {users.filter(u => u.project_id === p.id).length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-border/50">
+                            <p className="text-xs text-muted-foreground mb-1.5">Assigned Users:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {users.filter(u => u.project_id === p.id).map(u => (
+                                <Badge key={u.id} variant="secondary" className="text-xs" data-testid={`badge-user-${u.username}-project-${p.id}`}>
+                                  {u.username}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -439,6 +465,11 @@ export default function AdminPage() {
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                        {u.project_id && (
+                          <p className="text-xs text-muted-foreground truncate">
+                            Project: {projects.find(p => p.id === u.project_id)?.name || u.project_id}
+                          </p>
+                        )}
                         <div className="flex items-center gap-1 mt-1 flex-wrap">
                           <span className="text-xs text-muted-foreground">{u.permissions.length} features</span>
                         </div>
@@ -541,6 +572,23 @@ export default function AdminPage() {
                   data-testid="input-create-email"
                 />
               </div>
+              {newRole === "user" && (
+                <div className="space-y-2">
+                  <Label htmlFor="create-project">Assign to Project</Label>
+                  <Select value={newProjectId} onValueChange={setNewProjectId}>
+                    <SelectTrigger data-testid="select-create-project">
+                      <SelectValue placeholder="Select a project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {projects.map((p) => (
+                        <SelectItem key={p.id} value={p.id} data-testid={`option-create-project-${p.id}`}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="create-password">Password</Label>
                 <Input
@@ -614,8 +662,9 @@ export default function AdminPage() {
                   password: newPassword,
                   role: newRole,
                   features: newRole === "admin" ? features.map(f => f.key) : newFeatures,
+                  project_id: newRole === "user" ? newProjectId : undefined,
                 })}
-                disabled={!newUsername.trim() || !newEmail.trim() || !newPassword || newPassword.length < 6 || createUserMutation.isPending}
+                disabled={!newUsername.trim() || !newEmail.trim() || !newPassword || newPassword.length < 6 || (newRole === "user" && !newProjectId) || createUserMutation.isPending}
                 data-testid="button-submit-create"
               >
                 {createUserMutation.isPending ? (

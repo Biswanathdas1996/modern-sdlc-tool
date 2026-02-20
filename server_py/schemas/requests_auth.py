@@ -1,6 +1,6 @@
 """Request/response models for authentication endpoints."""
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 
 class LoginRequest(BaseModel):
@@ -16,6 +16,7 @@ class CreateUserRequest(BaseModel):
     password: str
     role: str = "user"
     features: List[str] = []
+    project_id: Optional[str] = None
 
 
 class UpdatePermissionsRequest(BaseModel):

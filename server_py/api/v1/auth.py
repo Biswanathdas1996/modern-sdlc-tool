@@ -99,6 +99,7 @@ async def login(request: LoginRequest, raw_request: Request):
                 "username": user["username"],
                 "email": user["email"],
                 "role": user["role"],
+                "projectId": user.get("project_id"),
             },
             "permissions": permissions,
         })
@@ -167,6 +168,7 @@ async def get_me(request: Request):
             "username": user["username"],
             "email": user["email"],
             "role": user["role"],
+            "projectId": user.get("project_id"),
         },
         "permissions": permissions,
     }
@@ -220,6 +222,7 @@ async def admin_create_user(user_data: CreateUserRequest, request: Request):
         password = user_data.password
         role = user_data.role
         features = user_data.features
+        project_id = user_data.project_id
         
         if not username or not email or not password:
             raise bad_request("Username, email, and password are required")
@@ -227,7 +230,10 @@ async def admin_create_user(user_data: CreateUserRequest, request: Request):
         if role not in ("admin", "user"):
             raise bad_request("Role must be admin or user")
         
-        user = create_user(username, email, password, role, features)
+        if role == "user" and not project_id:
+            raise bad_request("Non-admin users must be assigned to a project")
+        
+        user = create_user(username, email, password, role, features, project_id=project_id if role == "user" else None)
         log_info(f"User created: {email}", "admin")
         
         return user

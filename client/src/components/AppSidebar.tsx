@@ -148,7 +148,7 @@ interface AppSidebarProps {
 export function AppSidebar({ completedSteps = [] }: AppSidebarProps) {
   const [location] = useLocation();
   const { user, isAdmin, hasPermission, logout } = useAuth();
-  const { projects, currentProject, selectProject, isLoading: projectsLoading } = useProject();
+  const { projects, currentProject, selectProject, isLoading: projectsLoading, isProjectLocked } = useProject();
 
   const getStepStatus = (step: WorkflowStep) => {
     if (completedSteps.includes(step.id)) return "completed";
@@ -238,6 +238,22 @@ export function AppSidebar({ completedSteps = [] }: AppSidebarProps) {
                       Create a project
                     </Link>
                   )}
+                </div>
+              ) : isProjectLocked && currentProject ? (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-sidebar-border bg-sidebar-accent/30" data-testid="locked-project-display">
+                  <GitBranch className="h-3.5 w-3.5 shrink-0 text-primary" />
+                  <span className="text-sm font-medium truncate">{currentProject.name}</span>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "text-[10px] px-1 py-0 ml-auto",
+                      currentProject.status === "completed" && "bg-success/10 text-success border-success/30",
+                      currentProject.status === "analyzing" && "bg-warning/10 text-warning border-warning/30",
+                      currentProject.status === "error" && "bg-destructive/10 text-destructive border-destructive/30"
+                    )}
+                  >
+                    {currentProject.status}
+                  </Badge>
                 </div>
               ) : (
                 <Select

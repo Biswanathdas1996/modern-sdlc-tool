@@ -216,9 +216,22 @@ def init_postgres_database():
             );
         """)
 
+        cur.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'users' AND column_name = 'project_id'
+                ) THEN
+                    ALTER TABLE users ADD COLUMN project_id TEXT;
+                END IF;
+            END $$;
+        """)
+
         cur.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_ufa_user ON user_feature_access(user_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_users_project ON users(project_id);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_repo_analyses_project ON repo_analyses(project_id);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_documentation_project ON documentation(project_id);")
