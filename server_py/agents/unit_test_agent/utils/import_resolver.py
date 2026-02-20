@@ -13,7 +13,6 @@ def calculate_correct_import_path(test_file_path: str, source_file_path: str, te
     if tech_stack:
         import_style = tech_stack.get("import_style", "relative")
         path_alias = tech_stack.get("path_alias")
-        has_src_dir = tech_stack.get("has_src_dir", False)
 
         if path_alias and import_style == "alias":
             source_str = str(source_path)
