@@ -31,7 +31,13 @@ export default function AnalyzePage() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { saveSessionArtifact } = useSession();
-  const { projects, selectProject: setActiveProject } = useProject();
+  const { projects, currentProject, selectProject: setActiveProject } = useProject();
+
+  useEffect(() => {
+    if (currentProject?.repoUrl && !repoUrl) {
+      setRepoUrl(currentProject.repoUrl);
+    }
+  }, [currentProject]);
 
   const { isLoading: projectsLoading } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
@@ -78,6 +84,7 @@ export default function AnalyzePage() {
 
   const isAnalyzing = analyzeMutation.isPending || !!analyzingProjectId;
   const analyzingProject = projects?.find(p => p.id === analyzingProjectId);
+  const hasProjectRepo = !!currentProject?.repoUrl;
 
   const handleAnalyze = () => {
     if (repoUrl.trim()) {
@@ -141,9 +148,10 @@ export default function AnalyzePage() {
                     type="url"
                     placeholder="https://github.com/owner/repository"
                     value={repoUrl}
-                    onChange={(e) => setRepoUrl(e.target.value)}
+                    onChange={(e) => !hasProjectRepo && setRepoUrl(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleAnalyze()}
                     className="pl-10"
+                    readOnly={hasProjectRepo}
                     data-testid="input-repo-url"
                   />
                 </div>
