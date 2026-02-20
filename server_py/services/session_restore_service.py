@@ -113,11 +113,17 @@ def restore_user_stories(stories_data: Optional[List[Dict[str, Any]]], brd_id: s
     return storage.create_user_stories(stories_data)
 
 
-def get_project_context():
-    """Get common project context (project_id, analysis, documentation, database_schema)."""
-    projects = storage.get_all_projects()
-    project_id = projects[0]["id"] if projects else "global"
-    analysis = storage.get_analysis(project_id) if projects else None
-    documentation = storage.get_documentation(project_id) if projects else None
-    database_schema = storage.get_database_schema(project_id) if projects else None
+def get_project_context(project_id: str = None):
+    """Get common project context (project_id, analysis, documentation, database_schema).
+    
+    If project_id is provided, uses that project's context directly.
+    Otherwise falls back to the first project (legacy behavior).
+    """
+    if not project_id:
+        projects = storage.get_all_projects()
+        project_id = projects[0]["id"] if projects else "global"
+    
+    analysis = storage.get_analysis(project_id) if project_id != "global" else None
+    documentation = storage.get_documentation(project_id) if project_id != "global" else None
+    database_schema = storage.get_database_schema(project_id) if project_id != "global" else None
     return project_id, analysis, documentation, database_schema

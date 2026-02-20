@@ -198,7 +198,8 @@ async def generate_test_cases_endpoint(request: GenerateTestCasesRequest):
         if not brd:
             raise bad_request("No BRD found. Please generate a BRD first.")
 
-        _, analysis, documentation, _ = get_project_context()
+        brd_project_id = brd.get("projectId")
+        _, analysis, documentation, _ = get_project_context(brd_project_id)
 
         test_cases = await ai_service.generate_test_cases(
             brd,
@@ -290,7 +291,8 @@ async def generate_user_stories_endpoint(request: GenerateUserStoriesRequest):
         if not brd:
             raise bad_request("No BRD found. Please generate a BRD first.")
 
-        _, _, documentation, database_schema = get_project_context()
+        brd_project_id = brd.get("projectId")
+        _, _, documentation, database_schema = get_project_context(brd_project_id)
         documentation = restore_documentation(request.documentation) if not documentation else documentation
 
         parent_context = None
@@ -382,7 +384,8 @@ async def generate_copilot_prompt_endpoint(request: GenerateCopilotPromptRequest
         if not user_stories_list:
             raise bad_request("No user stories found. Please generate user stories first.")
 
-        _, analysis, documentation, database_schema = get_project_context()
+        brd_project_id = brd.get("projectId")
+        _, analysis, documentation, database_schema = get_project_context(brd_project_id)
         documentation_data = documentation if documentation else request.documentation
         analysis_data = analysis if analysis else request.analysis
         database_schema_data = database_schema if database_schema else request.databaseSchema
