@@ -169,7 +169,7 @@ def _try_extract_passing(
 
     task["thinking_steps"].append({
         "type": "tool_result",
-        "content": f"⚠️ Extracted tests still failing - will remove file"
+        "content": "⚠️ Extracted tests still failing - will remove file"
     })
     return current_test_code, False, error_output
 
