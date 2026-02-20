@@ -36,10 +36,10 @@ export default function AnalyzePage() {
   const { isAdmin } = useAuth();
 
   useEffect(() => {
-    if (currentProject?.repoUrl && !repoUrl) {
+    if (currentProject?.repoUrl) {
       setRepoUrl(currentProject.repoUrl);
     }
-  }, [currentProject]);
+  }, [currentProject?.id]);
 
   const { isLoading: projectsLoading } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
