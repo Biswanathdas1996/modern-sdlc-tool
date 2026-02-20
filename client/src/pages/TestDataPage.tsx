@@ -66,8 +66,8 @@ export default function TestDataPage() {
   const regenerateMutation = useMutation({
     mutationFn: async () => {
       const body: Record<string, any> = {};
-      const cachedTestCases = getSessionArtifact("testCases");
-      if (cachedTestCases) body.testCases = cachedTestCases;
+      const cachedBrd = getSessionArtifact<any>("brd");
+      if (cachedBrd?.id) body.brdId = cachedBrd.id;
       const response = await apiRequest("POST", "/api/test-data/generate", body);
       return response.json();
     },

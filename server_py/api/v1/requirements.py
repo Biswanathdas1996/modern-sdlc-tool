@@ -194,7 +194,11 @@ async def get_test_cases(project_id: Optional[str] = Query(None)):
 async def generate_test_cases_endpoint(request: GenerateTestCasesRequest):
     """Generate test cases from BRD."""
     try:
-        brd = restore_brd(request.brdData)
+        brd = None
+        if request.brdId:
+            brd = storage.brds_repo.get_by_id(request.brdId)
+        if not brd:
+            brd = restore_brd(request.brdData)
         if not brd:
             raise bad_request("No BRD found. Please generate a BRD first.")
 
@@ -209,6 +213,9 @@ async def generate_test_cases_endpoint(request: GenerateTestCasesRequest):
 
         if not test_cases:
             raise internal_error("Failed to generate test cases - no cases returned")
+
+        for tc in test_cases:
+            tc["projectId"] = brd_project_id
 
         saved_test_cases = storage.create_test_cases(test_cases)
         log_info(f"Generated {len(saved_test_cases)} test cases", "requirements")
@@ -240,7 +247,11 @@ async def get_test_data(project_id: Optional[str] = Query(None)):
 async def generate_test_data_endpoint(request: GenerateTestDataRequest):
     """Generate test data from test cases."""
     try:
-        brd = restore_brd(request.brd)
+        brd = None
+        if request.brdId:
+            brd = storage.brds_repo.get_by_id(request.brdId)
+        if not brd:
+            brd = restore_brd(request.brd)
         if not brd:
             raise bad_request("No BRD found. Please generate a BRD first.")
 
@@ -250,6 +261,8 @@ async def generate_test_data_endpoint(request: GenerateTestDataRequest):
         if not test_cases_list:
             raise bad_request("No test cases found. Please generate test cases first.")
 
+        brd_project_id = brd.get("projectId")
+
         test_data = await ai_service.generate_test_data(
             test_cases_list,
             brd,
@@ -258,6 +271,9 @@ async def generate_test_data_endpoint(request: GenerateTestDataRequest):
 
         if not test_data:
             raise internal_error("Failed to generate test data - no data returned")
+
+        for td in test_data:
+            td["projectId"] = brd_project_id
 
         saved_test_data = storage.create_test_data_batch(test_data)
         log_info(f"Generated {len(saved_test_data)} test data entries", "requirements")

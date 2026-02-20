@@ -78,10 +78,8 @@ export default function TestCasesPage() {
   const regenerateMutation = useMutation({
     mutationFn: async () => {
       const body: Record<string, any> = {};
-      const cachedBrd = getSessionArtifact("brd");
-      if (cachedBrd) body.brdData = cachedBrd;
-      const cachedStories = getSessionArtifact("userStories");
-      if (cachedStories) body.userStories = cachedStories;
+      const cachedBrd = getSessionArtifact<any>("brd");
+      if (cachedBrd?.id) body.brdId = cachedBrd.id;
       const response = await apiRequest("POST", "/api/test-cases/generate", body);
       return response.json();
     },
@@ -93,12 +91,8 @@ export default function TestCasesPage() {
   const generateTestDataMutation = useMutation({
     mutationFn: async () => {
       const body: Record<string, any> = {};
-      const cachedTestCases = getSessionArtifact("testCases");
-      if (cachedTestCases) body.testCases = cachedTestCases;
-      const cachedBrd = getSessionArtifact("brd");
-      if (cachedBrd) body.brd = cachedBrd;
-      const cachedDocumentation = getSessionArtifact("documentation");
-      if (cachedDocumentation) body.documentation = cachedDocumentation;
+      const cachedBrd = getSessionArtifact<any>("brd");
+      if (cachedBrd?.id) body.brdId = cachedBrd.id;
       const response = await apiRequest("POST", "/api/test-data/generate", body);
       return response.json();
     },

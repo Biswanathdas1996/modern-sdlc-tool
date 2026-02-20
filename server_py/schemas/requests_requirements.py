@@ -26,11 +26,13 @@ class GenerateBRDRequest(BaseModel):
 
 class GenerateTestCasesRequest(BaseModel):
     """Request for generating test cases."""
+    brdId: Optional[str] = None
     brdData: Optional[dict] = None
 
 
 class GenerateTestDataRequest(BaseModel):
     """Request for generating test data."""
+    brdId: Optional[str] = None
     brd: Optional[dict] = None
     documentation: Optional[dict] = None
     testCases: Optional[List[dict]] = None

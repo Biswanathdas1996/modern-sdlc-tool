@@ -157,10 +157,7 @@ export default function UserStoriesPage() {
     mutationFn: async () => {
       setIsGeneratingTests(true);
       const body: Record<string, any> = {};
-      const cachedBrd = getSessionArtifact("brd");
-      if (cachedBrd) body.brdData = cachedBrd;
-      const cachedStories = getSessionArtifact("userStories");
-      if (cachedStories) body.userStories = cachedStories;
+      if (brd?.id) body.brdId = brd.id;
       const response = await apiRequest("POST", "/api/test-cases/generate", body);
       return response.json();
     },
