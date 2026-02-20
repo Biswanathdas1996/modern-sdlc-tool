@@ -502,3 +502,36 @@ async def get_generation_history(project_id: str = Query(...)):
     except Exception as e:
         log_error("Error fetching generation history", "requirements", e)
         raise internal_error("Failed to fetch generation history")
+
+
+@router.delete("/feature-request/{feature_request_id}")
+async def delete_feature_request(feature_request_id: str):
+    """Delete a feature request and all its cascading artifacts (BRDs, user stories, test cases, test data)."""
+    try:
+        fr = storage.get_feature_request(feature_request_id)
+        if not fr:
+            raise not_found("Feature request not found")
+
+        brds = storage.get_brds_by_project(fr["projectId"])
+        fr_brds = [b for b in brds if b.get("featureRequestId") == feature_request_id]
+
+        all_test_cases = storage.get_test_cases_by_project(fr["projectId"])
+        for brd in fr_brds:
+            brd_id = brd["id"]
+            brd_cases = [tc for tc in all_test_cases if tc.get("brdId") == brd_id]
+            for tc in brd_cases:
+                storage.test_data_repo.delete_by_field("testCaseId", tc["id"])
+            storage.test_cases_repo.delete_by_field("brdId", brd_id)
+            storage.user_stories_repo.delete_by_field("brdId", brd_id)
+            storage.brds_repo.delete(brd_id)
+
+        storage.feature_requests_repo.delete(feature_request_id)
+
+        log_info(f"Deleted feature request {feature_request_id} and {len(fr_brds)} BRDs", "requirements")
+        return success_response({"deleted": True, "featureRequestId": feature_request_id})
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error(f"Error deleting feature request {feature_request_id}", "requirements", e)
+        raise internal_error("Failed to delete feature request")

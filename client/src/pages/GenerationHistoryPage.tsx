@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   History,
   ChevronDown,
@@ -8,19 +8,21 @@ import {
   Bookmark,
   TestTube,
   Database,
-  ClipboardList,
   Lightbulb,
   Bug,
   RefreshCw,
   Calendar,
-  Hash,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
 import { useProject } from "@/hooks/useProject";
+import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/EmptyState";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { apiRequest } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
 
 interface FeatureRequestSummary {
   id: string;
@@ -56,14 +58,14 @@ interface HistoryGroup {
 }
 
 const requestTypeConfig: Record<string, { label: string; icon: typeof Lightbulb; color: string }> = {
-  feature: { label: "Feature", icon: Lightbulb, color: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30" },
-  bug: { label: "Bug", icon: Bug, color: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30" },
-  change_request: { label: "Change Request", icon: RefreshCw, color: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30" },
-  enhancement: { label: "Enhancement", icon: RefreshCw, color: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30" },
+  feature: { label: "Feature", icon: Lightbulb, color: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20" },
+  bug: { label: "Bug", icon: Bug, color: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20" },
+  change_request: { label: "Change", icon: RefreshCw, color: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20" },
+  enhancement: { label: "Enhancement", icon: RefreshCw, color: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20" },
 };
 
 function formatDate(dateStr: string) {
-  if (!dateStr) return "";
+  if (!dateStr) return "—";
   try {
     return new Date(dateStr).toLocaleDateString("en-US", {
       month: "short",
@@ -77,117 +79,138 @@ function formatDate(dateStr: string) {
   }
 }
 
-function SummaryBadge({ count, label, icon: Icon }: { count: number; label: string; icon: typeof FileCheck }) {
-  if (count === 0) return null;
+function CountPill({ count, label, icon: Icon, className }: { count: number; label: string; icon: typeof FileCheck; className?: string }) {
   return (
-    <div className="flex items-center gap-1.5 text-xs text-muted-foreground" data-testid={`badge-${label.toLowerCase().replace(/\s/g, "-")}`}>
-      <Icon className="h-3.5 w-3.5" />
-      <span className="font-medium">{count}</span>
-      <span>{label}{count !== 1 ? "s" : ""}</span>
+    <div className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium", className)} data-testid={`count-${label.toLowerCase()}`}>
+      <Icon className="h-3 w-3" />
+      <span>{count}</span>
+      <span className="hidden sm:inline">{label}</span>
     </div>
   );
 }
 
-function BrdSection({ brd }: { brd: BrdItem }) {
-  const [expanded, setExpanded] = useState(false);
+function ExpandedBrdRow({ brd }: { brd: BrdItem }) {
+  const [showDetails, setShowDetails] = useState(false);
 
   return (
-    <div className="border rounded-lg bg-card" data-testid={`brd-card-${brd.id}`}>
-      <button
-        className="w-full flex items-center gap-3 p-3 text-left hover:bg-muted/50 transition-colors rounded-lg"
-        onClick={() => setExpanded(!expanded)}
-        data-testid={`button-expand-brd-${brd.id}`}
+    <>
+      <tr
+        className="border-b border-border/50 bg-muted/20 hover:bg-muted/40 cursor-pointer transition-colors"
+        onClick={() => setShowDetails(!showDetails)}
+        data-testid={`row-brd-${brd.id}`}
       >
-        {expanded ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
-        <FileCheck className="h-4 w-4 shrink-0 text-primary" />
-        <div className="flex-1 min-w-0">
-          <p className="font-medium text-sm truncate">{brd.title}</p>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-            <span>v{brd.version}</span>
-            <span>•</span>
-            <Calendar className="h-3 w-3" />
-            <span>{formatDate(brd.createdAt)}</span>
+        <td className="py-2.5 pl-12 pr-3">
+          <div className="flex items-center gap-2">
+            {showDetails ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+            <FileCheck className="h-3.5 w-3.5 text-primary" />
+            <span className="text-sm">{brd.title}</span>
           </div>
-        </div>
-        <Badge variant="outline" className="text-xs shrink-0">
-          {brd.status}
-        </Badge>
-      </button>
-
-      {expanded && (
-        <div className="px-3 pb-3 space-y-3">
-          <div className="flex flex-wrap gap-3 pl-8">
-            <SummaryBadge count={brd.userStoryCount} label="User Story" icon={Bookmark} />
-            <SummaryBadge count={brd.testCaseCount} label="Test Case" icon={TestTube} />
-            <SummaryBadge count={brd.testDataCount} label="Test Data" icon={Database} />
+        </td>
+        <td className="py-2.5 px-3">
+          <Badge variant="outline" className="text-[10px]">{brd.status}</Badge>
+        </td>
+        <td className="py-2.5 px-3">
+          <span className="text-xs text-muted-foreground">v{brd.version}</span>
+        </td>
+        <td className="py-2.5 px-3">
+          <div className="flex items-center gap-2">
+            <CountPill count={brd.userStoryCount} label="Stories" icon={Bookmark} className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400" />
+            <CountPill count={brd.testCaseCount} label="Tests" icon={TestTube} className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" />
+            <CountPill count={brd.testDataCount} label="Data" icon={Database} className="bg-orange-500/10 text-orange-600 dark:text-orange-400" />
           </div>
-
-          {brd.userStories.length > 0 && (
-            <div className="pl-8 space-y-1.5">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                <Bookmark className="h-3 w-3" /> User Stories
-              </p>
-              {brd.userStories.map((story: any, idx: number) => (
-                <div key={story.id || idx} className="flex items-center gap-2 text-xs p-2 rounded bg-muted/30" data-testid={`story-item-${story.id}`}>
-                  <Hash className="h-3 w-3 text-muted-foreground shrink-0" />
-                  <span className="truncate flex-1">{story.title}</span>
-                  {story.priority && (
-                    <Badge variant="outline" className="text-[10px] py-0 px-1.5">{story.priority}</Badge>
-                  )}
+        </td>
+        <td className="py-2.5 px-3 text-xs text-muted-foreground">{formatDate(brd.createdAt)}</td>
+        <td className="py-2.5 px-3"></td>
+      </tr>
+      {showDetails && (
+        <tr className="border-b border-border/30" data-testid={`detail-brd-${brd.id}`}>
+          <td colSpan={6} className="py-2 pl-20 pr-4">
+            <div className="space-y-3">
+              {brd.userStories.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1">
+                    <Bookmark className="h-3 w-3" /> User Stories ({brd.userStoryCount})
+                  </p>
+                  <div className="grid gap-1">
+                    {brd.userStories.map((s: any, i: number) => (
+                      <div key={s.id || i} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-muted/30" data-testid={`story-${s.id}`}>
+                        <span className="truncate">{s.title}</span>
+                        {s.priority && <Badge variant="outline" className="text-[9px] py-0 px-1">{s.priority}</Badge>}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
-
-          {brd.testCases.length > 0 && (
-            <div className="pl-8 space-y-1.5">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                <TestTube className="h-3 w-3" /> Test Cases
-              </p>
-              {brd.testCases.map((tc: any, idx: number) => (
-                <div key={tc.id || idx} className="flex items-center gap-2 text-xs p-2 rounded bg-muted/30" data-testid={`testcase-item-${tc.id}`}>
-                  <Hash className="h-3 w-3 text-muted-foreground shrink-0" />
-                  <span className="truncate flex-1">{tc.title}</span>
-                  {tc.category && (
-                    <Badge variant="outline" className="text-[10px] py-0 px-1.5">{tc.category}</Badge>
-                  )}
-                  {tc.priority && (
-                    <Badge variant="outline" className="text-[10px] py-0 px-1.5">{tc.priority}</Badge>
-                  )}
+              )}
+              {brd.testCases.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1">
+                    <TestTube className="h-3 w-3" /> Test Cases ({brd.testCaseCount})
+                  </p>
+                  <div className="grid gap-1">
+                    {brd.testCases.map((tc: any, i: number) => (
+                      <div key={tc.id || i} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-muted/30" data-testid={`testcase-${tc.id}`}>
+                        <span className="truncate">{tc.title}</span>
+                        <div className="flex gap-1">
+                          {tc.category && <Badge variant="outline" className="text-[9px] py-0 px-1">{tc.category}</Badge>}
+                          {tc.priority && <Badge variant="outline" className="text-[9px] py-0 px-1">{tc.priority}</Badge>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
-
-          {brd.testData.length > 0 && (
-            <div className="pl-8 space-y-1.5">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                <Database className="h-3 w-3" /> Test Data
-              </p>
-              {brd.testData.map((td: any, idx: number) => (
-                <div key={td.id || idx} className="flex items-center gap-2 text-xs p-2 rounded bg-muted/30" data-testid={`testdata-item-${td.id}`}>
-                  <Hash className="h-3 w-3 text-muted-foreground shrink-0" />
-                  <span className="truncate flex-1">{td.name}</span>
-                  {td.dataType && (
-                    <Badge variant="outline" className="text-[10px] py-0 px-1.5">{td.dataType}</Badge>
-                  )}
+              )}
+              {brd.testData.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1">
+                    <Database className="h-3 w-3" /> Test Data ({brd.testDataCount})
+                  </p>
+                  <div className="grid gap-1">
+                    {brd.testData.map((td: any, i: number) => (
+                      <div key={td.id || i} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-muted/30" data-testid={`testdata-${td.id}`}>
+                        <span className="truncate">{td.name}</span>
+                        {td.dataType && <Badge variant="outline" className="text-[9px] py-0 px-1">{td.dataType}</Badge>}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
+              )}
+              {brd.userStories.length === 0 && brd.testCases.length === 0 && brd.testData.length === 0 && (
+                <p className="text-xs text-muted-foreground italic">No child artifacts generated yet</p>
+              )}
             </div>
-          )}
-        </div>
+          </td>
+        </tr>
       )}
-    </div>
+    </>
   );
 }
 
 export default function GenerationHistoryPage() {
   const { currentProjectId } = useProject();
   const [expandedFRs, setExpandedFRs] = useState<Set<string>>(new Set());
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const queryKey = [`/api/generation-history?project_id=${currentProjectId}`];
 
   const { data: history, isLoading } = useQuery<HistoryGroup[]>({
-    queryKey: [`/api/generation-history?project_id=${currentProjectId}`],
+    queryKey,
     enabled: !!currentProjectId,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (frId: string) => {
+      await apiRequest("DELETE", `/api/feature-request/${frId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
+      toast({ title: "Deleted", description: "Feature request and all related artifacts have been removed." });
+      setDeleteConfirm(null);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to delete feature request. Please try again.", variant: "destructive" });
+    },
   });
 
   const toggleFR = (id: string) => {
@@ -202,121 +225,218 @@ export default function GenerationHistoryPage() {
   const totalFRs = history?.length ?? 0;
   const totalBRDs = history?.reduce((sum, g) => sum + g.summary.brdCount, 0) ?? 0;
   const totalStories = history?.reduce((sum, g) => sum + g.summary.userStoryCount, 0) ?? 0;
+  const totalTests = history?.reduce((sum, g) => sum + g.summary.testCaseCount, 0) ?? 0;
 
   return (
     <div className="flex flex-col h-full">
       <div className="border-b bg-card/50">
         <div className="p-6">
-          <div className="flex items-center gap-3 mb-2">
+          <div className="flex items-center gap-3 mb-1">
             <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary">
               <History className="h-5 w-5 text-primary-foreground" />
             </div>
             <div>
               <h1 className="text-2xl font-bold" data-testid="text-page-title">Generation History</h1>
-              <p className="text-sm text-muted-foreground">
-                All generated artifacts grouped by feature request
-              </p>
+              <p className="text-sm text-muted-foreground">All generated artifacts grouped by feature request</p>
             </div>
           </div>
           {totalFRs > 0 && (
-            <div className="flex gap-4 mt-4">
-              <Badge variant="outline" className="text-sm" data-testid="badge-total-frs">
-                {totalFRs} Feature Request{totalFRs !== 1 ? "s" : ""}
-              </Badge>
-              <Badge variant="outline" className="text-sm" data-testid="badge-total-brds">
-                {totalBRDs} BRD{totalBRDs !== 1 ? "s" : ""}
-              </Badge>
-              <Badge variant="outline" className="text-sm" data-testid="badge-total-stories">
-                {totalStories} User Stor{totalStories !== 1 ? "ies" : "y"}
-              </Badge>
+            <div className="flex gap-3 mt-3 ml-[52px]">
+              <Badge variant="outline" className="text-xs" data-testid="badge-total-frs">{totalFRs} Requests</Badge>
+              <Badge variant="outline" className="text-xs" data-testid="badge-total-brds">{totalBRDs} BRDs</Badge>
+              <Badge variant="outline" className="text-xs" data-testid="badge-total-stories">{totalStories} Stories</Badge>
+              <Badge variant="outline" className="text-xs" data-testid="badge-total-tests">{totalTests} Tests</Badge>
             </div>
           )}
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
-        <div className="max-w-4xl mx-auto">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-20">
-              <LoadingSpinner />
-            </div>
-          ) : !history || history.length === 0 ? (
+      <div className="flex-1 overflow-auto">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <LoadingSpinner />
+          </div>
+        ) : !history || history.length === 0 ? (
+          <div className="p-6">
             <EmptyState
               icon="document"
               title="No generation history"
               description="Start by creating a feature request, then generate BRDs, user stories, test cases, and test data."
             />
-          ) : (
-            <ScrollArea className="h-[calc(100vh-220px)]">
-              <div className="space-y-4">
-                {history.map((group) => {
-                  const fr = group.featureRequest;
-                  const isExpanded = expandedFRs.has(fr.id);
-                  const typeConfig = requestTypeConfig[fr.requestType] || requestTypeConfig.feature;
-                  const TypeIcon = typeConfig.icon;
+          </div>
+        ) : (
+          <div className="p-4">
+            <div className="rounded-lg border border-border overflow-hidden">
+              <table className="w-full" data-testid="table-generation-history">
+                <thead>
+                  <tr className="bg-muted/50 border-b border-border">
+                    <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider py-3 px-4">Feature Request</th>
+                    <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider py-3 px-3">Type</th>
+                    <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider py-3 px-3">Artifacts</th>
+                    <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider py-3 px-3 hidden lg:table-cell">Artifacts Detail</th>
+                    <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider py-3 px-3">Created</th>
+                    <th className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider py-3 px-4 w-20">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((group) => {
+                    const fr = group.featureRequest;
+                    const isExpanded = expandedFRs.has(fr.id);
+                    const typeConfig = requestTypeConfig[fr.requestType] || requestTypeConfig.feature;
+                    const TypeIcon = typeConfig.icon;
+                    const isDeleting = deleteConfirm === fr.id;
 
-                  return (
-                    <Card key={fr.id} className="overflow-hidden" data-testid={`fr-card-${fr.id}`}>
-                      <button
-                        className="w-full flex items-start gap-4 p-5 text-left hover:bg-muted/30 transition-colors"
-                        onClick={() => toggleFR(fr.id)}
-                        data-testid={`button-expand-fr-${fr.id}`}
-                      >
-                        <div className="mt-0.5">
-                          {isExpanded ? (
-                            <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                          ) : (
-                            <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                          )}
-                        </div>
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10">
-                          <ClipboardList className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <p className="font-semibold truncate">{fr.title}</p>
-                            <Badge variant="outline" className={`text-xs shrink-0 ${typeConfig.color}`}>
-                              <TypeIcon className="h-3 w-3 mr-1" />
-                              {typeConfig.label}
-                            </Badge>
-                          </div>
-                          {fr.description && (
-                            <p className="text-sm text-muted-foreground line-clamp-2 mb-2">{fr.description}</p>
-                          )}
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <Calendar className="h-3 w-3" />
-                            <span>{formatDate(fr.createdAt)}</span>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap gap-3 shrink-0">
-                          <SummaryBadge count={group.summary.brdCount} label="BRD" icon={FileCheck} />
-                          <SummaryBadge count={group.summary.userStoryCount} label="Story" icon={Bookmark} />
-                          <SummaryBadge count={group.summary.testCaseCount} label="Test" icon={TestTube} />
-                          <SummaryBadge count={group.summary.testDataCount} label="Data" icon={Database} />
-                        </div>
-                      </button>
-
-                      {isExpanded && (
-                        <CardContent className="pt-0 pb-4 px-5">
-                          <div className="ml-14 space-y-2">
-                            {group.brds.length === 0 ? (
-                              <p className="text-sm text-muted-foreground italic py-2">No BRDs generated yet</p>
-                            ) : (
-                              group.brds.map((brd) => (
-                                <BrdSection key={brd.id} brd={brd} />
-                              ))
-                            )}
-                          </div>
-                        </CardContent>
-                      )}
-                    </Card>
-                  );
-                })}
-              </div>
-            </ScrollArea>
-          )}
-        </div>
+                    return (
+                      <FeatureRequestRows
+                        key={fr.id}
+                        group={group}
+                        isExpanded={isExpanded}
+                        isDeleting={isDeleting}
+                        typeConfig={typeConfig}
+                        TypeIcon={TypeIcon}
+                        onToggle={() => toggleFR(fr.id)}
+                        onDeleteClick={() => setDeleteConfirm(fr.id)}
+                        onDeleteConfirm={() => deleteMutation.mutate(fr.id)}
+                        onDeleteCancel={() => setDeleteConfirm(null)}
+                        deletePending={deleteMutation.isPending}
+                      />
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+function FeatureRequestRows({
+  group,
+  isExpanded,
+  isDeleting,
+  typeConfig,
+  TypeIcon,
+  onToggle,
+  onDeleteClick,
+  onDeleteConfirm,
+  onDeleteCancel,
+  deletePending,
+}: {
+  group: HistoryGroup;
+  isExpanded: boolean;
+  isDeleting: boolean;
+  typeConfig: { label: string; color: string };
+  TypeIcon: typeof Lightbulb;
+  onToggle: () => void;
+  onDeleteClick: () => void;
+  onDeleteConfirm: () => void;
+  onDeleteCancel: () => void;
+  deletePending: boolean;
+}) {
+  const fr = group.featureRequest;
+  const s = group.summary;
+
+  return (
+    <>
+      <tr
+        className={cn(
+          "border-b border-border transition-colors group",
+          isExpanded ? "bg-muted/30" : "hover:bg-muted/20"
+        )}
+        data-testid={`row-fr-${fr.id}`}
+      >
+        <td className="py-3 px-4">
+          <div className="flex items-center gap-2.5 cursor-pointer" onClick={onToggle} data-testid={`button-toggle-fr-${fr.id}`}>
+            {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
+            <div className="min-w-0">
+              <p className="font-medium text-sm truncate" data-testid={`text-fr-title-${fr.id}`}>{fr.title}</p>
+              {fr.description && fr.description !== fr.title && (
+                <p className="text-xs text-muted-foreground truncate max-w-md">{fr.description}</p>
+              )}
+            </div>
+          </div>
+        </td>
+        <td className="py-3 px-3">
+          <Badge variant="outline" className={cn("text-[10px]", typeConfig.color)}>
+            <TypeIcon className="h-3 w-3 mr-0.5" />
+            {typeConfig.label}
+          </Badge>
+        </td>
+        <td className="py-3 px-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <CountPill count={s.brdCount} label="BRDs" icon={FileCheck} className="bg-sky-500/10 text-sky-600 dark:text-sky-400" />
+            <CountPill count={s.userStoryCount} label="Stories" icon={Bookmark} className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400" />
+          </div>
+        </td>
+        <td className="py-3 px-3 hidden lg:table-cell">
+          <div className="flex items-center gap-2 flex-wrap">
+            <CountPill count={s.testCaseCount} label="Tests" icon={TestTube} className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" />
+            <CountPill count={s.testDataCount} label="Data" icon={Database} className="bg-orange-500/10 text-orange-600 dark:text-orange-400" />
+          </div>
+        </td>
+        <td className="py-3 px-3">
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Calendar className="h-3 w-3" />
+            <span>{formatDate(fr.createdAt)}</span>
+          </div>
+        </td>
+        <td className="py-3 px-4 text-right">
+          {isDeleting ? (
+            <div className="flex items-center gap-1 justify-end">
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={onDeleteConfirm}
+                disabled={deletePending}
+                data-testid={`button-confirm-delete-${fr.id}`}
+              >
+                {deletePending ? <LoadingSpinner size="sm" /> : "Yes"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onDeleteCancel}
+                disabled={deletePending}
+                data-testid={`button-cancel-delete-${fr.id}`}
+              >
+                No
+              </Button>
+            </div>
+          ) : (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={onDeleteClick}
+              data-testid={`button-delete-fr-${fr.id}`}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </td>
+      </tr>
+      {isDeleting && (
+        <tr className="border-b border-border" data-testid={`row-delete-confirm-${fr.id}`}>
+          <td colSpan={6} className="py-2 px-4">
+            <div className="flex items-center gap-2 text-xs text-destructive bg-destructive/5 rounded-md py-2 px-3">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              <span>This will permanently delete this feature request and all its BRDs, user stories, test cases, and test data. Are you sure?</span>
+            </div>
+          </td>
+        </tr>
+      )}
+      {isExpanded && group.brds.length > 0 && group.brds.map((brd) => (
+        <ExpandedBrdRow key={brd.id} brd={brd} />
+      ))}
+      {isExpanded && group.brds.length === 0 && (
+        <tr className="border-b border-border/50 bg-muted/10">
+          <td colSpan={6} className="py-3 pl-12 pr-4 text-xs text-muted-foreground italic">
+            No BRDs generated yet
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
