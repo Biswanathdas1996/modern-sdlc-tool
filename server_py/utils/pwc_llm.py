@@ -29,6 +29,7 @@ import requests
 from typing import Dict, Any, Optional
 from pathlib import Path
 from dotenv import load_dotenv
+from core.logging import log_debug
 
 env_path = Path(__file__).parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
@@ -168,7 +169,13 @@ async def call_pwc_genai_async(
 
     temperature = temperature if temperature is not None else 0.2
     max_tokens = max_tokens if max_tokens is not None else 6096
-    
+    resolved_model = model or _config.default_model
+    log_debug(
+        f"[async] task={task_name or 'adhoc'} model={resolved_model} "
+        f"temp={temperature} max_tokens={max_tokens}",
+        "pwc_llm",
+    )
+
     request_body = _build_request_body(prompt, temperature, max_tokens, model)
     headers = _build_headers()
     timeout_value = timeout or _config.default_timeout
@@ -256,7 +263,13 @@ def call_pwc_genai_sync(
 
     temperature = temperature if temperature is not None else 0.2
     max_tokens = max_tokens if max_tokens is not None else 6096
-    
+    resolved_model = model or _config.default_model
+    log_debug(
+        f"[sync] task={task_name or 'adhoc'} model={resolved_model} "
+        f"temp={temperature} max_tokens={max_tokens}",
+        "pwc_llm",
+    )
+
     request_body = _build_request_body(prompt, temperature, max_tokens, model)
     headers = _build_headers()
     timeout_value = timeout or _config.default_timeout

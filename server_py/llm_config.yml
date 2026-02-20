@@ -1,9 +1,7 @@
 # =============================================================================
 # LLM Configuration - Defuse 2.O
 # =============================================================================
-# Central config to control which LLM model is used for each processing task.
-# Change any model value below to reassign a task to a different LLM.
-#
+
 # Available Models:
 #   - vertex_ai.gemini-2.0-flash        (fast, cost-effective)
 #   - vertex_ai.gemini-2.0-flash-001    (pinned version of above)
@@ -37,7 +35,7 @@ documentation_generation:
 brd_generation:
   model: vertex_ai.gemini-2.0-flash
   temperature: 0.3
-  max_tokens: 8192
+  max_tokens: 8000
 
 bpmn_diagram:
   model: vertex_ai.gemini-2.0-flash

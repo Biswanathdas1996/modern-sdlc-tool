@@ -5,7 +5,7 @@ from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.outputs import GenerationChunk
 
 from utils.pwc_llm import call_pwc_genai_async
-from core.logging import log_info
+from core.logging import log_info, log_debug
 
 
 class PwCGenAILLM(LLM):
@@ -56,13 +56,20 @@ class PwCGenAILLM(LLM):
         **kwargs: Any,
     ) -> str:
         """Async call to PwC GenAI using centralized utility."""
+        resolved_temp = kwargs.get("temperature", self.temperature)
+        resolved_tokens = kwargs.get("max_tokens", self.max_tokens)
+        resolved_task = kwargs.get("task_name", self.task_name)
         log_info(f"LLM call with prompt length: {len(prompt)}", "pwc_genai_llm")
-        
+        log_debug(
+            f"task={resolved_task} temp={resolved_temp} max_tokens={resolved_tokens}",
+            "pwc_genai_llm",
+        )
+
         response = await call_pwc_genai_async(
             prompt=prompt,
-            temperature=kwargs.get("temperature", self.temperature),
-            max_tokens=kwargs.get("max_tokens", self.max_tokens),
-            task_name=kwargs.get("task_name", self.task_name),
+            temperature=resolved_temp,
+            max_tokens=resolved_tokens,
+            task_name=resolved_task,
         )
         
         return response

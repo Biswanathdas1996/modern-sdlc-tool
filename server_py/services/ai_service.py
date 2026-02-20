@@ -31,9 +31,11 @@ class AIService:
         from llm_config.yml (explicit overrides still win).
         """
         cfg = self._llm_config.get(task_name) if task_name else None
+        resolved_temp = temperature if temperature is not None else (cfg.temperature if cfg else 0.2)
+        resolved_tokens = max_tokens if max_tokens is not None else (cfg.max_tokens if cfg else 6096)
         model_label = cfg.model if cfg else "defaults"
         log_info(f"Calling PwC GenAI [task={task_name or 'adhoc'}] (prompt length: {len(prompt)} chars)", "ai")
-        log_debug(f"AI parameters: model={model_label}, temp={temperature}, max_tokens={max_tokens}", "ai")
+        log_debug(f"AI parameters: model={model_label}, temp={resolved_temp}, max_tokens={resolved_tokens}", "ai")
         
         try:
             response = await call_pwc_genai_async(
