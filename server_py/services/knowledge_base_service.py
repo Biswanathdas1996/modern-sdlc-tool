@@ -69,11 +69,49 @@ class KnowledgeBaseService:
                 )
                 log_info(f"Created id_1 index on {docs_name}", "kb")
             
+            self._ensure_vector_index(chunks_col, chunks_name)
+            
             _initialized_collections.add(safe_id)
             log_info(f"Indexes verified for project {project_id} (chunks: {chunks_name}, docs: {docs_name})", "kb")
             
         except Exception as error:
             log_error(f"Index setup error for project {project_id}", "kb", error)
+    
+    def _ensure_vector_index(self, collection, collection_name: str):
+        """Create Atlas Vector Search index on the embedding field if not exists."""
+        try:
+            from pymongo.operations import SearchIndexModel
+            
+            existing_search = [idx.get("name") for idx in collection.list_search_indexes()]
+            
+            if "vector_index" not in existing_search:
+                vector_index = SearchIndexModel(
+                    definition={
+                        "fields": [
+                            {
+                                "type": "vector",
+                                "path": "embedding",
+                                "numDimensions": 384,
+                                "similarity": "cosine"
+                            },
+                            {
+                                "type": "filter",
+                                "path": "documentId"
+                            },
+                            {
+                                "type": "filter",
+                                "path": "projectId"
+                            }
+                        ]
+                    },
+                    name="vector_index",
+                    type="vectorSearch"
+                )
+                collection.create_search_index(model=vector_index)
+                log_info(f"Created vector_index on {collection_name}", "kb")
+            
+        except Exception as error:
+            log_error(f"Vector index setup on {collection_name}", "kb", error)
     
     def _get_chunks_collection(self, project_id: str):
         self._ensure_project_indexes(project_id)
@@ -449,12 +487,26 @@ class KnowledgeBaseService:
         total_chunks = chunks_col.count_documents({})
         embedded_count = chunks_col.count_documents({"embedding": {"$exists": True}})
         
+        vector_search_indexes = []
+        try:
+            for idx in chunks_col.list_search_indexes():
+                vector_search_indexes.append({
+                    "name": idx.get("name"),
+                    "type": idx.get("type"),
+                    "status": idx.get("status"),
+                    "queryable": idx.get("queryable"),
+                    "definition": idx.get("latestDefinition")
+                })
+        except Exception:
+            pass
+        
         return {
             "projectId": project_id,
             "chunksCollection": chunks_name,
             "documentsCollection": docs_name,
             "chunksIndexes": [idx.get("name") for idx in chunks_indexes],
             "documentsIndexes": [idx.get("name") for idx in docs_indexes],
+            "vectorSearchIndexes": vector_search_indexes,
             "chunksCount": total_chunks,
             "embeddedChunks": embedded_count,
             "documentsCount": docs_col.count_documents({}),
