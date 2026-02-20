@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { useLocation } from "wouter";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { useLocation, useSearch } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   FileCheck,
@@ -68,6 +68,9 @@ export default function BRDPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingKnowledgeSources, setStreamingKnowledgeSources] = useState<KnowledgeSource[]>([]);
   const [, navigate] = useLocation();
+  const searchString = useSearch();
+  const searchParams = useMemo(() => new URLSearchParams(searchString), [searchString]);
+  const brdIdParam = searchParams.get("brd_id");
   const queryClient = useQueryClient();
   const contentRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -82,10 +85,12 @@ export default function BRDPage() {
   const [isCheckingRelated, setIsCheckingRelated] = useState(false);
 
   const { data: brd, isLoading: brdLoading, error } = useQuery<BRD>({
-    queryKey: ["/api/brd/current", currentProjectId],
+    queryKey: ["/api/brd/current", currentProjectId, brdIdParam],
     queryFn: async () => {
-      const url = currentProjectId ? `/api/brd/current?project_id=${currentProjectId}` : `/api/brd/current`;
-      const res = await fetch(url, { credentials: "include" });
+      const params = new URLSearchParams();
+      if (brdIdParam) params.set("brd_id", brdIdParam);
+      else if (currentProjectId) params.set("project_id", currentProjectId);
+      const res = await fetch(`/api/brd/current?${params.toString()}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
@@ -182,7 +187,8 @@ export default function BRDPage() {
         title: "User Stories Generated",
         description: "User stories have been successfully generated from the BRD.",
       });
-      navigate("/user-stories");
+      const brdQuery = brdIdParam ? `?brd_id=${brdIdParam}` : "";
+      navigate(`/user-stories${brdQuery}`);
     },
     onError: (error: any) => {
       toast({

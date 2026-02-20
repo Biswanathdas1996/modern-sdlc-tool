@@ -76,10 +76,13 @@ async def create_requirements(
 # ==================== BRD ENDPOINTS ====================
 
 @router.get("/brd/current")
-async def get_current_brd(project_id: Optional[str] = Query(None)):
-    """Get the current BRD, optionally scoped to a project."""
+async def get_current_brd(project_id: Optional[str] = Query(None), brd_id: Optional[str] = Query(None)):
+    """Get the current BRD, optionally scoped to a project or by specific ID."""
     try:
-        brd = storage.get_current_brd(project_id=project_id)
+        if brd_id:
+            brd = storage.get_brd(brd_id)
+        else:
+            brd = storage.get_current_brd(project_id=project_id)
         if not brd:
             raise not_found("No BRD found")
         return brd
@@ -175,9 +178,11 @@ async def generate_brd_endpoint(request: GenerateBRDRequest):
 # ==================== TEST CASES ENDPOINTS ====================
 
 @router.get("/test-cases")
-async def get_test_cases(project_id: Optional[str] = Query(None)):
-    """Get all test cases, optionally scoped to a project."""
+async def get_test_cases(project_id: Optional[str] = Query(None), brd_id: Optional[str] = Query(None)):
+    """Get all test cases, optionally scoped to a project or BRD."""
     try:
+        if brd_id:
+            return storage.get_test_cases(brd_id)
         if project_id:
             return storage.get_test_cases_by_project(project_id)
         brd = storage.get_current_brd()
@@ -231,9 +236,11 @@ async def generate_test_cases_endpoint(request: GenerateTestCasesRequest):
 # ==================== TEST DATA ENDPOINTS ====================
 
 @router.get("/test-data")
-async def get_test_data(project_id: Optional[str] = Query(None)):
-    """Get all test data, optionally scoped to a project."""
+async def get_test_data(project_id: Optional[str] = Query(None), brd_id: Optional[str] = Query(None)):
+    """Get all test data, optionally scoped to a project or BRD."""
     try:
+        if brd_id:
+            return storage.get_test_data_by_brd(brd_id)
         if project_id:
             return storage.get_test_data_by_project(project_id)
         test_data = storage.get_all_test_data()

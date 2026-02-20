@@ -126,6 +126,16 @@ class StorageManager:
     def get_test_data_by_project(self, project_id: str) -> List[Dict]:
         return self.test_data_repo.get_by_project(project_id)
 
+    def get_test_data_by_brd(self, brd_id: str) -> List[Dict]:
+        test_cases = self.get_test_cases(brd_id)
+        if not test_cases:
+            return []
+        result = []
+        for tc in test_cases:
+            tc_data = self.test_data_repo.get_by_field("testCaseId", tc.get("id", ""))
+            result.extend(tc_data)
+        return result
+
     def create_test_data(self, data: dict) -> Dict:
         valid_types = {"valid", "invalid", "edge", "boundary"}
         raw_type = str(data.get("dataType", "valid")).lower().strip()

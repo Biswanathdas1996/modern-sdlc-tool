@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import ReactMarkdown from "react-markdown";
 import { ArrowLeft, ArrowRight, Bookmark, RefreshCw, Clock, Layers, Tag, CheckCircle2, AlertCircle, Loader2, Wand2, Copy, Check, Upload, Pencil, Plus, X, GitBranch, Trash2, Code2 } from "lucide-react";
 import { SiJira } from "react-icons/si";
@@ -62,12 +62,17 @@ export default function UserStoriesPage() {
   const { toast } = useToast();
   const { saveSessionArtifact, getSessionArtifact } = useSession();
   const { currentProjectId } = useProject();
+  const searchString = useSearch();
+  const searchParams = useMemo(() => new URLSearchParams(searchString), [searchString]);
+  const brdIdParam = searchParams.get("brd_id");
 
   const { data: brd, isLoading: brdLoading } = useQuery<BRD>({
-    queryKey: ["/api/brd/current", currentProjectId],
+    queryKey: ["/api/brd/current", currentProjectId, brdIdParam],
     queryFn: async () => {
-      const url = currentProjectId ? `/api/brd/current?project_id=${currentProjectId}` : `/api/brd/current`;
-      const res = await fetch(url, { credentials: "include" });
+      const params = new URLSearchParams();
+      if (brdIdParam) params.set("brd_id", brdIdParam);
+      else if (currentProjectId) params.set("project_id", currentProjectId);
+      const res = await fetch(`/api/brd/current?${params.toString()}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
@@ -162,9 +167,10 @@ export default function UserStoriesPage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/test-cases", currentProjectId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/test-cases", currentProjectId, brdIdParam] });
       setIsGeneratingTests(false);
-      navigate("/test-cases");
+      const brdQuery = brdIdParam ? `?brd_id=${brdIdParam}` : "";
+      navigate(`/test-cases${brdQuery}`);
     },
     onError: () => {
       setIsGeneratingTests(false);

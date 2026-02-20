@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSession } from "@/hooks/useSession";
 import { useToast } from "@/hooks/use-toast";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   TestTube,
@@ -56,16 +56,21 @@ export default function TestCasesPage() {
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [, navigate] = useLocation();
+  const searchString = useSearch();
+  const searchParams = useMemo(() => new URLSearchParams(searchString), [searchString]);
+  const brdIdParam = searchParams.get("brd_id");
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { saveSessionArtifact, getSessionArtifact } = useSession();
   const { currentProjectId } = useProject();
 
   const { data: testCases, isLoading } = useQuery<TestCase[]>({
-    queryKey: ["/api/test-cases", currentProjectId],
+    queryKey: ["/api/test-cases", currentProjectId, brdIdParam],
     queryFn: async () => {
-      const url = currentProjectId ? `/api/test-cases?project_id=${currentProjectId}` : `/api/test-cases`;
-      const res = await fetch(url, { credentials: "include" });
+      const params = new URLSearchParams();
+      if (brdIdParam) params.set("brd_id", brdIdParam);
+      else if (currentProjectId) params.set("project_id", currentProjectId);
+      const res = await fetch(`/api/test-cases?${params.toString()}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
@@ -78,27 +83,34 @@ export default function TestCasesPage() {
   const regenerateMutation = useMutation({
     mutationFn: async () => {
       const body: Record<string, any> = {};
-      const cachedBrd = getSessionArtifact<any>("brd");
-      if (cachedBrd?.id) body.brdId = cachedBrd.id;
+      if (brdIdParam) body.brdId = brdIdParam;
+      else {
+        const cachedBrd = getSessionArtifact<any>("brd");
+        if (cachedBrd?.id) body.brdId = cachedBrd.id;
+      }
       const response = await apiRequest("POST", "/api/test-cases/generate", body);
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/test-cases", currentProjectId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/test-cases", currentProjectId, brdIdParam] });
     },
   });
 
   const generateTestDataMutation = useMutation({
     mutationFn: async () => {
       const body: Record<string, any> = {};
-      const cachedBrd = getSessionArtifact<any>("brd");
-      if (cachedBrd?.id) body.brdId = cachedBrd.id;
+      if (brdIdParam) body.brdId = brdIdParam;
+      else {
+        const cachedBrd = getSessionArtifact<any>("brd");
+        if (cachedBrd?.id) body.brdId = cachedBrd.id;
+      }
       const response = await apiRequest("POST", "/api/test-data/generate", body);
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/test-data", currentProjectId] });
-      navigate("/test-data");
+      queryClient.invalidateQueries({ queryKey: ["/api/test-data", currentProjectId, brdIdParam] });
+      const brdQuery = brdIdParam ? `?brd_id=${brdIdParam}` : "";
+      navigate(`/test-data${brdQuery}`);
     },
     onError: (error: any) => {
       toast({

@@ -14,7 +14,9 @@ import {
   Calendar,
   Trash2,
   AlertTriangle,
+  Eye,
 } from "lucide-react";
+import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useProject } from "@/hooks/useProject";
@@ -91,11 +93,12 @@ function CountPill({ count, label, icon: Icon, className }: { count: number; lab
 
 function ExpandedBrdRow({ brd }: { brd: BrdItem }) {
   const [showDetails, setShowDetails] = useState(false);
+  const [, navigate] = useLocation();
 
   return (
     <>
       <tr
-        className="border-b border-border/50 bg-muted/20 hover:bg-muted/40 cursor-pointer transition-colors"
+        className="border-b border-border/50 bg-muted/20 hover:bg-muted/40 cursor-pointer transition-colors group/brd"
         onClick={() => setShowDetails(!showDetails)}
         data-testid={`row-brd-${brd.id}`}
       >
@@ -120,7 +123,18 @@ function ExpandedBrdRow({ brd }: { brd: BrdItem }) {
           </div>
         </td>
         <td className="py-2.5 px-3 text-xs text-muted-foreground">{formatDate(brd.createdAt)}</td>
-        <td className="py-2.5 px-3"></td>
+        <td className="py-2.5 px-3 text-right">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-primary opacity-0 group-hover/brd:opacity-100 transition-opacity h-7 px-2 text-xs"
+            onClick={(e) => { e.stopPropagation(); navigate(`/brd?brd_id=${brd.id}`); }}
+            data-testid={`button-view-brd-${brd.id}`}
+          >
+            <Eye className="h-3.5 w-3.5 mr-1" />
+            View
+          </Button>
+        </td>
       </tr>
       {showDetails && (
         <tr className="border-b border-border/30" data-testid={`detail-brd-${brd.id}`}>
@@ -337,6 +351,8 @@ function FeatureRequestRows({
 }) {
   const fr = group.featureRequest;
   const s = group.summary;
+  const [, navigate] = useLocation();
+  const firstBrdId = group.brds.length > 0 ? group.brds[0].id : null;
 
   return (
     <>
@@ -405,15 +421,28 @@ function FeatureRequestRows({
               </Button>
             </div>
           ) : (
-            <Button
-              size="icon"
-              variant="ghost"
-              className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={onDeleteClick}
-              data-testid={`button-delete-fr-${fr.id}`}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+              {firstBrdId && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="text-primary"
+                  onClick={() => navigate(`/brd?brd_id=${firstBrdId}`)}
+                  data-testid={`button-view-fr-${fr.id}`}
+                >
+                  <Eye className="h-4 w-4" />
+                </Button>
+              )}
+              <Button
+                size="icon"
+                variant="ghost"
+                className="text-muted-foreground"
+                onClick={onDeleteClick}
+                data-testid={`button-delete-fr-${fr.id}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
           )}
         </td>
       </tr>
