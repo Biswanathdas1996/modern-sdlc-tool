@@ -14,6 +14,7 @@ import { LoadingOverlay } from "@/components/LoadingSpinner";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { useSession } from "@/hooks/useSession";
+import { useProject } from "@/hooks/useProject";
 
 const workflowSteps = [
   { id: "analyze", label: "Analyze", completed: true, active: false },
@@ -67,6 +68,7 @@ export default function RequirementsPage() {
   const [generationStatus, setGenerationStatus] = useState("");
 
   const { startSession, saveSessionArtifact, getSessionArtifact } = useSession();
+  const { currentProjectId } = useProject();
 
   const submitMutation = useMutation({
     mutationFn: async (data: FormData) => {
@@ -133,7 +135,7 @@ export default function RequirementsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/requirements"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/brd/current"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/brd/current", currentProjectId] });
       setIsGeneratingBRD(false);
       setGenerationStatus("");
       navigate("/brd");
@@ -207,6 +209,9 @@ export default function RequirementsPage() {
     formData.append("requestType", requestType);
     formData.append("sessionId", sessionId);
 
+    if (currentProjectId) {
+      formData.append("project_id", currentProjectId);
+    }
     if (uploadedFile) {
       formData.append("file", uploadedFile);
     }

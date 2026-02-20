@@ -37,6 +37,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useSession } from "@/hooks/useSession";
+import { useProject } from "@/hooks/useProject";
 import type { BRD, KnowledgeSource } from "@shared/schema";
 
 interface RelatedJiraStory {
@@ -71,6 +72,7 @@ export default function BRDPage() {
   const contentRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { saveSessionArtifact, getSessionArtifact } = useSession();
+  const { currentProjectId } = useProject();
   
   // Related stories state
   const [relatedStoriesDialogOpen, setRelatedStoriesDialogOpen] = useState(false);
@@ -80,7 +82,13 @@ export default function BRDPage() {
   const [isCheckingRelated, setIsCheckingRelated] = useState(false);
 
   const { data: brd, isLoading: brdLoading, error } = useQuery<BRD>({
-    queryKey: ["/api/brd/current"],
+    queryKey: ["/api/brd/current", currentProjectId],
+    queryFn: async () => {
+      const url = currentProjectId ? `/api/brd/current?project_id=${currentProjectId}` : `/api/brd/current`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
   });
 
   useEffect(() => {
@@ -147,7 +155,7 @@ export default function BRDPage() {
       return content;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/brd/current"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/brd/current", currentProjectId] });
     },
     onError: () => {
       setIsStreaming(false);

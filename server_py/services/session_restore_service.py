@@ -21,7 +21,7 @@ def restore_feature_request(fr_data: Optional[Dict[str, Any]]):
     fr_data.setdefault("createdAt", datetime.now().isoformat())
 
     feature_request = storage.create_feature_request(fr_data)
-    storage.current_feature_request_id = feature_request.id
+    storage.current_feature_request_id = feature_request["id"]
     log_info("Feature request restored from session", "session")
     return feature_request
 
@@ -34,11 +34,6 @@ def restore_brd(brd_data: Optional[Dict[str, Any]]):
 
     if not brd_data:
         return None
-
-    from schemas.entities import BRDContent
-    content = brd_data.get("content", {})
-    if isinstance(content, dict):
-        brd_data["content"] = BRDContent(**content)
 
     brd_data.setdefault("id", "restored")
     brd_data.setdefault("requestType", "feature")
@@ -56,45 +51,42 @@ def restore_analysis(analysis_data: Optional[Dict[str, Any]]):
     """Restore repo analysis from session data if not in storage."""
     projects = storage.get_all_projects()
     if projects:
-        analysis = storage.get_analysis(projects[0].id)
+        analysis = storage.get_analysis(projects[0]["id"])
         if analysis:
             return analysis
 
     if not analysis_data:
         return None
 
-    from schemas.entities import RepoAnalysis
-    return RepoAnalysis(**analysis_data)
+    return analysis_data
 
 
 def restore_documentation(doc_data: Optional[Dict[str, Any]]):
     """Restore documentation from session data if not in storage."""
     projects = storage.get_all_projects()
     if projects:
-        doc = storage.get_documentation(projects[0].id)
+        doc = storage.get_documentation(projects[0]["id"])
         if doc:
             return doc
 
     if not doc_data:
         return None
 
-    from schemas.entities import Documentation
-    return Documentation(**doc_data)
+    return doc_data
 
 
 def restore_database_schema(schema_data: Optional[Dict[str, Any]]):
     """Restore database schema from session data if not in storage."""
     projects = storage.get_all_projects()
     if projects:
-        schema = storage.get_database_schema(projects[0].id)
+        schema = storage.get_database_schema(projects[0]["id"])
         if schema:
             return schema
 
     if not schema_data:
         return None
 
-    from schemas.entities import DatabaseSchemaInfo
-    return DatabaseSchemaInfo(**schema_data)
+    return schema_data
 
 
 def restore_test_cases(test_cases_data: Optional[List[Dict[str, Any]]], brd_id: str):
@@ -124,7 +116,7 @@ def restore_user_stories(stories_data: Optional[List[Dict[str, Any]]], brd_id: s
 def get_project_context():
     """Get common project context (project_id, analysis, documentation, database_schema)."""
     projects = storage.get_all_projects()
-    project_id = projects[0].id if projects else "global"
+    project_id = projects[0]["id"] if projects else "global"
     analysis = storage.get_analysis(project_id) if projects else None
     documentation = storage.get_documentation(project_id) if projects else None
     database_schema = storage.get_database_schema(project_id) if projects else None

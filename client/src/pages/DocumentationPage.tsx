@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import type { Documentation, RepoAnalysis, BPMNDiagram, DatabaseSchemaInfo } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { useSession } from "@/hooks/useSession";
+import { useProject } from "@/hooks/useProject";
 
 const workflowSteps = [
   { id: "analyze", label: "Analyze", completed: true, active: false },
@@ -44,6 +45,7 @@ export default function DocumentationPage() {
   const [connectionString, setConnectionString] = useState("");
   const { toast } = useToast();
   const { saveSessionArtifact } = useSession();
+  const { currentProjectId } = useProject();
 
   const handleSectionSelect = (sectionId: string) => {
     setActiveSection(sectionId);
@@ -54,25 +56,44 @@ export default function DocumentationPage() {
   };
 
   const { data: analysis, isLoading: analysisLoading } = useQuery<RepoAnalysis>({
-    queryKey: ["/api/analysis/current"],
+    queryKey: ["/api/analysis/current", currentProjectId],
+    queryFn: async () => {
+      const url = currentProjectId ? `/api/analysis/current?project_id=${currentProjectId}` : `/api/analysis/current`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
   });
 
   const { data: documentation, isLoading: docLoading } = useQuery<Documentation>({
-    queryKey: ["/api/documentation/current"],
+    queryKey: ["/api/documentation/current", currentProjectId],
+    queryFn: async () => {
+      const url = currentProjectId ? `/api/documentation/current?project_id=${currentProjectId}` : `/api/documentation/current`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
   });
 
   const { data: bpmnDiagrams, isLoading: bpmnLoading } = useQuery<BPMNDiagram>({
-    queryKey: ["/api/bpmn/current"],
+    queryKey: ["/api/bpmn/current", currentProjectId],
+    queryFn: async () => {
+      const url = currentProjectId ? `/api/bpmn/current?project_id=${currentProjectId}` : `/api/bpmn/current`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
     enabled: !!documentation,
   });
 
   const regenerateBpmnMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/bpmn/regenerate");
+      const url = currentProjectId ? `/api/bpmn/regenerate?project_id=${currentProjectId}` : "/api/bpmn/regenerate";
+      const response = await apiRequest("POST", url);
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/bpmn/current"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/bpmn/current", currentProjectId] });
     },
   });
 

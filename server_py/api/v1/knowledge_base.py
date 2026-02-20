@@ -1,6 +1,6 @@
 """Knowledge base API router."""
-from fastapi import APIRouter, UploadFile, File, HTTPException
-from typing import List, Dict, Any
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query
+from typing import List, Dict, Any, Optional
 from io import BytesIO
 import json
 from schemas import KnowledgeSearchRequest
@@ -13,11 +13,12 @@ router = APIRouter(prefix="/knowledge-base", tags=["knowledge-base"])
 
 
 @router.get("")
-async def get_knowledge_documents():
-    """Get all knowledge documents."""
+async def get_knowledge_documents(project_id: Optional[str] = Query(None)):
+    """Get all knowledge documents, optionally scoped by project."""
     try:
         kb_service = get_kb_service()
-        documents = kb_service.get_knowledge_documents("global")
+        scope = project_id or "global"
+        documents = kb_service.get_knowledge_documents(scope)
         return documents
     except Exception as e:
         log_error("Error fetching knowledge documents", "api", e)
@@ -25,11 +26,12 @@ async def get_knowledge_documents():
 
 
 @router.get("/stats")
-async def get_knowledge_stats():
-    """Get knowledge base statistics."""
+async def get_knowledge_stats(project_id: Optional[str] = Query(None)):
+    """Get knowledge base statistics, optionally scoped by project."""
     try:
         kb_service = get_kb_service()
-        stats = kb_service.get_knowledge_stats("global")
+        scope = project_id or "global"
+        stats = kb_service.get_knowledge_stats(scope)
         return stats
     except Exception as e:
         log_error("Error fetching knowledge stats", "api", e)
@@ -37,13 +39,13 @@ async def get_knowledge_stats():
 
 
 @router.post("/upload", status_code=201)
-async def upload_knowledge_document(file: UploadFile = File(...)):
-    """Upload a document to the knowledge base."""
+async def upload_knowledge_document(file: UploadFile = File(...), project_id: Optional[str] = Form(None)):
+    """Upload a document to the knowledge base, optionally scoped to a project."""
     try:
         if not file:
             raise bad_request("No file provided")
         
-        project_id = "global"
+        project_id = project_id or "global"
         
         # Read file content
         file_content = await file.read()
@@ -196,11 +198,12 @@ async def verify_document_deletion(id: str):
 
 @router.post("/search")
 async def search_knowledge(request: KnowledgeSearchRequest):
-    """Search the knowledge base."""
+    """Search the knowledge base, optionally scoped by project."""
     try:
         kb_service = get_kb_service()
+        scope = getattr(request, "project_id", None) or "global"
         results = kb_service.search_knowledge_base(
-            "global",
+            scope,
             request.query,
             request.limit
         )

@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -32,11 +34,16 @@ import {
   ToggleLeft,
   Check,
   X,
+  FolderPlus,
+  FolderOpen,
+  Pencil,
+  GitBranch,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { Project } from "@shared/schema";
 
 interface Feature {
   key: string;
@@ -71,6 +78,15 @@ export default function AdminPage() {
   const [newFeatures, setNewFeatures] = useState<string[]>([]);
   const [resetPassword, setResetPassword] = useState("");
 
+  const [showCreateProjectDialog, setShowCreateProjectDialog] = useState(false);
+  const [showEditProjectDialog, setShowEditProjectDialog] = useState(false);
+  const [showDeleteProjectDialog, setShowDeleteProjectDialog] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [projectName, setProjectName] = useState("");
+  const [projectRepoUrl, setProjectRepoUrl] = useState("");
+  const [projectDescription, setProjectDescription] = useState("");
+  const [projectStatus, setProjectStatus] = useState<string>("pending");
+
   useEffect(() => {
     document.title = "Admin Dashboard | Defuse 2.O";
   }, []);
@@ -82,6 +98,68 @@ export default function AdminPage() {
   const { data: features = [] } = useQuery<Feature[]>({
     queryKey: ["/api/auth/features"],
   });
+
+  const { data: projects = [], isLoading: projectsLoading } = useQuery<Project[]>({
+    queryKey: ["/api/projects"],
+  });
+
+  const createProjectMutation = useMutation({
+    mutationFn: async (data: { name: string; repoUrl: string; description: string; status: string }) => {
+      const res = await apiRequest("POST", "/api/projects", { ...data, techStack: [] });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      setShowCreateProjectDialog(false);
+      setProjectName("");
+      setProjectRepoUrl("");
+      setProjectDescription("");
+      setProjectStatus("pending");
+      toast({ title: "Project created", description: "New project has been added" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to create project", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const updateProjectMutation = useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; name: string; repoUrl: string; description: string; status: string }) => {
+      const res = await apiRequest("PATCH", `/api/projects/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      setShowEditProjectDialog(false);
+      toast({ title: "Project updated", description: "Project details saved" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to update project", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteProjectMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      const res = await apiRequest("DELETE", `/api/projects/${projectId}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      setShowDeleteProjectDialog(false);
+      toast({ title: "Project deleted", description: "Project has been removed" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to delete project", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const openEditProject = (p: Project) => {
+    setSelectedProject(p);
+    setProjectName(p.name);
+    setProjectRepoUrl(p.repoUrl || "");
+    setProjectDescription(p.description || "");
+    setProjectStatus(p.status);
+    setShowEditProjectDialog(true);
+  };
 
   const createUserMutation = useMutation({
     mutationFn: async (data: { username: string; email: string; password: string; role: string; features: string[] }) => {
@@ -199,23 +277,122 @@ export default function AdminPage() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-5xl mx-auto p-6 space-y-6">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-              <Shield className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold" data-testid="text-admin-title">Admin Dashboard</h1>
-              <p className="text-sm text-muted-foreground">
-                Manage users and feature access
-              </p>
-            </div>
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
+            <Shield className="h-5 w-5 text-primary-foreground" />
           </div>
-          <Button onClick={() => setShowCreateDialog(true)} data-testid="button-create-user">
-            <UserPlus className="h-4 w-4 mr-2" />
-            Create User
-          </Button>
+          <div>
+            <h1 className="text-2xl font-bold" data-testid="text-admin-title">Admin Dashboard</h1>
+            <p className="text-sm text-muted-foreground">
+              Manage projects, users, and feature access
+            </p>
+          </div>
         </div>
+
+        <Tabs defaultValue="projects" className="w-full">
+          <TabsList data-testid="tabs-admin">
+            <TabsTrigger value="projects" data-testid="tab-projects">
+              <FolderOpen className="h-4 w-4 mr-2" />
+              Projects ({projects.length})
+            </TabsTrigger>
+            <TabsTrigger value="users" data-testid="tab-users">
+              <Users className="h-4 w-4 mr-2" />
+              Users ({users.length})
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="projects" className="space-y-4 mt-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Create and manage projects for repository analysis and documentation</p>
+              <Button onClick={() => setShowCreateProjectDialog(true)} data-testid="button-create-project">
+                <FolderPlus className="h-4 w-4 mr-2" />
+                Create Project
+              </Button>
+            </div>
+            <Card>
+              <CardContent className="pt-6">
+                {projectsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : projects.length === 0 ? (
+                  <div className="text-center py-12">
+                    <FolderOpen className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+                    <p className="text-sm text-muted-foreground">No projects yet</p>
+                    <p className="text-xs text-muted-foreground mt-1">Create a project to get started with repository analysis</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {projects.map((p) => (
+                      <div
+                        key={p.id}
+                        className="flex items-center justify-between gap-3 p-4 rounded-md border border-border"
+                        data-testid={`project-row-${p.id}`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                            <GitBranch className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium text-sm">{p.name}</span>
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-xs",
+                                  p.status === "completed" && "bg-success/10 text-success border-success/30",
+                                  p.status === "analyzing" && "bg-warning/10 text-warning border-warning/30",
+                                  p.status === "error" && "bg-destructive/10 text-destructive border-destructive/30",
+                                  p.status === "pending" && "bg-muted text-muted-foreground"
+                                )}
+                              >
+                                {p.status}
+                              </Badge>
+                            </div>
+                            {p.description && (
+                              <p className="text-xs text-muted-foreground truncate mt-0.5">{p.description}</p>
+                            )}
+                            {p.repoUrl && (
+                              <p className="text-xs text-muted-foreground truncate">{p.repoUrl}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openEditProject(p)}
+                            title="Edit project"
+                            data-testid={`button-edit-project-${p.id}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => { setSelectedProject(p); setShowDeleteProjectDialog(true); }}
+                            title="Delete project"
+                            data-testid={`button-delete-project-${p.id}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="users" className="space-y-4 mt-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Manage user accounts and feature permissions</p>
+              <Button onClick={() => setShowCreateDialog(true)} data-testid="button-create-user">
+                <UserPlus className="h-4 w-4 mr-2" />
+                Create User
+              </Button>
+            </div>
 
         <Card>
           <CardHeader className="pb-3">
@@ -592,6 +769,183 @@ export default function AdminPage() {
                   <><Loader2 className="h-4 w-4 animate-spin mr-2" />Deleting...</>
                 ) : (
                   "Delete User"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+          </TabsContent>
+        </Tabs>
+
+        <Dialog open={showCreateProjectDialog} onOpenChange={setShowCreateProjectDialog}>
+          <DialogContent className="sm:max-w-lg" data-testid="dialog-create-project">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FolderPlus className="h-5 w-5" />
+                Create New Project
+              </DialogTitle>
+              <DialogDescription>
+                Add a new project manually or later connect it to a GitHub repository
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label htmlFor="project-name">Project Name</Label>
+                <Input
+                  id="project-name"
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  placeholder="My Project"
+                  data-testid="input-project-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="project-repo">Repository URL (optional)</Label>
+                <Input
+                  id="project-repo"
+                  value={projectRepoUrl}
+                  onChange={(e) => setProjectRepoUrl(e.target.value)}
+                  placeholder="https://github.com/owner/repo"
+                  data-testid="input-project-repo"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="project-desc">Description</Label>
+                <Textarea
+                  id="project-desc"
+                  value={projectDescription}
+                  onChange={(e) => setProjectDescription(e.target.value)}
+                  placeholder="Brief description of the project"
+                  rows={3}
+                  data-testid="input-project-description"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowCreateProjectDialog(false)}>Cancel</Button>
+              <Button
+                onClick={() => createProjectMutation.mutate({
+                  name: projectName.trim(),
+                  repoUrl: projectRepoUrl.trim(),
+                  description: projectDescription.trim(),
+                  status: "pending",
+                })}
+                disabled={!projectName.trim() || createProjectMutation.isPending}
+                data-testid="button-submit-create-project"
+              >
+                {createProjectMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 animate-spin mr-2" />Creating...</>
+                ) : (
+                  "Create Project"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showEditProjectDialog} onOpenChange={setShowEditProjectDialog}>
+          <DialogContent className="sm:max-w-lg" data-testid="dialog-edit-project">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Pencil className="h-5 w-5" />
+                Edit Project
+              </DialogTitle>
+              <DialogDescription>
+                {selectedProject && `Update details for ${selectedProject.name}`}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label htmlFor="edit-project-name">Project Name</Label>
+                <Input
+                  id="edit-project-name"
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  data-testid="input-edit-project-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-project-repo">Repository URL</Label>
+                <Input
+                  id="edit-project-repo"
+                  value={projectRepoUrl}
+                  onChange={(e) => setProjectRepoUrl(e.target.value)}
+                  placeholder="https://github.com/owner/repo"
+                  data-testid="input-edit-project-repo"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-project-desc">Description</Label>
+                <Textarea
+                  id="edit-project-desc"
+                  value={projectDescription}
+                  onChange={(e) => setProjectDescription(e.target.value)}
+                  rows={3}
+                  data-testid="input-edit-project-description"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-project-status">Status</Label>
+                <Select value={projectStatus} onValueChange={setProjectStatus}>
+                  <SelectTrigger data-testid="select-edit-project-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="analyzing">Analyzing</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="error">Error</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowEditProjectDialog(false)}>Cancel</Button>
+              <Button
+                onClick={() => selectedProject && updateProjectMutation.mutate({
+                  id: selectedProject.id,
+                  name: projectName.trim(),
+                  repoUrl: projectRepoUrl.trim(),
+                  description: projectDescription.trim(),
+                  status: projectStatus,
+                })}
+                disabled={!projectName.trim() || updateProjectMutation.isPending}
+                data-testid="button-submit-edit-project"
+              >
+                {updateProjectMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 animate-spin mr-2" />Saving...</>
+                ) : (
+                  "Save Changes"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showDeleteProjectDialog} onOpenChange={setShowDeleteProjectDialog}>
+          <DialogContent className="sm:max-w-sm" data-testid="dialog-delete-project">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Trash2 className="h-5 w-5 text-destructive" />
+                Delete Project
+              </DialogTitle>
+              <DialogDescription>
+                {selectedProject && `Are you sure you want to delete "${selectedProject.name}"? All associated data will be removed. This cannot be undone.`}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowDeleteProjectDialog(false)}>Cancel</Button>
+              <Button
+                variant="destructive"
+                onClick={() => selectedProject && deleteProjectMutation.mutate(selectedProject.id)}
+                disabled={deleteProjectMutation.isPending}
+                data-testid="button-confirm-delete-project"
+              >
+                {deleteProjectMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 animate-spin mr-2" />Deleting...</>
+                ) : (
+                  "Delete Project"
                 )}
               </Button>
             </DialogFooter>

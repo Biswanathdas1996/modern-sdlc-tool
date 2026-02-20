@@ -16,6 +16,7 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useSession } from "@/hooks/useSession";
+import { useProject } from "@/hooks/useProject";
 import type { BRD, UserStory } from "@shared/schema";
 
 const workflowSteps = [
@@ -105,6 +106,7 @@ export default function CodeGenerationPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { getSessionArtifact, saveSessionArtifact } = useSession();
+  const { currentProjectId } = useProject();
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [taskId, setTaskId] = useState<string | null>(null);
@@ -139,7 +141,13 @@ export default function CodeGenerationPage() {
   const lastStepCountRef = useRef(0);
 
   const { data: brd, isLoading: brdLoading } = useQuery<BRD>({
-    queryKey: ["/api/brd/current"],
+    queryKey: ["/api/brd/current", currentProjectId],
+    queryFn: async () => {
+      const url = currentProjectId ? `/api/brd/current?project_id=${currentProjectId}` : `/api/brd/current`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
   });
 
   const { data: userStories, isLoading: storiesLoading } = useQuery<UserStory[]>({

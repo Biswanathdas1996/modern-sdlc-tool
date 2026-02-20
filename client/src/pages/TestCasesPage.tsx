@@ -28,6 +28,7 @@ import { CodeBlock } from "@/components/CodeBlock";
 import { EmptyState } from "@/components/EmptyState";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
+import { useProject } from "@/hooks/useProject";
 import type { TestCase } from "@shared/schema";
 
 const workflowSteps = [
@@ -58,9 +59,16 @@ export default function TestCasesPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { saveSessionArtifact, getSessionArtifact } = useSession();
+  const { currentProjectId } = useProject();
 
   const { data: testCases, isLoading } = useQuery<TestCase[]>({
-    queryKey: ["/api/test-cases"],
+    queryKey: ["/api/test-cases", currentProjectId],
+    queryFn: async () => {
+      const url = currentProjectId ? `/api/test-cases?project_id=${currentProjectId}` : `/api/test-cases`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
   });
 
   useEffect(() => {
@@ -78,7 +86,7 @@ export default function TestCasesPage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/test-cases"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/test-cases", currentProjectId] });
     },
   });
 
@@ -95,7 +103,7 @@ export default function TestCasesPage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/test-data"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/test-data", currentProjectId] });
       navigate("/test-data");
     },
     onError: (error: any) => {

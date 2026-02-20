@@ -27,6 +27,7 @@ import { LoadingSpinner, LoadingOverlay } from "@/components/LoadingSpinner";
 import { EmptyState } from "@/components/EmptyState";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
+import { useProject } from "@/hooks/useProject";
 import type { TestData } from "@shared/schema";
 
 const workflowSteps = [
@@ -46,9 +47,16 @@ export default function TestDataPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { saveSessionArtifact, getSessionArtifact } = useSession();
+  const { currentProjectId } = useProject();
 
   const { data: testData, isLoading } = useQuery<TestData[]>({
-    queryKey: ["/api/test-data"],
+    queryKey: ["/api/test-data", currentProjectId],
+    queryFn: async () => {
+      const url = currentProjectId ? `/api/test-data?project_id=${currentProjectId}` : `/api/test-data`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
   });
 
   useEffect(() => {
@@ -64,7 +72,7 @@ export default function TestDataPage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/test-data"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/test-data", currentProjectId] });
     },
   });
 

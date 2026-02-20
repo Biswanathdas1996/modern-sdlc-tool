@@ -1,6 +1,6 @@
 """Requirements, BRD, test cases, test data, and user stories API router."""
 import json
-from fastapi import APIRouter, HTTPException, File, UploadFile, Form
+from fastapi import APIRouter, HTTPException, File, UploadFile, Form, Query
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 from typing import Optional
@@ -34,13 +34,17 @@ async def create_requirements(
     description: Optional[str] = Form(None),
     inputType: str = Form(...),
     requestType: str = Form("feature"),
+    project_id: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
     audio: Optional[UploadFile] = File(None)
 ):
     """Create a new feature request/requirement."""
     try:
-        projects = storage.get_all_projects()
-        project_id = projects[0].id if projects else "global"
+        if not project_id:
+            projects = storage.get_all_projects()
+            if not projects:
+                raise not_found("No projects found. Create a project first.")
+            project_id = projects[0]["id"]
 
         final_description = description or ""
 
@@ -62,7 +66,7 @@ async def create_requirements(
         })
 
         log_info(f"Feature request created: {title}", "requirements")
-        return JSONResponse(status_code=201, content=feature_request.model_dump())
+        return JSONResponse(status_code=201, content=feature_request)
 
     except Exception as e:
         log_error("Error creating feature request", "requirements", e)
@@ -72,13 +76,13 @@ async def create_requirements(
 # ==================== BRD ENDPOINTS ====================
 
 @router.get("/brd/current")
-async def get_current_brd():
-    """Get the current BRD."""
+async def get_current_brd(project_id: Optional[str] = Query(None)):
+    """Get the current BRD, optionally scoped to a project."""
     try:
-        brd = storage.get_current_brd()
+        brd = storage.get_current_brd(project_id=project_id)
         if not brd:
             raise not_found("No BRD found")
-        return brd.model_dump()
+        return brd
     except HTTPException:
         raise
     except Exception as e:
@@ -101,26 +105,22 @@ async def generate_brd_endpoint(request: GenerateBRDRequest):
         knowledge_context = None
         knowledge_sources = []
         try:
-            # Construct focused search query based on feature request
-            # Prioritize title and description, include request type for context
             request_type_context = {
                 'feature': 'new feature functionality component',
                 'bug': 'bug fix error issue problem',
                 'enhancement': 'enhancement improvement optimization'
-            }.get(feature_request.requestType, '')
+            }.get(feature_request.get("requestType", "feature"), '')
             
-            # Build comprehensive search query focused on user's request
-            search_query = f"{feature_request.title} {feature_request.description} {request_type_context}"
+            search_query = f"{feature_request['title']} {feature_request['description']} {request_type_context}"
             
             log_info(f"KB Search Query: {search_query[:150]}...", "requirements")
             
-            # Retrieve relevant knowledge chunks (limit to top 5 most relevant)
-            kb_results = get_kb_service().search_knowledge_base("global", search_query, 5)
+            kb_project_id = feature_request.get("projectId", "global")
+            kb_results = get_kb_service().search_knowledge_base(kb_project_id, search_query, 5)
             
             if kb_results:
                 log_info(f"Retrieved {len(kb_results)} knowledge chunks with avg score: {sum(r.get('score', 0) for r in kb_results) / len(kb_results):.3f}", "requirements")
                 
-                # Format knowledge context with clear source attribution
                 knowledge_context = "\n\n---\n\n".join([
                     f"[Source: {r['filename']} | Relevance: {r.get('score', 0):.2f}]\n{r['content']}" 
                     for r in kb_results
@@ -146,10 +146,10 @@ async def generate_brd_endpoint(request: GenerateBRDRequest):
                     yield {"data": json.dumps({"knowledgeSources": knowledge_sources})}
 
                 brd = await ai_service.generate_brd(
-                    feature_request.model_dump(),
-                    analysis.model_dump() if analysis else None,
-                    documentation.model_dump() if documentation else None,
-                    database_schema.model_dump() if database_schema else None,
+                    feature_request,
+                    analysis,
+                    documentation,
+                    database_schema,
                     knowledge_context,
                     lambda chunk: None
                 )
@@ -175,14 +175,16 @@ async def generate_brd_endpoint(request: GenerateBRDRequest):
 # ==================== TEST CASES ENDPOINTS ====================
 
 @router.get("/test-cases")
-async def get_test_cases():
-    """Get all test cases for the current BRD."""
+async def get_test_cases(project_id: Optional[str] = Query(None)):
+    """Get all test cases, optionally scoped to a project."""
     try:
+        if project_id:
+            return storage.get_test_cases_by_project(project_id)
         brd = storage.get_current_brd()
         if not brd:
             return []
-        test_cases = storage.get_test_cases(brd.id)
-        return [tc.model_dump() for tc in test_cases]
+        test_cases = storage.get_test_cases(brd["id"])
+        return test_cases
     except Exception as e:
         log_error("Error fetching test cases", "requirements", e)
         raise internal_error("Failed to fetch test cases")
@@ -199,9 +201,9 @@ async def generate_test_cases_endpoint(request: GenerateTestCasesRequest):
         _, analysis, documentation, _ = get_project_context()
 
         test_cases = await ai_service.generate_test_cases(
-            brd.model_dump(),
-            analysis.model_dump() if analysis else None,
-            documentation.model_dump() if documentation else None
+            brd,
+            analysis,
+            documentation
         )
 
         if not test_cases:
@@ -209,7 +211,7 @@ async def generate_test_cases_endpoint(request: GenerateTestCasesRequest):
 
         saved_test_cases = storage.create_test_cases(test_cases)
         log_info(f"Generated {len(saved_test_cases)} test cases", "requirements")
-        return [tc.model_dump() for tc in saved_test_cases]
+        return saved_test_cases
 
     except HTTPException:
         raise
@@ -221,11 +223,13 @@ async def generate_test_cases_endpoint(request: GenerateTestCasesRequest):
 # ==================== TEST DATA ENDPOINTS ====================
 
 @router.get("/test-data")
-async def get_test_data():
-    """Get all test data."""
+async def get_test_data(project_id: Optional[str] = Query(None)):
+    """Get all test data, optionally scoped to a project."""
     try:
+        if project_id:
+            return storage.get_test_data_by_project(project_id)
         test_data = storage.get_all_test_data()
-        return [td.model_dump() for td in test_data]
+        return test_data
     except Exception as e:
         log_error("Error fetching test data", "requirements", e)
         raise internal_error("Failed to fetch test data")
@@ -240,15 +244,15 @@ async def generate_test_data_endpoint(request: GenerateTestDataRequest):
             raise bad_request("No BRD found. Please generate a BRD first.")
 
         documentation = restore_documentation(request.documentation)
-        test_cases_list = restore_test_cases(request.testCases, brd.id)
+        test_cases_list = restore_test_cases(request.testCases, brd["id"])
 
         if not test_cases_list:
             raise bad_request("No test cases found. Please generate test cases first.")
 
         test_data = await ai_service.generate_test_data(
-            [tc.model_dump() for tc in test_cases_list],
-            brd.model_dump(),
-            documentation.model_dump() if documentation else None
+            test_cases_list,
+            brd,
+            documentation
         )
 
         if not test_data:
@@ -256,7 +260,7 @@ async def generate_test_data_endpoint(request: GenerateTestDataRequest):
 
         saved_test_data = storage.create_test_data_batch(test_data)
         log_info(f"Generated {len(saved_test_data)} test data entries", "requirements")
-        return [td.model_dump() for td in saved_test_data]
+        return saved_test_data
 
     except HTTPException:
         raise
@@ -272,7 +276,7 @@ async def get_user_stories(brd_id: str):
     """Get all user stories for a BRD."""
     try:
         user_stories = storage.get_user_stories(brd_id)
-        return [s.model_dump() for s in user_stories]
+        return user_stories
     except Exception as e:
         log_error("Error fetching user stories", "requirements", e)
         raise internal_error("Failed to fetch user stories")
@@ -295,8 +299,9 @@ async def generate_user_stories_endpoint(request: GenerateUserStoriesRequest):
 
         knowledge_context = None
         try:
-            search_query = f"{brd.title} {brd.content.overview if hasattr(brd.content, 'overview') else ''}"
-            kb_results = get_kb_service().search_knowledge_base("global", search_query, 5)
+            search_query = f"{brd['title']} {brd.get('content', {}).get('overview', '')}"
+            kb_project_id = brd.get("projectId", "global")
+            kb_results = get_kb_service().search_knowledge_base(kb_project_id, search_query, 5)
             if kb_results:
                 knowledge_context = "\n\n---\n\n".join([
                     f"[Source: {r['filename']}]\n{r['content']}" for r in kb_results
@@ -305,9 +310,9 @@ async def generate_user_stories_endpoint(request: GenerateUserStoriesRequest):
             log_error("Knowledge base search error", "requirements", kb_error)
 
         user_stories = await ai_service.generate_user_stories(
-            brd.model_dump(),
-            documentation.model_dump() if documentation else None,
-            database_schema.model_dump() if database_schema else None,
+            brd,
+            documentation,
+            database_schema,
             parent_context,
             knowledge_context
         )
@@ -322,7 +327,7 @@ async def generate_user_stories_endpoint(request: GenerateUserStoriesRequest):
 
         saved_stories = storage.create_user_stories(stories_with_parent)
         log_info(f"Generated {len(saved_stories)} user stories", "requirements")
-        return [s.model_dump() for s in saved_stories]
+        return saved_stories
 
     except HTTPException:
         raise
@@ -339,7 +344,7 @@ async def update_user_story(id: str, updates: dict):
         if not updated_story:
             raise not_found("User story not found")
         log_info(f"User story updated: {id}", "requirements")
-        return updated_story.model_dump()
+        return updated_story
     except HTTPException:
         raise
     except Exception as e:
@@ -373,23 +378,23 @@ async def generate_copilot_prompt_endpoint(request: GenerateCopilotPromptRequest
         if not brd:
             raise bad_request("No BRD found. Please generate a BRD first.")
 
-        user_stories_list = restore_user_stories(request.userStories, brd.id)
+        user_stories_list = restore_user_stories(request.userStories, brd["id"])
         if not user_stories_list:
             raise bad_request("No user stories found. Please generate user stories first.")
 
         _, analysis, documentation, database_schema = get_project_context()
-        documentation_data = documentation.model_dump() if documentation else request.documentation
-        analysis_data = analysis.model_dump() if analysis else request.analysis
-        database_schema_data = database_schema.model_dump() if database_schema else request.databaseSchema
+        documentation_data = documentation if documentation else request.documentation
+        analysis_data = analysis if analysis else request.analysis
+        database_schema_data = database_schema if database_schema else request.databaseSchema
 
         feature_request_data = request.featureRequest
         if not feature_request_data:
             fr = storage.get_current_feature_request()
             if fr:
-                feature_request_data = fr.model_dump()
+                feature_request_data = fr
 
         prompt = await ai_service.generate_copilot_prompt(
-            [s.model_dump() for s in user_stories_list],
+            user_stories_list,
             documentation_data,
             analysis_data,
             database_schema_data,

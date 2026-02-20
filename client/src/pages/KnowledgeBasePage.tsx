@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
+import { useProject } from "@/hooks/useProject";
 import { EmptyState } from "@/components/EmptyState";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import type { KnowledgeDocument } from "@shared/schema";
@@ -26,11 +27,18 @@ export default function KnowledgeBasePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { currentProjectId } = useProject();
+
+  const kbQueryParam = currentProjectId ? `?project_id=${currentProjectId}` : "";
 
   const { data: documents, isLoading } = useQuery<KnowledgeDocument[]>({
-    queryKey: ["/api/knowledge-base"],
+    queryKey: ["/api/knowledge-base", currentProjectId],
+    queryFn: async () => {
+      const res = await fetch(`/api/knowledge-base${kbQueryParam}`);
+      if (!res.ok) throw new Error("Failed to fetch documents");
+      return res.json();
+    },
     refetchInterval: (query) => {
-      // Poll every 2 seconds while any document is processing
       const docs = query.state.data;
       if (docs && docs.some(d => d.status === "processing")) {
         return 2000;
@@ -40,9 +48,13 @@ export default function KnowledgeBasePage() {
   });
 
   const { data: stats } = useQuery<{ documentCount: number; chunkCount: number }>({
-    queryKey: ["/api/knowledge-base/stats"],
+    queryKey: ["/api/knowledge-base/stats", currentProjectId],
+    queryFn: async () => {
+      const res = await fetch(`/api/knowledge-base/stats${kbQueryParam}`);
+      if (!res.ok) throw new Error("Failed to fetch stats");
+      return res.json();
+    },
     refetchInterval: (query) => {
-      // Also refresh stats when documents are processing
       if (documents?.some(d => d.status === "processing")) {
         return 2000;
       }
@@ -54,6 +66,9 @@ export default function KnowledgeBasePage() {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append("file", file);
+      if (currentProjectId) {
+        formData.append("project_id", currentProjectId);
+      }
       
       const response = await fetch("/api/knowledge-base/upload", {
         method: "POST",

@@ -1,7 +1,7 @@
 """Projects API router."""
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from typing import List
-from schemas import Project, AnalyzeRequest
+from schemas import AnalyzeRequest
 from repositories import storage
 from utils.exceptions import not_found, internal_error
 from utils.response import success_response
@@ -10,30 +10,67 @@ from core.logging import log_info, log_error
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
-@router.get("", response_model=List[Project])
+@router.get("")
 async def get_projects():
     """Get all projects."""
     try:
         projects = storage.get_all_projects()
-        return [p.model_dump() for p in projects]
+        return projects
     except Exception as e:
         log_error("Error fetching projects", "api", e)
         raise internal_error("Failed to fetch projects")
 
 
-@router.get("/{id}", response_model=Project)
+@router.post("", status_code=201)
+async def create_project(request: dict):
+    """Create a new project."""
+    try:
+        project = storage.create_project({
+            "name": request.get("name", ""),
+            "repoUrl": request.get("repoUrl", ""),
+            "description": request.get("description", ""),
+            "techStack": request.get("techStack", []),
+            "status": request.get("status", "pending"),
+        })
+        return project
+    except Exception as e:
+        log_error("Error creating project", "api", e)
+        raise internal_error("Failed to create project")
+
+
+@router.get("/{id}")
 async def get_project(id: str):
     """Get a specific project."""
     try:
         project = storage.get_project(id)
         if not project:
             raise not_found("Project")
-        return project.model_dump()
+        return project
     except HTTPException:
         raise
     except Exception as e:
         log_error(f"Error fetching project {id}", "api", e)
         raise internal_error("Failed to fetch project")
+
+
+@router.patch("/{id}")
+async def update_project(id: str, request: dict):
+    """Update a project."""
+    try:
+        project = storage.get_project(id)
+        if not project:
+            raise not_found("Project")
+        updates = {}
+        for key in ["name", "repoUrl", "description", "status", "techStack"]:
+            if key in request:
+                updates[key] = request[key]
+        updated = storage.update_project(id, updates)
+        return updated
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error(f"Error updating project {id}", "api", e)
+        raise internal_error("Failed to update project")
 
 
 @router.delete("/{id}")
@@ -64,7 +101,6 @@ async def analyze_project(
     try:
         repo_url = request.repoUrl
         
-        # Validate GitHub URL
         match = re.match(
             r"github\.com/([^/]+)/([^/]+)",
             repo_url.replace("https://", "")
@@ -74,7 +110,6 @@ async def analyze_project(
         
         repo_name = f"{match.group(1)}/{match.group(2)}".replace(".git", "")
         
-        # Create project
         from datetime import datetime
         project = storage.create_project({
             "name": repo_name,
@@ -84,14 +119,11 @@ async def analyze_project(
             "analyzedAt": datetime.utcnow().isoformat(),
         })
         
-        # Run analysis in background
         async def run_analysis(project_id: str, repo_url: str):
             try:
-                # Analyze repository
                 analysis = await ai_service.analyze_repository(repo_url, project_id)
                 storage.create_analysis(analysis)
                 
-                # Update project
                 tech_stack = []
                 if analysis.get("techStack"):
                     tech_stack = (
@@ -104,21 +136,19 @@ async def analyze_project(
                     "description": analysis.get("summary", ""),
                 })
                 
-                # Generate documentation
                 try:
                     updated_project = storage.get_project(project_id)
                     if updated_project:
                         documentation = await ai_service.generate_documentation(
                             analysis,
-                            updated_project.model_dump()
+                            updated_project
                         )
                         saved_doc = storage.create_documentation(documentation)
                         
-                        # Generate BPMN
                         try:
                             log_info("Generating BPMN diagrams...", "api")
                             bpmn_data = await ai_service.generate_bpmn_diagram(
-                                saved_doc.model_dump(),
+                                saved_doc,
                                 analysis
                             )
                             storage.create_bpmn_diagram(bpmn_data)
@@ -133,9 +163,9 @@ async def analyze_project(
                 log_error("Analysis failed", "api", error)
                 storage.update_project(project_id, {"status": "error"})
         
-        background_tasks.add_task(run_analysis, project.id, repo_url)
+        background_tasks.add_task(run_analysis, project["id"], repo_url)
         
-        return project.model_dump()
+        return project
     except HTTPException:
         raise
     except Exception as e:

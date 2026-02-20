@@ -12,6 +12,7 @@ import { LoadingOverlay, LoadingSpinner } from "@/components/LoadingSpinner";
 import { EmptyState } from "@/components/EmptyState";
 import { apiRequest } from "@/lib/queryClient";
 import { useSession } from "@/hooks/useSession";
+import { useProject } from "@/hooks/useProject";
 import type { Project } from "@shared/schema";
 
 const workflowSteps = [
@@ -30,19 +31,19 @@ export default function AnalyzePage() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { saveSessionArtifact } = useSession();
+  const { projects, selectProject: setActiveProject } = useProject();
 
-  // Poll for projects to check status
-  const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({
+  const { isLoading: projectsLoading } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
-    refetchInterval: analyzingProjectId ? 2000 : false, // Poll every 2s when analyzing
+    refetchInterval: analyzingProjectId ? 2000 : false,
   });
 
-  // Check if analyzing project is complete
   useEffect(() => {
     if (analyzingProjectId && projects) {
       const project = projects.find(p => p.id === analyzingProjectId);
       if (project && project.status === "completed") {
         saveSessionArtifact("project", project);
+        setActiveProject(project.id);
         setAnalyzingProjectId(null);
         queryClient.invalidateQueries({ queryKey: ["/api/analysis/current"] });
         queryClient.invalidateQueries({ queryKey: ["/api/documentation/current"] });
@@ -93,6 +94,7 @@ export default function AnalyzePage() {
 
   const selectProject = (project: Project) => {
     saveSessionArtifact("project", project);
+    setActiveProject(project.id);
     queryClient.setQueryData(["currentProject"], project);
     navigate("/documentation");
   };

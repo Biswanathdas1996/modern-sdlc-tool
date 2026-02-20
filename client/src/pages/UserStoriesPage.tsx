@@ -20,6 +20,7 @@ import { WorkflowHeader } from "@/components/WorkflowHeader";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useSession } from "@/hooks/useSession";
+import { useProject } from "@/hooks/useProject";
 import type { BRD, UserStory } from "@shared/schema";
 
 const workflowSteps = [
@@ -60,9 +61,16 @@ export default function UserStoriesPage() {
   const [creationMode, setCreationMode] = useState<"new" | "subtask">("new");
   const { toast } = useToast();
   const { saveSessionArtifact, getSessionArtifact } = useSession();
+  const { currentProjectId } = useProject();
 
   const { data: brd, isLoading: brdLoading } = useQuery<BRD>({
-    queryKey: ["/api/brd/current"],
+    queryKey: ["/api/brd/current", currentProjectId],
+    queryFn: async () => {
+      const url = currentProjectId ? `/api/brd/current?project_id=${currentProjectId}` : `/api/brd/current`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
   });
 
   const { data: userStories, isLoading: storiesLoading } = useQuery<UserStory[]>({
@@ -160,7 +168,7 @@ export default function UserStoriesPage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/test-cases"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/test-cases", currentProjectId] });
       setIsGeneratingTests(false);
       navigate("/test-cases");
     },

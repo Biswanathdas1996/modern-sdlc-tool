@@ -18,6 +18,8 @@ import {
   Settings,
   LogOut,
   User,
+  ChevronsUpDown,
+  FolderOpen,
 } from "lucide-react";
 import {
   Sidebar,
@@ -31,10 +33,18 @@ import {
   SidebarHeader,
   SidebarFooter,
 } from "@/components/ui/sidebar";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
+import { useProject } from "@/hooks/useProject";
 
 interface WorkflowStep {
   id: string;
@@ -132,13 +142,13 @@ const agentItems = [
 ];
 
 interface AppSidebarProps {
-  currentProject?: { name: string; status: string } | null;
   completedSteps?: string[];
 }
 
-export function AppSidebar({ currentProject, completedSteps = [] }: AppSidebarProps) {
+export function AppSidebar({ completedSteps = [] }: AppSidebarProps) {
   const [location] = useLocation();
   const { user, isAdmin, hasPermission, logout } = useAuth();
+  const { projects, currentProject, selectProject, isLoading: projectsLoading } = useProject();
 
   const getStepStatus = (step: WorkflowStep) => {
     if (completedSteps.includes(step.id)) return "completed";
@@ -213,32 +223,58 @@ export function AppSidebar({ currentProject, completedSteps = [] }: AppSidebarPr
       </SidebarHeader>
 
       <SidebarContent className="px-2">
-        {currentProject && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
-              Current Project
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <div className="mx-2 p-3 rounded-md bg-sidebar-accent/50 border border-sidebar-border">
-                <div className="flex items-center gap-2">
-                  <GitBranch className="h-4 w-4 text-primary" />
-                  <span className="font-medium text-sm truncate">{currentProject.name}</span>
-                </div>
-                <Badge 
-                  variant="outline" 
-                  className={cn(
-                    "mt-2 text-xs",
-                    currentProject.status === "completed" && "bg-success/10 text-success border-success/30",
-                    currentProject.status === "analyzing" && "bg-warning/10 text-warning border-warning/30",
-                    currentProject.status === "error" && "bg-destructive/10 text-destructive border-destructive/30"
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
+            Project
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <div className="mx-2">
+              {projects.length === 0 ? (
+                <div className="p-3 rounded-md bg-sidebar-accent/50 border border-sidebar-border text-center">
+                  <FolderOpen className="h-5 w-5 mx-auto text-muted-foreground mb-1" />
+                  <p className="text-xs text-muted-foreground">No projects yet</p>
+                  {isAdmin && (
+                    <Link href="/admin" className="text-xs text-primary hover:underline mt-1 block" data-testid="link-create-project">
+                      Create a project
+                    </Link>
                   )}
+                </div>
+              ) : (
+                <Select
+                  value={currentProject?.id || ""}
+                  onValueChange={selectProject}
                 >
-                  {currentProject.status}
-                </Badge>
-              </div>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+                  <SelectTrigger className="w-full" data-testid="select-project">
+                    <div className="flex items-center gap-2 truncate">
+                      <GitBranch className="h-3.5 w-3.5 shrink-0 text-primary" />
+                      <SelectValue placeholder="Select project" />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((p) => (
+                      <SelectItem key={p.id} value={p.id} data-testid={`option-project-${p.id}`}>
+                        <div className="flex items-center gap-2">
+                          <span className="truncate">{p.name}</span>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "text-[10px] px-1 py-0",
+                              p.status === "completed" && "bg-success/10 text-success border-success/30",
+                              p.status === "analyzing" && "bg-warning/10 text-warning border-warning/30",
+                              p.status === "error" && "bg-destructive/10 text-destructive border-destructive/30"
+                            )}
+                          >
+                            {p.status}
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </SidebarGroupContent>
+        </SidebarGroup>
 
         {visiblePrereqSteps.length > 0 && (
           <SidebarGroup>

@@ -1,5 +1,4 @@
 import { Switch, Route, useLocation, Redirect } from "wouter";
-import { useQuery } from "@tanstack/react-query";
 import { queryClient, hydrateFromLocalStorage } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -10,6 +9,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SessionContext, useSessionProvider } from "@/hooks/useSession";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { ProjectProvider, useProject } from "@/hooks/useProject";
 import { Loader2 } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/LoginPage";
@@ -27,7 +27,6 @@ import SecurityAgentPage from "@/pages/SecurityAgentPage";
 import UnitTestAgentPage from "@/pages/UnitTestAgentPage";
 import WebTestAgentPage from "@/pages/WebTestAgentPage";
 import CodeGenerationPage from "@/pages/CodeGenerationPage";
-import type { Project } from "@shared/schema";
 
 hydrateFromLocalStorage();
 
@@ -89,12 +88,7 @@ function Router() {
 }
 
 function AppLayout() {
-  const { data: projects } = useQuery<Project[]>({
-    queryKey: ["/api/projects"],
-  });
-  
-  const currentProject = projects && projects.length > 0 ? projects[0] : null;
-  const { user, logout, isAdmin } = useAuth();
+  const { user } = useAuth();
 
   const sidebarStyle = {
     "--sidebar-width": "18rem",
@@ -104,10 +98,7 @@ function AppLayout() {
   return (
     <SidebarProvider style={sidebarStyle as React.CSSProperties}>
       <div className="flex h-screen w-full overflow-hidden">
-        <AppSidebar 
-          currentProject={currentProject ? { name: currentProject.name, status: currentProject.status } : null}
-          completedSteps={[]}
-        />
+        <AppSidebar completedSteps={[]} />
         <SidebarInset className="flex flex-col flex-1 overflow-hidden">
           <header className="flex items-center justify-between h-14 shrink-0 gap-2 px-4 border-b border-border bg-background">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
@@ -155,7 +146,9 @@ function AuthGate() {
 
   return (
     <SessionWrapper>
-      <AppLayout />
+      <ProjectProvider>
+        <AppLayout />
+      </ProjectProvider>
     </SessionWrapper>
   );
 }

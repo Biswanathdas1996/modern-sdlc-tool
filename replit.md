@@ -25,7 +25,7 @@ Large backend modules have been split into focused sub-modules for maintainabili
 - Pattern: Coordinator/orchestrator classes import standalone functions from sub-modules. Backward compatibility maintained via class delegation methods and `__init__.py` exports.
 
 ### Data Storage
-Drizzle ORM with a PostgreSQL dialect is used for database interactions, with Zod schemas for validation. The application manages data for projects, repository analysis, documentation, feature requests, BRDs, test cases, and test data. In-memory storage is used via a `StorageManager` and `BaseRepository` pattern.
+PostgreSQL is the primary data store for all domain entities, accessed via `psycopg2` through a custom repository layer (`server_py/repositories/pg_repository.py`). All domain tables (projects, repo_analyses, documentation, bpmn_diagrams, feature_requests, brds, test_cases, test_data, user_stories, database_schemas, knowledge_documents) use `project_id` foreign keys for multi-tenancy. JSONB columns store structured nested data (tech stacks, BRD content, test steps, etc.). The `StorageManager` (`server_py/repositories/storage.py`) provides a unified API returning plain Python dicts with camelCase keys. Schema initialization runs at startup via `init_postgres_database()`. Frontend uses Zod schemas in `shared/schema.ts` for type validation. MongoDB Atlas remains for the knowledge base vector search with per-project scoping via `project_id` field.
 
 ### Key Design Patterns
 The system employs shared types between client and server, path aliases for organized imports, and a clear separation of concerns with routes, services, and repositories. A session restoration mechanism allows the client to send cached session data to the backend, ensuring continuity even after server restarts.
@@ -43,6 +43,7 @@ The application uses a GitHub-inspired color palette, JetBrains Mono for code bl
 - **Knowledge Base (RAG System)**: Integrates with MongoDB Atlas for a RAG system. Supports drag-and-drop document upload (TXT, MD, JSON, CSV), automatic text chunking, and vector embeddings (OpenAI `text-embedding-3-small`) for semantic search during BRD and user story generation.
 - **External Database Schema Integration**: Users can connect to external PostgreSQL databases to fetch and store schema details, which are then used as context for AI prompts.
 - **Session Management**: Each workflow run generates a unique session ID, persisting all generated artifacts across the client and allowing backend restoration of session data.
+- **Project Management (Multi-Tenancy)**: All domain entities are scoped to projects via `project_id` foreign keys. Admins can create projects manually via the Admin page (Projects tab) or through GitHub repo analysis. A global project selector in the sidebar allows switching between projects. Frontend uses `useProject()` context hook (`client/src/hooks/useProject.tsx`) for project-scoped data access. Projects API supports CRUD at `/api/projects` with GET, POST, PATCH, DELETE endpoints.
 
 ## External Dependencies
 

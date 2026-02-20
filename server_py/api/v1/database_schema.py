@@ -40,6 +40,7 @@ async def connect_database_schema(request: ConnectDatabaseRequest):
         if not projects:
             raise bad_request("Please analyze a repository first")
         project = projects[0]
+        project_id = project["id"]
         
         try:
             conn = psycopg2.connect(connection_string)
@@ -118,10 +119,8 @@ async def connect_database_schema(request: ConnectDatabaseRequest):
             cursor.close()
             conn.close()
             
-            # Delete existing schema and create new
-            storage.delete_database_schema(project.id)
+            storage.delete_database_schema(project_id)
             
-            # Mask password in connection string
             masked_connection_string = re.sub(
                 r"(://[^:]+:)[^@]+(@)",
                 r"\1****\2",
@@ -129,25 +128,24 @@ async def connect_database_schema(request: ConnectDatabaseRequest):
             )
             
             schema_info = storage.create_database_schema({
-                "projectId": project.id,
+                "projectId": project_id,
                 "connectionString": masked_connection_string,
                 "databaseName": database_name,
                 "tables": tables,
             })
             
-            # Update documentation with schema
-            documentation = storage.get_documentation(project.id)
+            documentation = storage.get_documentation(project_id)
             if documentation:
-                storage.update_documentation(project.id, {
+                storage.update_documentation(project_id, {
                     "databaseSchema": {
                         "databaseName": database_name,
                         "connectionString": masked_connection_string,
                         "tables": tables,
                     },
                 })
-                log_info(f"Database schema saved to documentation for project {project.id}", "database_schema")
+                log_info(f"Database schema saved to documentation for project {project_id}", "database_schema")
             
-            return schema_info.model_dump()
+            return schema_info
             
         except Exception as db_error:
             log_error("Database connection error", "database_schema", db_error)
@@ -168,8 +166,8 @@ async def get_current_database_schema():
         if not projects:
             return None
         
-        schema = storage.get_database_schema(projects[0].id)
-        return schema.model_dump() if schema else None
+        schema = storage.get_database_schema(projects[0]["id"])
+        return schema
         
     except Exception as e:
         log_error("Error fetching database schema", "database_schema", e)
@@ -185,13 +183,13 @@ async def delete_current_database_schema():
             raise not_found("No project found")
         
         project = projects[0]
-        storage.delete_database_schema(project.id)
+        project_id = project["id"]
+        storage.delete_database_schema(project_id)
         
-        # Remove from documentation
-        documentation = storage.get_documentation(project.id)
+        documentation = storage.get_documentation(project_id)
         if documentation:
-            storage.update_documentation(project.id, {"databaseSchema": None})
-            log_info(f"Database schema removed from documentation for project {project.id}", "database_schema")
+            storage.update_documentation(project_id, {"databaseSchema": None})
+            log_info(f"Database schema removed from documentation for project {project_id}", "database_schema")
         
         return success_response(message="Database schema deleted successfully")
         
