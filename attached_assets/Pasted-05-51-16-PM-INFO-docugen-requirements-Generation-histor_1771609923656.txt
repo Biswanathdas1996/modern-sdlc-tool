@@ -1,0 +1,31 @@
+05:51:16 PM [INFO] [docugen] [requirements] Generation history: 3 feature requests for project 81afbcbf-4c75-4126-bbef-33e083c84ed0
+05:51:16 PM [INFO] [docugen] GET /api/generation-history 200 in 843ms
+INFO:     172.31.77.226:35594 - "GET /api/generation-history?project_id=81afbcbf-4c75-4126-bbef-33e083c84ed0 HTTP/1.1" 200 OK
+05:51:17 PM [INFO] [docugen] GET /api/sessions/active 200 in 520ms
+INFO:     172.31.77.226:43218 - "GET /api/sessions/active?project_id=81afbcbf-4c75-4126-bbef-33e083c84ed0 HTTP/1.1" 200 OK
+05:51:29 PM [INFO] [docugen] [ai] PwC GenAI response received successfully
+05:51:29 PM [ERROR] [docugen] [requirements] Error generating test data: null value in column "name" of relation "test_data" violates not-null constraint
+DETAIL:  Failing row contains (be22b416-20a0-4c1f-a36f-7e5e4eada8ea, 378d2cdc-554a-4dfc-ad8e-ef427a137dda, 77ebda82-055c-4b6e-8aef-e54f39646319, null, Tests a successful end-to-end scenario with valid employee and b..., valid, {"netPay": 3500.0, "employeeId": "EMP001", "transferDate": "2024..., 2026-02-20 17:51:29.690229).
+Traceback (most recent call last):
+  File "/home/runner/workspace/server_py/api/v1/requirements.py", line 278, in generate_test_data_endpoint
+    saved_test_data = storage.create_test_data_batch(test_data)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/repositories/storage.py", line 137, in create_test_data_batch
+    return [self.create_test_data(d) for d in data_list]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/repositories/storage.py", line 137, in <listcomp>
+    return [self.create_test_data(d) for d in data_list]
+            ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/repositories/storage.py", line 134, in create_test_data
+    return self.test_data_repo.create(data)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/repositories/pg_repository.py", line 229, in create
+    cur.execute(sql, vals)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/psycopg2/extras.py", line 236, in execute
+    return super().execute(query, vars)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+psycopg2.errors.NotNullViolation: null value in column "name" of relation "test_data" violates not-null constraint
+DETAIL:  Failing row contains (be22b416-20a0-4c1f-a36f-7e5e4eada8ea, 378d2cdc-554a-4dfc-ad8e-ef427a137dda, 77ebda82-055c-4b6e-8aef-e54f39646319, null, Tests a successful end-to-end scenario with valid employee and b..., valid, {"netPay": 3500.0, "employeeId": "EMP001", "transferDate": "2024..., 2026-02-20 17:51:29.690229).
+
+05:51:29 PM [INFO] [docugen] POST /api/test-data/generate 500 in 30313ms
+INFO:     172.31.77.226:38030 - "POST /api/test-data/generate HTTP/1.1" 500 Internal Server Error

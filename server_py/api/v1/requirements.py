@@ -272,8 +272,10 @@ async def generate_test_data_endpoint(request: GenerateTestDataRequest):
         if not test_data:
             raise internal_error("Failed to generate test data - no data returned")
 
-        for td in test_data:
+        for i, td in enumerate(test_data):
             td["projectId"] = brd_project_id
+            if not td.get("name"):
+                td["name"] = td.get("title") or td.get("description", f"Test Data {i+1}")[:100]
 
         saved_test_data = storage.create_test_data_batch(test_data)
         log_info(f"Generated {len(saved_test_data)} test data entries", "requirements")
