@@ -77,8 +77,10 @@ class KnowledgeBaseService:
         except Exception as error:
             log_error(f"Index setup error for project {project_id}", "kb", error)
     
-    def _ensure_vector_index(self, collection, collection_name: str):
-        """Create Atlas Vector Search index on the embedding field if not exists."""
+    def _ensure_vector_index(self, collection, collection_name: str) -> str:
+        """Create Atlas Vector Search index on the embedding field if not exists.
+        Returns: 'created', 'exists', or 'error'
+        """
         try:
             from pymongo.operations import SearchIndexModel
             
@@ -109,9 +111,14 @@ class KnowledgeBaseService:
                 )
                 collection.create_search_index(model=vector_index)
                 log_info(f"Created vector_index on {collection_name}", "kb")
+                return "created"
+            
+            log_info(f"vector_index already exists on {collection_name}", "kb")
+            return "exists"
             
         except Exception as error:
             log_error(f"Vector index setup on {collection_name}", "kb", error)
+            return "error"
     
     def _get_chunks_collection(self, project_id: str):
         self._ensure_project_indexes(project_id)
@@ -126,9 +133,16 @@ class KnowledgeBaseService:
         document_id: str, 
         project_id: str, 
         filename: str, 
-        content: str
+        content: str,
+        on_progress: Optional[callable] = None
     ) -> int:
-        """Ingest a document with paragraph-based chunking and embedding generation."""
+        """Ingest a document with paragraph-based chunking, embedding generation,
+        and vector index creation/verification. Calls on_progress(step, detail) if provided."""
+        def report(step: str, detail: str = ""):
+            if on_progress:
+                on_progress(step, detail)
+        
+        report("preparing", f"Setting up project collection for '{filename}'...")
         collection = self._get_chunks_collection(project_id)
         docs_col = self._get_docs_collection(project_id)
         
@@ -140,16 +154,21 @@ class KnowledgeBaseService:
         
         collection.delete_many({"documentId": document_id})
         
+        report("chunking", f"Splitting '{filename}' into semantic chunks...")
         chunks = chunk_text(content)
         total_chunks = len(chunks)
         avg_chars = sum(len(c) for c in chunks) // max(total_chunks, 1)
         log_info(f"Document '{filename}' split into {total_chunks} chunks (avg {avg_chars} chars)", "kb")
+        report("chunking_done", f"Created {total_chunks} chunks (avg {avg_chars} chars each)")
         
+        report("embedding", f"Generating vector embeddings for {total_chunks} chunks...")
         log_info(f"Generating embeddings for {total_chunks} chunks...", "kb")
         embeddings = generate_embeddings_batch(chunks)
         embedded_count = sum(1 for e in embeddings if e is not None)
         log_info(f"Generated {embedded_count}/{total_chunks} embeddings successfully", "kb")
+        report("embedding_done", f"Generated {embedded_count}/{total_chunks} embeddings (BAAI/bge-small-en-v1.5, 384-dim)")
         
+        report("storing", f"Storing {total_chunks} chunks in MongoDB collection...")
         inserted_count = 0
         
         for i, chunk in enumerate(chunks):
@@ -178,7 +197,20 @@ class KnowledgeBaseService:
             except Exception as error:
                 log_error(f"Error processing chunk {i}", "kb", error)
         
-        log_info(f"Ingested {inserted_count} chunks ({embedded_count} with embeddings) for '{filename}' into {self._chunks_collection_name(project_id)}", "kb")
+        report("storing_done", f"Stored {inserted_count} chunks in {self._chunks_collection_name(project_id)}")
+        
+        report("indexing", "Creating/verifying Atlas Vector Search index for semantic search...")
+        chunks_name = self._chunks_collection_name(project_id)
+        index_status = self._ensure_vector_index(collection, chunks_name)
+        if index_status == "created":
+            report("indexing_done", f"Created new vector_index on {chunks_name} (building in background)")
+        elif index_status == "exists":
+            report("indexing_done", f"Vector search index verified on {chunks_name}")
+        else:
+            report("indexing_done", "Vector index setup encountered an issue; in-memory search will be used as fallback")
+        
+        log_info(f"Ingested {inserted_count} chunks ({embedded_count} with embeddings) for '{filename}' into {chunks_name}", "kb")
+        report("complete", f"Successfully ingested '{filename}': {inserted_count} chunks with {embedded_count} embeddings, vector index {index_status}")
         return inserted_count
     
     def search_knowledge_base(

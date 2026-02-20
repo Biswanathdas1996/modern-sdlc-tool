@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   FileText, 
@@ -8,7 +8,10 @@ import {
   AlertCircle,
   Search,
   Library,
-  FileUp
+  FileUp,
+  Database,
+  Cpu,
+  FileSearch
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,9 +24,50 @@ import { EmptyState } from "@/components/EmptyState";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import type { KnowledgeDocument } from "@shared/schema";
 
+interface UploadProgress {
+  step: string;
+  detail: string;
+}
+
+const STEP_ICONS: Record<string, typeof Loader2> = {
+  upload: FileUp,
+  document_created: Database,
+  preparing: Database,
+  chunking: FileSearch,
+  chunking_done: FileSearch,
+  embedding: Cpu,
+  embedding_done: Cpu,
+  storing: Database,
+  storing_done: Database,
+  indexing: Search,
+  indexing_done: Search,
+  complete: CheckCircle,
+  done: CheckCircle,
+  error: AlertCircle,
+};
+
+const STEP_LABELS: Record<string, string> = {
+  upload: "Uploading",
+  document_created: "Document Created",
+  preparing: "Preparing Collection",
+  chunking: "Chunking Document",
+  chunking_done: "Chunking Complete",
+  embedding: "Generating Embeddings",
+  embedding_done: "Embeddings Generated",
+  storing: "Storing Chunks",
+  storing_done: "Chunks Stored",
+  indexing: "Creating Vector Index",
+  indexing_done: "Index Ready",
+  complete: "Complete",
+  done: "Complete",
+  error: "Error",
+};
+
 export default function KnowledgeBasePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadSteps, setUploadSteps] = useState<UploadProgress[]>([]);
+  const [currentStep, setCurrentStep] = useState<UploadProgress | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -62,8 +106,12 @@ export default function KnowledgeBasePage() {
     },
   });
 
-  const uploadMutation = useMutation({
-    mutationFn: async (file: File) => {
+  const uploadWithProgress = useCallback(async (file: File) => {
+    setIsUploading(true);
+    setUploadSteps([]);
+    setCurrentStep(null);
+    
+    try {
       const formData = new FormData();
       formData.append("file", file);
       if (currentProjectId) {
@@ -76,28 +124,85 @@ export default function KnowledgeBasePage() {
       });
       
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Upload failed");
+        let errorMsg = "Upload failed";
+        try {
+          const errData = await response.json();
+          errorMsg = errData.detail || errData.error || errorMsg;
+        } catch {}
+        throw new Error(errorMsg);
       }
       
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/knowledge-base"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/knowledge-base/stats"] });
-      toast({
-        title: "Document uploaded",
-        description: "Your document is being processed for the knowledge base.",
-      });
-    },
-    onError: (error: Error) => {
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      
+      if (!reader) {
+        throw new Error("No response stream available");
+      }
+      
+      let buffer = "";
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              const progress: UploadProgress = {
+                step: data.step,
+                detail: data.detail,
+              };
+              
+              setCurrentStep(progress);
+              setUploadSteps(prev => [...prev, progress]);
+              
+              if (data.step === "done") {
+                queryClient.invalidateQueries({ queryKey: ["/api/knowledge-base"] });
+                queryClient.invalidateQueries({ queryKey: ["/api/knowledge-base/stats"] });
+                toast({
+                  title: "Document uploaded & indexed",
+                  description: data.detail,
+                });
+              }
+              
+              if (data.step === "error") {
+                toast({
+                  title: "Upload error",
+                  description: data.detail,
+                  variant: "destructive",
+                });
+              }
+            } catch {}
+          }
+        }
+      }
+      
+      setTimeout(() => {
+        setIsUploading(false);
+        setUploadSteps([]);
+        setCurrentStep(null);
+      }, 2000);
+      
+    } catch (error: any) {
       toast({
         title: "Upload failed",
-        description: error.message,
+        description: error.message || "Something went wrong",
         variant: "destructive",
       });
-    },
-  });
+      setIsUploading(false);
+      setUploadSteps([]);
+      setCurrentStep(null);
+    } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  }, [currentProjectId, queryClient, toast]);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -131,29 +236,14 @@ export default function KnowledgeBasePage() {
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
-    setIsUploading(true);
-    try {
-      await uploadMutation.mutateAsync(file);
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }
+    await uploadWithProgress(file);
   };
 
   const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     const file = event.dataTransfer.files?.[0];
     if (!file) return;
-
-    setIsUploading(true);
-    try {
-      await uploadMutation.mutateAsync(file);
-    } finally {
-      setIsUploading(false);
-    }
+    await uploadWithProgress(file);
   };
 
   const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
@@ -211,10 +301,10 @@ export default function KnowledgeBasePage() {
       <div className="flex-1 overflow-auto p-6">
         <div className="max-w-4xl mx-auto space-y-6">
           <Card
-            className="border-2 border-dashed hover:border-primary/50 transition-colors cursor-pointer"
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onClick={() => fileInputRef.current?.click()}
+            className={`border-2 border-dashed transition-colors ${isUploading ? "border-primary/50 bg-primary/5" : "hover:border-primary/50 cursor-pointer"}`}
+            onDrop={isUploading ? undefined : handleDrop}
+            onDragOver={isUploading ? undefined : handleDragOver}
+            onClick={isUploading ? undefined : () => fileInputRef.current?.click()}
             data-testid="upload-dropzone"
           >
             <CardContent className="flex flex-col items-center justify-center py-10">
@@ -227,10 +317,49 @@ export default function KnowledgeBasePage() {
                 data-testid="input-file-upload"
               />
               {isUploading ? (
-                <>
-                  <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-                  <p className="text-lg font-medium">Uploading...</p>
-                </>
+                <div className="w-full max-w-md" data-testid="upload-progress">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Loader2 className="h-6 w-6 text-primary animate-spin shrink-0" />
+                    <p className="text-lg font-medium">
+                      {currentStep ? (STEP_LABELS[currentStep.step] || currentStep.step) : "Processing..."}
+                    </p>
+                  </div>
+                  
+                  {currentStep && (
+                    <p className="text-sm text-muted-foreground mb-4" data-testid="text-current-step">
+                      {currentStep.detail}
+                    </p>
+                  )}
+                  
+                  <div className="space-y-2">
+                    {uploadSteps.map((step, idx) => {
+                      const StepIcon = STEP_ICONS[step.step] || Loader2;
+                      const isComplete = step.step.endsWith("_done") || step.step === "done" || step.step === "complete";
+                      const isError = step.step === "error";
+                      const isActive = idx === uploadSteps.length - 1 && !isComplete && !isError;
+                      
+                      return (
+                        <div 
+                          key={idx} 
+                          className={`flex items-start gap-2 text-xs rounded-md px-3 py-1.5 ${
+                            isError ? "text-destructive bg-destructive/10" : 
+                            isComplete ? "text-green-600 dark:text-green-400 bg-green-500/10" : 
+                            isActive ? "text-primary bg-primary/10" : 
+                            "text-muted-foreground"
+                          }`}
+                          data-testid={`step-${step.step}`}
+                        >
+                          {isActive ? (
+                            <Loader2 className="h-3.5 w-3.5 mt-0.5 shrink-0 animate-spin" />
+                          ) : (
+                            <StepIcon className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                          )}
+                          <span>{step.detail}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               ) : (
                 <>
                   <FileUp className="h-12 w-12 text-muted-foreground mb-4" />
@@ -350,10 +479,9 @@ export default function KnowledgeBasePage() {
                 <div>
                   <h3 className="font-medium mb-1">How it works</h3>
                   <p className="text-sm text-muted-foreground">
-                    Documents are split into chunks and stored in MongoDB Atlas. 
-                    When you generate BRDs or user stories, the system automatically 
-                    searches for relevant information using keyword matching to 
-                    provide better context for AI generation.
+                    Documents are split into semantic chunks, embedded using BAAI/bge-small-en-v1.5 (384-dim vectors), 
+                    and indexed with Atlas Vector Search for each project. When you generate BRDs or user stories, the 
+                    system performs semantic similarity search to find the most relevant content for AI generation.
                   </p>
                 </div>
               </div>

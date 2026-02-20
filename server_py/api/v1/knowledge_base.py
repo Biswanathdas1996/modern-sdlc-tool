@@ -1,8 +1,12 @@
 """Knowledge base API router."""
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from typing import List, Dict, Any, Optional
 from io import BytesIO
 import json
+import asyncio
+import queue
+import threading
 from schemas import KnowledgeSearchRequest
 from services.knowledge_base_service import get_kb_service
 from core.logging import log_info, log_error
@@ -56,87 +60,135 @@ async def get_collection_info(project_id: str = Query(...)):
         raise internal_error("Failed to fetch collection info")
 
 
+def _parse_file_content(file_content: bytes, content_type: str) -> str:
+    """Parse file content based on content type."""
+    try:
+        if content_type in ["text/plain", "text/markdown", "text/csv"]:
+            return file_content.decode("utf-8", errors="ignore")
+        elif content_type == "application/json":
+            json_content = json.loads(file_content.decode("utf-8"))
+            return json.dumps(json_content, indent=2)
+        elif content_type == "application/pdf":
+            from PyPDF2 import PdfReader
+            reader = PdfReader(BytesIO(file_content))
+            return "\n".join([
+                page.extract_text() or "" 
+                for page in reader.pages
+            ])
+        elif content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            from docx import Document
+            doc_obj = Document(BytesIO(file_content))
+            return "\n".join([para.text for para in doc_obj.paragraphs])
+        else:
+            return file_content.decode("utf-8", errors="ignore")
+    except Exception as parse_error:
+        log_error("Error parsing file", "api", parse_error)
+        return file_content.decode("utf-8", errors="ignore")
+
+
 @router.post("/upload", status_code=201)
 async def upload_knowledge_document(file: UploadFile = File(...), project_id: Optional[str] = Form(None)):
-    """Upload a document to the project-specific knowledge base collection."""
-    try:
-        if not file:
-            raise bad_request("No file provided")
+    """Upload a document with SSE streaming progress updates."""
+    if not file:
+        raise bad_request("No file provided")
+    if not project_id:
+        raise bad_request("project_id is required")
+    
+    file_content = await file.read()
+    content = _parse_file_content(file_content, file.content_type or "text/plain")
+    
+    if not content or len(content.strip()) < 50:
+        raise bad_request("File content too short or could not be extracted")
+    
+    filename = file.filename or "unknown"
+    content_type = file.content_type or "text/plain"
+    
+    async def event_stream():
+        progress_queue = queue.Queue()
         
-        if not project_id:
-            raise bad_request("project_id is required")
+        def on_progress(step: str, detail: str):
+            progress_queue.put({"step": step, "detail": detail})
         
-        file_content = await file.read()
-        content = ""
+        def send_sse(data: dict) -> str:
+            return f"data: {json.dumps(data)}\n\n"
         
-        try:
-            if file.content_type in ["text/plain", "text/markdown", "text/csv"]:
-                content = file_content.decode("utf-8", errors="ignore")
-            elif file.content_type == "application/json":
-                json_content = json.loads(file_content.decode("utf-8"))
-                content = json.dumps(json_content, indent=2)
-            elif file.content_type == "application/pdf":
-                from PyPDF2 import PdfReader
-                reader = PdfReader(BytesIO(file_content))
-                content = "\n".join([
-                    page.extract_text() or "" 
-                    for page in reader.pages
-                ])
-            elif file.content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-                from docx import Document
-                doc = Document(BytesIO(file_content))
-                content = "\n".join([para.text for para in doc.paragraphs])
-            else:
-                content = file_content.decode("utf-8", errors="ignore")
-        except Exception as parse_error:
-            log_error("Error parsing file", "api", parse_error)
-            content = file_content.decode("utf-8", errors="ignore")
-        
-        if not content or len(content.strip()) < 50:
-            raise bad_request(
-                "File content too short or could not be extracted"
-            )
+        yield send_sse({"step": "upload", "detail": f"File '{filename}' received, starting processing..."})
+        await asyncio.sleep(0)
         
         kb_service = get_kb_service()
         doc = kb_service.create_knowledge_document({
             "projectId": project_id,
-            "filename": file.filename or "unknown",
-            "originalName": file.filename or "unknown",
-            "contentType": file.content_type or "text/plain",
+            "filename": filename,
+            "originalName": filename,
+            "contentType": content_type,
             "size": len(file_content),
         })
         
-        try:
-            kb_service = get_kb_service()
-            chunk_count = kb_service.ingest_document(
-                doc["id"],
-                project_id,
-                doc["filename"],
-                content
-            )
-            kb_service.update_knowledge_document(
-                doc["id"],
-                project_id,
-                {"chunkCount": chunk_count, "status": "ready"}
-            )
-            doc["chunkCount"] = chunk_count
-            doc["status"] = "ready"
-        except Exception as ingest_error:
-            log_error("Error ingesting document", "api", ingest_error)
-            kb_service.update_knowledge_document(
-                doc["id"],
-                project_id,
-                {"status": "error", "errorMessage": str(ingest_error)}
-            )
-            doc["status"] = "error"
-            doc["errorMessage"] = str(ingest_error)
+        yield send_sse({"step": "document_created", "detail": f"Document record created (ID: {doc['id'][:8]}...)"})
+        await asyncio.sleep(0)
         
-        return doc
-    except HTTPException:
-        raise
-    except Exception as e:
-        log_error("Error uploading knowledge document", "api", e)
-        raise internal_error("Failed to upload knowledge document")
+        result = {"doc": doc, "error": None}
+        
+        def run_ingestion():
+            try:
+                chunk_count = kb_service.ingest_document(
+                    doc["id"], project_id, filename, content,
+                    on_progress=on_progress
+                )
+                kb_service.update_knowledge_document(
+                    doc["id"], project_id,
+                    {"chunkCount": chunk_count, "status": "ready"}
+                )
+                result["doc"]["chunkCount"] = chunk_count
+                result["doc"]["status"] = "ready"
+            except Exception as e:
+                log_error("Error ingesting document", "api", e)
+                kb_service.update_knowledge_document(
+                    doc["id"], project_id,
+                    {"status": "error", "errorMessage": str(e)}
+                )
+                result["doc"]["status"] = "error"
+                result["error"] = str(e)
+            finally:
+                progress_queue.put(None)
+        
+        thread = threading.Thread(target=run_ingestion, daemon=True)
+        thread.start()
+        
+        while True:
+            try:
+                msg = progress_queue.get(timeout=0.3)
+                if msg is None:
+                    break
+                yield send_sse(msg)
+                await asyncio.sleep(0)
+            except queue.Empty:
+                continue
+        
+        thread.join(timeout=5)
+        
+        if result["error"]:
+            yield send_sse({
+                "step": "error",
+                "detail": result["error"],
+                "document": result["doc"]
+            })
+        else:
+            yield send_sse({
+                "step": "done",
+                "detail": f"'{filename}' is ready for semantic search",
+                "document": result["doc"]
+            })
+    
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
 
 
 @router.delete("/{id}")
