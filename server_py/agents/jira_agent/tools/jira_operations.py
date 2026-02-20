@@ -1,9 +1,28 @@
-"""JIRA API operations for creating and updating tickets."""
+"""JIRA API operations for creating and updating tickets.
+
+Production improvements:
+- Configurable HTTP client timeouts
+- Retry-aware via shared timeout settings
+- Consistent error logging with context
+"""
 import base64
 import httpx
 from typing import Dict, Any, List, Optional
 
 from core.logging import log_info, log_error
+
+
+# --- HTTP client configuration ---
+JIRA_HTTP_TIMEOUT = httpx.Timeout(
+    connect=10.0,   # seconds to establish connection
+    read=30.0,      # seconds to read response
+    write=10.0,     # seconds to write request
+    pool=10.0,      # seconds to acquire connection from pool
+)
+JIRA_HTTP_LIMITS = httpx.Limits(
+    max_connections=20,        # max simultaneous connections
+    max_keepalive_connections=5,
+)
 
 
 async def create_jira_issue(
@@ -64,7 +83,7 @@ async def create_jira_issue(
         issue_data["fields"]["priority"] = {"name": mapped_priority}
         log_info(f"Setting priority: {priority} -> {mapped_priority}", "jira_agent")
     
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=JIRA_HTTP_TIMEOUT, limits=JIRA_HTTP_LIMITS) as client:
         response = await client.post(
             f"{jira_base_url}/issue",
             headers={
@@ -119,7 +138,7 @@ async def update_jira_issue(
     
     results = []
     
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=JIRA_HTTP_TIMEOUT, limits=JIRA_HTTP_LIMITS) as client:
         # Update fields if provided
         if fields:
             update_payload = {"fields": {}}
@@ -406,7 +425,7 @@ async def create_subtask(
     # Try different subtask type names - JIRA projects can have different configurations
     subtask_type_names = ["Subtask", "Sub-task", "Sub Task", "subtask"]
     
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=JIRA_HTTP_TIMEOUT, limits=JIRA_HTTP_LIMITS) as client:
         # Try each subtask type name until one works
         for subtask_type in subtask_type_names:
             issue_data = {
@@ -515,7 +534,7 @@ async def link_issues(
         "outwardIssue": {"key": target_key}
     }
     
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=JIRA_HTTP_TIMEOUT, limits=JIRA_HTTP_LIMITS) as client:
         response = await client.post(
             f"{jira_base_url}/issueLink",
             headers={

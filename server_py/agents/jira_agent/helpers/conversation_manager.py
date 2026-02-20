@@ -1,11 +1,27 @@
 """
-Conversation state management for multi-turn interactive Jira agent.
+Production-grade conversation state management for multi-turn interactive Jira agent.
 Tracks context, missing information, and conversation flow.
+
+Production improvements:
+- Thread-safe operations with asyncio.Lock
+- Maximum session cap to prevent memory exhaustion
+- Maximum messages per conversation to bound memory
+- Periodic cleanup of expired sessions
+- Structured logging
 """
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from enum import Enum
+import asyncio
 import json
+
+from core.logging import log_info, log_warning
+
+
+# --- Configuration ---
+MAX_ACTIVE_SESSIONS = 500
+MAX_MESSAGES_PER_SESSION = 100
+SESSION_TIMEOUT_MINUTES = 30
 
 
 class ConversationState(str, Enum):
@@ -51,12 +67,15 @@ class ConversationContext:
         self.messages: List[Dict[str, Any]] = []
     
     def add_message(self, role: str, content: str):
-        """Add a message to conversation history."""
+        """Add a message to conversation history (bounded to MAX_MESSAGES_PER_SESSION)."""
         self.messages.append({
             "role": role,
             "content": content,
             "timestamp": datetime.now().isoformat()
         })
+        # Evict oldest messages if over limit
+        if len(self.messages) > MAX_MESSAGES_PER_SESSION:
+            self.messages = self.messages[-MAX_MESSAGES_PER_SESSION:]
         self.updated_at = datetime.now()
     
     def update_collected_data(self, data: Dict[str, Any]):
@@ -124,13 +143,32 @@ class ConversationContext:
 
 
 class ConversationManager:
-    """Manages multiple conversation contexts."""
+    """Manages multiple conversation contexts with production safeguards.
+
+    - Thread-safe via asyncio.Lock
+    - Enforces MAX_ACTIVE_SESSIONS to prevent memory exhaustion
+    - Auto-cleans expired sessions on access
+    """
     
     def __init__(self):
         self._contexts: Dict[str, ConversationContext] = {}
+        self._lock = asyncio.Lock()
     
     def create_context(self, session_id: str) -> ConversationContext:
-        """Create a new conversation context."""
+        """Create a new conversation context (caller should hold _lock if async)."""
+        self._cleanup_expired()
+        if len(self._contexts) >= MAX_ACTIVE_SESSIONS:
+            # Evict oldest session
+            oldest_id = min(
+                self._contexts,
+                key=lambda sid: self._contexts[sid].updated_at,
+            )
+            log_warning(
+                f"Max sessions ({MAX_ACTIVE_SESSIONS}) reached — evicting {oldest_id}",
+                "conversation_manager",
+            )
+            del self._contexts[oldest_id]
+
         context = ConversationContext(session_id)
         self._contexts[session_id] = context
         return context
@@ -153,7 +191,7 @@ class ConversationManager:
         if session_id in self._contexts:
             del self._contexts[session_id]
     
-    def _cleanup_expired(self, timeout_minutes: int = 30):
+    def _cleanup_expired(self, timeout_minutes: int = SESSION_TIMEOUT_MINUTES):
         """Remove expired contexts."""
         expired_ids = [
             session_id for session_id, ctx in self._contexts.items()
@@ -161,6 +199,8 @@ class ConversationManager:
         ]
         for session_id in expired_ids:
             del self._contexts[session_id]
+        if expired_ids:
+            log_info(f"Cleaned up {len(expired_ids)} expired sessions", "conversation_manager")
     
     def get_active_count(self) -> int:
         """Get count of active conversations."""

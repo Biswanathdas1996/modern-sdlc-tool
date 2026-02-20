@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     # Confluence
     confluence_space_key: str = "~5caf6d452c573b4b24d0f933"
     
+    # Langfuse (LLM Observability)
+    langfuse_secret_key: Optional[str] = None
+    langfuse_public_key: Optional[str] = None
+    langfuse_base_url: str = "https://cloud.langfuse.com"
+    langfuse_enabled: bool = True
+
     # MongoDB
     mongodb_uri: Optional[str] = None
     mongodb_db_name: str = "docugen_knowledge"
@@ -74,6 +80,10 @@ class Settings(BaseSettings):
             jira_instance_url=os.getenv("JIRA_INSTANCE_URL", "daspapun21.atlassian.net"),
             jira_project_key=os.getenv("JIRA_PROJECT_KEY", "KAN"),
             confluence_space_key=os.getenv("CONFLUENCE_SPACE_KEY", "~5caf6d452c573b4b24d0f933"),
+            langfuse_secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+            langfuse_public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+            langfuse_base_url=os.getenv("LANGFUSE_BASE_URL", "https://cloud.langfuse.com"),
+            langfuse_enabled=os.getenv("LANGFUSE_ENABLED", "true").lower() in ("true", "1", "yes"),
             mongodb_uri=os.getenv("MONGODB_URI"),
             mongodb_db_name=os.getenv("MONGODB_DB_NAME", "docugen_knowledge"),
             environment=os.getenv("NODE_ENV", "development"),

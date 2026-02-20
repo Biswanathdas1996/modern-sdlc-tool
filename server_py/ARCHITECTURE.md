@@ -254,3 +254,26 @@ End-to-End Tests
     ├── test_generate_user_stories()
     └── test_sync_to_jira()
 ```
+# 1. Replace in-memory sessions with Redis
+import redis
+session_store = redis.Redis(host='redis-host', port=6379, db=0)
+
+# 2. Add rate limiting
+from slowapi import Limiter
+limiter = Limiter(key_func=get_remote_address)
+
+# 3. Use Celery/RQ for background tasks instead of threads
+from celery import Celery
+celery_app = Celery('tasks', broker='redis://localhost:6379/0')
+
+# 4. Use async LLM calls consistently
+result = await call_pwc_genai_async(prompt=prompt, ...)
+
+# 5. Restrict CORS
+cors_origins: list[str] = ["https://your-domain.com"]
+
+# 6. Add deep health check
+@app.get("/health")
+async def health():
+    db_ok = await check_db_connection()
+    return {"status": "healthy" if db_ok else "degraded", "db": db_ok}

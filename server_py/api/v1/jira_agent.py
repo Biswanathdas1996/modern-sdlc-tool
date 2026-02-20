@@ -1,12 +1,21 @@
-"""API endpoints for JIRA agent with interactive conversation support."""
+"""Production-ready API endpoints for JIRA agent with rate limiting, validation, and metrics."""
 import uuid
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 
 from agents.jira_agent.jira_agent import jira_agent
 from agents.jira_agent.helpers.conversation_manager import conversation_manager
+from agents.jira_agent.utils import (
+    validate_prompt,
+    validate_session_id,
+    InputValidationError,
+    agent_rate_limiter,
+    agent_burst_limiter,
+    RateLimitExceeded,
+)
 from schemas.requests import JiraAgentRequest, JiraAgentResponse, MissingInfoField
 from schemas.requests_jira import SearchJiraResponse, ProcessQueryRequest
-from core.logging import log_info, log_error
+from core.logging import log_info, log_error, log_warning
 from utils.response import success_response
 
 
@@ -20,22 +29,11 @@ async def chat_with_agent(request: JiraAgentRequest):
     """
     Interactive chat endpoint with smart information gathering.
     
-    This endpoint supports multi-turn conversations where the agent can ask
-    for missing information and use it to complete tasks.
-    
-    Features:
-    - Automatically detects missing information
-    - Asks user for specific details when needed
-    - Maintains conversation context across requests
-    - Supports all JIRA operations (search, create, update)
-    
-    Example Flow:
-    1. User: "Create a ticket"
-       Agent: "ℹ️ I need some additional information: 1. Summary: Please provide a brief title..."
-    2. User: "Login button not working"
-       Agent: "Please provide a detailed description of the issue"
-    3. User: "When clicking login, nothing happens..."
-       Agent: "✅ Created ticket PROJ-123: Login button not working"
+    Production features:
+    - Input validation & sanitization
+    - Per-session rate limiting (burst + sustained)
+    - Structured error responses with proper HTTP status codes
+    - Request duration tracking
     
     Args:
         request: Chat request with prompt and optional session_id
@@ -43,19 +41,26 @@ async def chat_with_agent(request: JiraAgentRequest):
     Returns:
         Agent response with conversation state and any requested information
     """
+    session_id = None
     try:
-        # Generate or use existing session ID
-        session_id = request.session_id or str(uuid.uuid4())
+        # --- Input validation ---
+        validated_prompt = validate_prompt(request.prompt)
+        session_id = validate_session_id(request.session_id) or str(uuid.uuid4())
+
+        # --- Rate limiting ---
+        rate_key = session_id
+        await agent_burst_limiter.check(rate_key)
+        await agent_rate_limiter.check(rate_key)
         
-        log_info(f"Chat request - Session: {session_id}, Prompt: {request.prompt}", "jira_agent_api")
+        log_info(f"Chat request - Session: {session_id}, Prompt: {validated_prompt[:80]}", "jira_agent_api")
         
         # Get or create conversation context
         conversation_ctx = conversation_manager.get_or_create_context(session_id)
-        conversation_ctx.add_message("user", request.prompt)
+        conversation_ctx.add_message("user", validated_prompt)
         
         # Process with conversation context
         result = await jira_agent.process_query_interactive(
-            request.prompt,
+            validated_prompt,
             conversation_ctx=conversation_ctx,
             context_data=request.context_data or {}
         )
@@ -76,28 +81,31 @@ async def chat_with_agent(request: JiraAgentRequest):
             error=result.get("error"),
             collected_data=result.get("collected_data")
         )
+
+    except InputValidationError as ve:
+        log_warning(f"Validation error: {ve}", "jira_agent_api")
+        raise HTTPException(status_code=422, detail=str(ve))
+
+    except RateLimitExceeded as rle:
+        log_warning(f"Rate limit exceeded for session {session_id}", "jira_agent_api")
+        return JSONResponse(
+            status_code=429,
+            content={"detail": str(rle), "retry_after": rle.retry_after},
+            headers={"Retry-After": str(int(rle.retry_after) + 1)},
+        )
             
     except Exception as e:
         log_error("Error in JIRA agent chat", "jira_agent_api", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to process chat request: {str(e)}"
+            detail="Internal server error processing chat request",
         )
 
 
 @router.post("/process", response_model=SearchJiraResponse)
 async def process_query(request: ProcessQueryRequest):
     """
-    Intelligent query processing endpoint (legacy single-turn mode).
-    
-    This endpoint analyzes the user's natural language query and automatically
-    determines the appropriate action (search, create, update, or chained operations).
-    
-    Supported queries:
-    - "Find all in-progress tickets" (search)
-    - "Create a new bug for login issue" (create)
-    - "Update PROJ-123 status to Done" (update)
-    - "Find all blocked tickets and mark them as in progress" (chained)
+    Intelligent query processing endpoint (legacy single-turn mode) with validation.
     
     Args:
         request: Query request containing the user prompt
@@ -106,9 +114,10 @@ async def process_query(request: ProcessQueryRequest):
         Processed results with tickets and AI analysis
     """
     try:
-        log_info(f"JIRA agent query request: {request.prompt}", "jira_agent_api")
+        validated_prompt = validate_prompt(request.prompt)
+        log_info(f"JIRA agent query request: {validated_prompt[:80]}", "jira_agent_api")
         
-        result = await jira_agent.process_query(request.prompt)
+        result = await jira_agent.process_query(validated_prompt)
         
         return SearchJiraResponse(
             success=result.get("success", False),
@@ -118,20 +127,25 @@ async def process_query(request: ProcessQueryRequest):
             tickets=result.get("tickets", []),
             error=result.get("error")
         )
+
+    except InputValidationError as ve:
+        log_warning(f"Validation error: {ve}", "jira_agent_api")
+        raise HTTPException(status_code=422, detail=str(ve))
             
     except Exception as e:
         log_error("Error in JIRA agent query", "jira_agent_api", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to process query: {str(e)}"
+            detail="Internal server error processing query",
         )
 
 
 
 @router.get("/health")
 async def health_check():
-    """Health check endpoint for JIRA agent."""
+    """Health check endpoint for JIRA agent with metrics."""
     active_conversations = conversation_manager.get_active_count()
+    metrics = jira_agent.get_metrics()
     return success_response({
         "status": "healthy", 
         "service": "jira-agent",
@@ -140,8 +154,9 @@ async def health_check():
             "interactive_mode": True,
             "smart_info_gathering": True,
             "multi_turn_conversations": True,
-            "active_conversations": active_conversations
-        }
+            "active_conversations": active_conversations,
+        },
+        "metrics": metrics,
     })
 
 

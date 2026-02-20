@@ -6,6 +6,19 @@ from core.config import get_settings
 from core.logging import log_info, log_error, log_debug
 
 
+# --- HTTP client configuration for production ---
+JIRA_HTTP_TIMEOUT = httpx.Timeout(
+    connect=10.0,
+    read=30.0,
+    write=10.0,
+    pool=10.0,
+)
+JIRA_HTTP_LIMITS = httpx.Limits(
+    max_connections=20,
+    max_keepalive_connections=5,
+)
+
+
 class JiraService:
     """Service for JIRA API interactions."""
     
@@ -51,7 +64,7 @@ class JiraService:
         auth_header = self._get_auth_header()
         jira_base_url = f"https://{self.settings.jira_instance_url}/rest/api/3"
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=JIRA_HTTP_TIMEOUT, limits=JIRA_HTTP_LIMITS) as client:
             response = await client.get(
                 f"{jira_base_url}/issue/createmeta",
                 params={
@@ -114,7 +127,7 @@ class JiraService:
         
         results = []
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=JIRA_HTTP_TIMEOUT, limits=JIRA_HTTP_LIMITS) as client:
             for story in user_stories:
                 try:
                     description = self._build_story_description(story)
@@ -260,7 +273,7 @@ class JiraService:
         
         log_debug(f"JQL query: {jql}", "jira_service")
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=JIRA_HTTP_TIMEOUT, limits=JIRA_HTTP_LIMITS) as client:
             log_debug(f"Making request to {jira_base_url}/search/jql", "jira_service")
             response = await client.get(
                 f"{jira_base_url}/search/jql",
@@ -316,7 +329,7 @@ class JiraService:
         auth_header = self._get_auth_header()
         jira_base_url = f"https://{self.settings.jira_instance_url}/rest/api/3"
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=JIRA_HTTP_TIMEOUT, limits=JIRA_HTTP_LIMITS) as client:
             response = await client.get(
                 f"{jira_base_url}/search/jql",
                 params={
@@ -391,7 +404,7 @@ class JiraService:
             }
         }
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=JIRA_HTTP_TIMEOUT, limits=JIRA_HTTP_LIMITS) as client:
             response = await client.post(
                 f"{jira_base_url}/issue",
                 headers={
@@ -420,7 +433,7 @@ class JiraService:
         try:
             auth_header = self._get_auth_header()
             
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=JIRA_HTTP_TIMEOUT, limits=JIRA_HTTP_LIMITS) as client:
                 response = await client.get(
                     f"https://{self.settings.jira_instance_url}/rest/api/3/issue/{parent_jira_key}"
                     "?fields=summary,description",

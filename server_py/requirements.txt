@@ -28,3 +28,6 @@ langchain==0.3.9
 langchain-core==0.3.21
 langchain-community==0.3.8
 nest-asyncio==1.6.0
+
+# LLM Observability (Langfuse)
+langfuse==2.51.3
