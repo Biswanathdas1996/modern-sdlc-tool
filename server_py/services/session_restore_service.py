@@ -35,6 +35,13 @@ def restore_brd(brd_data: Optional[Dict[str, Any]]):
     if not brd_data:
         return None
 
+    brd_id = brd_data.get("id")
+    if brd_id and brd_id != "restored":
+        existing = storage.brds_repo.get_by_id(brd_id)
+        if existing:
+            storage.current_brd_id = brd_id
+            return existing
+
     brd_data.setdefault("id", "restored")
     brd_data.setdefault("requestType", "feature")
     brd_data.setdefault("version", "1.0")
