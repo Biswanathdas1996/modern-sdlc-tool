@@ -44,6 +44,23 @@ def remove_user_from_project(user_id: str, project_id: str) -> bool:
         conn.close()
 
 
+def _project_to_camel(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert a raw project DB row to camelCase dict matching frontend schema."""
+    import json
+    result = {
+        "id": row["id"],
+        "name": row["name"],
+        "repoUrl": row.get("repo_url", ""),
+        "description": row.get("description"),
+        "techStack": json.loads(row["tech_stack"]) if isinstance(row.get("tech_stack"), str) else (row.get("tech_stack") or []),
+        "analyzedAt": row["analyzed_at"].isoformat() if hasattr(row.get("analyzed_at"), "isoformat") else str(row.get("analyzed_at", "")),
+        "status": row.get("status", "pending"),
+    }
+    if "membership_role" in row:
+        result["membershipRole"] = row["membership_role"]
+    return result
+
+
 def get_user_projects(user_id: str) -> List[Dict[str, Any]]:
     """Get all projects a user belongs to."""
     conn = get_postgres_connection()
@@ -57,7 +74,7 @@ def get_user_projects(user_id: str) -> List[Dict[str, Any]]:
                ORDER BY p.created_at DESC""",
             (user_id,)
         )
-        return [dict(row) for row in cur.fetchall()]
+        return [_project_to_camel(dict(row)) for row in cur.fetchall()]
     finally:
         cur.close()
         conn.close()

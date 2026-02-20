@@ -21,16 +21,8 @@ class AddMemberRequest(BaseModel):
 async def get_my_projects(request: Request):
     user = require_auth(request)
     if user["role"] == "admin":
-        from core.db.postgres import get_postgres_connection
-        import psycopg2.extras
-        conn = get_postgres_connection()
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        try:
-            cur.execute("SELECT * FROM projects ORDER BY created_at DESC")
-            return [dict(row) for row in cur.fetchall()]
-        finally:
-            cur.close()
-            conn.close()
+        from repositories import storage
+        return storage.get_all_projects()
     return get_user_projects(user["id"])
 
 
