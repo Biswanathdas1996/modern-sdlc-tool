@@ -76,6 +76,27 @@ def _fix_common_json_issues(text: str) -> str:
     return text
 
 
+def _repair_truncated_json(text: str):
+    """Attempt to repair a truncated JSON array by closing it at the last complete object."""
+    stripped = text.strip()
+    if not stripped.startswith("["):
+        return None
+
+    last_close_brace = stripped.rfind("}")
+    if last_close_brace <= 0:
+        return None
+
+    candidate = stripped[:last_close_brace + 1].rstrip().rstrip(",") + "\n]"
+    try:
+        fixed = _fix_common_json_issues(candidate)
+        result = json.loads(fixed)
+        if isinstance(result, list) and len(result) > 0:
+            return result
+    except (json.JSONDecodeError, ValueError):
+        pass
+    return None
+
+
 def parse_json_response(text: str) -> Any:
     """Parse JSON from AI response, handling various formats and common issues."""
     cleaned = text.strip()
@@ -121,6 +142,11 @@ def parse_json_response(text: str) -> Any:
             except (json.JSONDecodeError, ValueError):
                 pass
         
+        # Try to repair truncated JSON arrays (common when AI hits token limit)
+        repaired = _repair_truncated_json(cleaned)
+        if repaired is not None:
+            return repaired
+
         # Raise original error if all attempts fail
         preview = text[:200] + "..." if len(text) > 200 else text
         raise ValueError(
