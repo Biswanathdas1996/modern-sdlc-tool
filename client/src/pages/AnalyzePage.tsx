@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { apiRequest } from "@/lib/queryClient";
 import { useSession } from "@/hooks/useSession";
 import { useProject } from "@/hooks/useProject";
+import { useAuth } from "@/hooks/useAuth";
 import type { Project } from "@shared/schema";
 
 const workflowSteps = [
@@ -32,6 +33,7 @@ export default function AnalyzePage() {
   const queryClient = useQueryClient();
   const { saveSessionArtifact } = useSession();
   const { projects, currentProject, selectProject: setActiveProject } = useProject();
+  const { isAdmin } = useAuth();
 
   useEffect(() => {
     if (currentProject?.repoUrl && !repoUrl) {
@@ -289,15 +291,17 @@ export default function AnalyzePage() {
                                 <ExternalLink className="h-4 w-4" />
                               </a>
                             </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon"
-                              onClick={(e) => handleDelete(e, project.id)}
-                              disabled={deleteMutation.isPending}
-                              data-testid={`button-delete-project-${project.id}`}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
+                            {isAdmin && (
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                onClick={(e) => handleDelete(e, project.id)}
+                                disabled={deleteMutation.isPending}
+                                data-testid={`button-delete-project-${project.id}`}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </CardContent>
