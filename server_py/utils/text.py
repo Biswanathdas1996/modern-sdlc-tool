@@ -130,30 +130,82 @@ def parse_json_response(text: str) -> Any:
         )
 
 
-def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> list[str]:
-    """Split text into overlapping chunks."""
+def chunk_text(text: str, chunk_size: int = 1500, overlap: int = 200) -> list[str]:
+    """Split text into overlapping chunks with section-aware boundaries.
+    
+    Preserves document structure by preferring to break at:
+    1. Section headings (lines starting with # or all-caps lines)
+    2. Double newlines (paragraph boundaries)
+    3. Single newlines
+    4. Sentence endings (period followed by space or newline)
+    5. Any position as last resort
+    
+    Args:
+        text: The full document text to chunk
+        chunk_size: Target size for each chunk in characters (default: 1500)
+        overlap: Number of overlapping characters between chunks (default: 200)
+    
+    Returns:
+        List of text chunks covering the entire document
+    """
+    if not text or not text.strip():
+        return []
+    
+    text = text.strip()
+    
+    if len(text) <= chunk_size:
+        return [text]
+    
     chunks = []
     start = 0
+    text_len = len(text)
     
-    while start < len(text):
-        end = start + chunk_size
+    while start < text_len:
+        end = min(start + chunk_size, text_len)
         
-        # Try to break at sentence or newline
-        if end < len(text):
-            last_period = text.rfind(".", start, end)
-            last_newline = text.rfind("\n", start, end)
-            break_point = max(last_period, last_newline)
-            
-            if break_point > start + chunk_size // 2:
-                end = break_point + 1
+        if end >= text_len:
+            chunk = text[start:].strip()
+            if chunk:
+                chunks.append(chunk)
+            break
         
-        chunk = text[start:min(end, len(text))].strip()
-        if len(chunk) > 50:  # Only add substantial chunks
+        best_break = -1
+        
+        search_start = start + chunk_size // 3
+        search_region = text[search_start:end]
+        
+        heading_patterns = ['\n# ', '\n## ', '\n### ', '\n#### ']
+        for pattern in heading_patterns:
+            idx = search_region.rfind(pattern)
+            if idx != -1:
+                best_break = search_start + idx + 1
+                break
+        
+        if best_break == -1:
+            idx = search_region.rfind('\n\n')
+            if idx != -1:
+                best_break = search_start + idx + 2
+        
+        if best_break == -1:
+            idx = search_region.rfind('\n')
+            if idx != -1:
+                best_break = search_start + idx + 1
+        
+        if best_break == -1:
+            for sep in ['. ', '? ', '! ']:
+                idx = search_region.rfind(sep)
+                if idx != -1:
+                    candidate = search_start + idx + len(sep)
+                    if best_break == -1 or candidate > best_break:
+                        best_break = candidate
+        
+        if best_break > start:
+            end = best_break
+        
+        chunk = text[start:end].strip()
+        if chunk:
             chunks.append(chunk)
         
-        start = end - overlap
-        
-        if start >= len(text) - overlap:
-            break
+        start = max(end - overlap, start + 1)
     
     return chunks

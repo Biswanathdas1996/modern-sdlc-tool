@@ -210,6 +210,62 @@ async def verify_document_deletion(id: str, project_id: Optional[str] = Query(No
         raise internal_error("Failed to verify document deletion")
 
 
+@router.post("/reingest/{id}")
+async def reingest_document(id: str, project_id: Optional[str] = Query(None)):
+    """Re-ingest an existing document with improved chunking and embeddings."""
+    try:
+        if not project_id:
+            raise bad_request("project_id is required")
+        
+        kb_service = get_kb_service()
+        result = kb_service.reingest_document(id, project_id)
+        
+        if not result.get("success"):
+            raise HTTPException(status_code=404, detail=result.get("error", "Document not found"))
+        
+        return success_response(
+            message=f"Document re-ingested: {result['oldChunks']} old chunks replaced with {result['newChunks']} new chunks with improved chunking.",
+            data=result
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error("Error re-ingesting document", "api", e)
+        raise internal_error("Failed to re-ingest document")
+
+
+@router.post("/reingest-all")
+async def reingest_all_documents(project_id: Optional[str] = Query(None)):
+    """Re-ingest all documents in a project with improved chunking and embeddings."""
+    try:
+        if not project_id:
+            raise bad_request("project_id is required")
+        
+        kb_service = get_kb_service()
+        documents = kb_service.get_knowledge_documents(project_id)
+        
+        if not documents:
+            return success_response(message="No documents to re-ingest.", data={"count": 0})
+        
+        results = []
+        for doc in documents:
+            doc_id = doc.get("id")
+            if doc_id:
+                result = kb_service.reingest_document(doc_id, project_id)
+                results.append(result)
+        
+        success_count = sum(1 for r in results if r.get("success"))
+        return success_response(
+            message=f"Re-ingested {success_count}/{len(documents)} documents with improved chunking.",
+            data={"results": results, "totalProcessed": len(documents), "successful": success_count}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error("Error re-ingesting all documents", "api", e)
+        raise internal_error("Failed to re-ingest documents")
+
+
 @router.post("/search")
 async def search_knowledge(request: KnowledgeSearchRequest):
     """Search the knowledge base within a project's collection."""
