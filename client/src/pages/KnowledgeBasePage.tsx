@@ -182,11 +182,10 @@ export default function KnowledgeBasePage() {
         }
       }
       
-      setTimeout(() => {
-        setIsUploading(false);
-        setUploadSteps([]);
-        setCurrentStep(null);
-      }, 2000);
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      setIsUploading(false);
+      setUploadSteps([]);
+      setCurrentStep(null);
       
     } catch (error: any) {
       toast({
