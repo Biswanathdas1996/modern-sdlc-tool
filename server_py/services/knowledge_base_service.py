@@ -211,15 +211,90 @@ class KnowledgeBaseService:
         return self._keyword_search(collection, query, limit)
     
     MIN_SIMILARITY_SCORE = 0.55
+    ATLAS_MIN_SCORE = 0.78
+    VECTOR_INDEX_NAME = "vector_index"
 
     def _vector_search(self, collection, query: str, limit: int) -> List[Dict[str, Any]]:
-        """Search using cosine similarity against stored embeddings.
+        """Search using Atlas $vectorSearch aggregation with the vector_index.
+        Falls back to in-memory cosine similarity if Atlas index is unavailable.
         Only returns chunks with similarity >= MIN_SIMILARITY_SCORE."""
         query_embedding = generate_embedding(query)
         if query_embedding is None:
             log_error("Failed to generate query embedding", "kb")
             return []
         
+        results = self._atlas_vector_search(collection, query_embedding, limit)
+        if results is not None:
+            return results
+        
+        log_info("Atlas vector search unavailable, using in-memory cosine similarity", "kb")
+        return self._inmemory_vector_search(collection, query_embedding, limit)
+    
+    def _atlas_vector_search(self, collection, query_embedding: List[float], limit: int):
+        """Use Atlas $vectorSearch aggregation pipeline with the project's vector_index."""
+        try:
+            has_index = any(
+                idx.get("name") == self.VECTOR_INDEX_NAME and idx.get("queryable")
+                for idx in collection.list_search_indexes()
+            )
+            if not has_index:
+                return None
+            
+            num_candidates = max(limit * 10, 50)
+            
+            pipeline = [
+                {
+                    "$vectorSearch": {
+                        "index": self.VECTOR_INDEX_NAME,
+                        "path": "embedding",
+                        "queryVector": query_embedding,
+                        "numCandidates": num_candidates,
+                        "limit": limit * 3
+                    }
+                },
+                {
+                    "$project": {
+                        "content": 1,
+                        "metadata": 1,
+                        "chunkIndex": 1,
+                        "score": {"$meta": "vectorSearchScore"}
+                    }
+                }
+            ]
+            
+            raw_results = list(collection.aggregate(pipeline))
+            
+            results = []
+            for doc in raw_results:
+                score = doc.get("score", 0)
+                if score < self.ATLAS_MIN_SCORE:
+                    continue
+                results.append({
+                    "content": doc.get("content", ""),
+                    "filename": doc.get("metadata", {}).get("filename", "Unknown"),
+                    "score": round(score, 4),
+                    "chunkIndex": doc.get("chunkIndex", 0),
+                    "searchMethod": "atlas_vector"
+                })
+            
+            results = results[:limit]
+            
+            if results:
+                log_info(f"Atlas vector search: returning {len(results)} results (index: {self.VECTOR_INDEX_NAME})", "kb")
+            else:
+                log_info(f"Atlas vector search: no chunks met minimum threshold ({self.ATLAS_MIN_SCORE})", "kb")
+            
+            for i, r in enumerate(results[:3]):
+                log_info(f"Vector result {i+1}: {r['filename']} chunk#{r['chunkIndex']} (score: {r['score']:.4f})", "kb")
+            
+            return results
+            
+        except Exception as e:
+            log_error(f"Atlas $vectorSearch failed: {e}", "kb")
+            return None
+    
+    def _inmemory_vector_search(self, collection, query_embedding: List[float], limit: int) -> List[Dict[str, Any]]:
+        """Fallback: fetch all chunks and compute cosine similarity in memory."""
         all_chunks = list(collection.find(
             {"embedding": {"$exists": True}},
             {"content": 1, "metadata": 1, "embedding": 1, "chunkIndex": 1}
@@ -250,10 +325,10 @@ class KnowledgeBaseService:
         scored.sort(key=lambda x: x["score"], reverse=True)
         results = scored[:limit]
         
-        if scored:
-            log_info(f"Vector search: {len(scored)} chunks above threshold ({self.MIN_SIMILARITY_SCORE}), returning top {len(results)}", "kb")
+        if results:
+            log_info(f"In-memory vector search: returning {len(results)} results", "kb")
         else:
-            log_info(f"Vector search: no chunks met minimum similarity threshold ({self.MIN_SIMILARITY_SCORE})", "kb")
+            log_info(f"In-memory vector search: no chunks met minimum threshold ({self.MIN_SIMILARITY_SCORE})", "kb")
         
         for i, r in enumerate(results[:3]):
             log_info(f"Vector result {i+1}: {r['filename']} chunk#{r['chunkIndex']} (similarity: {r['score']:.4f})", "kb")
