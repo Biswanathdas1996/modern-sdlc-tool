@@ -409,3 +409,96 @@ async def generate_copilot_prompt_endpoint(request: GenerateCopilotPromptRequest
     except Exception as e:
         log_error("Error generating Copilot prompt", "requirements", e)
         raise internal_error("Failed to generate Copilot prompt")
+
+
+# ==================== GENERATION HISTORY ====================
+
+@router.get("/generation-history")
+async def get_generation_history(project_id: str = Query(...)):
+    """Get all generated artifacts grouped by feature request for a project."""
+    try:
+        feature_requests = storage.get_feature_requests_by_project(project_id)
+        brds = storage.get_brds_by_project(project_id)
+        test_cases = storage.get_test_cases_by_project(project_id)
+        test_data = storage.get_test_data_by_project(project_id)
+        user_stories = storage.get_user_stories_by_project(project_id)
+
+        brds_by_fr = {}
+        for brd in brds:
+            fr_id = brd.get("featureRequestId", "")
+            brds_by_fr.setdefault(fr_id, []).append(brd)
+
+        stories_by_brd = {}
+        for story in user_stories:
+            brd_id = story.get("brdId", "")
+            stories_by_brd.setdefault(brd_id, []).append(story)
+
+        cases_by_brd = {}
+        for tc in test_cases:
+            brd_id = tc.get("brdId", "")
+            cases_by_brd.setdefault(brd_id, []).append(tc)
+
+        data_by_tc = {}
+        for td in test_data:
+            tc_id = td.get("testCaseId", "")
+            data_by_tc.setdefault(tc_id, []).append(td)
+
+        grouped = []
+        for fr in feature_requests:
+            fr_id = fr["id"]
+            fr_brds = brds_by_fr.get(fr_id, [])
+
+            brd_items = []
+            for brd in fr_brds:
+                brd_id = brd["id"]
+                brd_stories = stories_by_brd.get(brd_id, [])
+                brd_cases = cases_by_brd.get(brd_id, [])
+
+                brd_test_data = []
+                for tc in brd_cases:
+                    brd_test_data.extend(data_by_tc.get(tc["id"], []))
+
+                brd_items.append({
+                    "id": brd["id"],
+                    "title": brd.get("title", ""),
+                    "version": brd.get("version", "1.0"),
+                    "status": brd.get("status", "draft"),
+                    "createdAt": brd.get("createdAt", ""),
+                    "userStoryCount": len(brd_stories),
+                    "testCaseCount": len(brd_cases),
+                    "testDataCount": len(brd_test_data),
+                    "userStories": brd_stories,
+                    "testCases": brd_cases,
+                    "testData": brd_test_data,
+                })
+
+            total_brds = len(brd_items)
+            total_stories = sum(b["userStoryCount"] for b in brd_items)
+            total_cases = sum(b["testCaseCount"] for b in brd_items)
+            total_data = sum(b["testDataCount"] for b in brd_items)
+
+            grouped.append({
+                "featureRequest": {
+                    "id": fr["id"],
+                    "title": fr.get("title", ""),
+                    "description": fr.get("description", ""),
+                    "requestType": fr.get("requestType", "feature"),
+                    "createdAt": fr.get("createdAt", ""),
+                },
+                "summary": {
+                    "brdCount": total_brds,
+                    "userStoryCount": total_stories,
+                    "testCaseCount": total_cases,
+                    "testDataCount": total_data,
+                },
+                "brds": brd_items,
+            })
+
+        grouped.sort(key=lambda x: x["featureRequest"].get("createdAt", ""), reverse=True)
+
+        log_info(f"Generation history: {len(grouped)} feature requests for project {project_id}", "requirements")
+        return grouped
+
+    except Exception as e:
+        log_error("Error fetching generation history", "requirements", e)
+        raise internal_error("Failed to fetch generation history")

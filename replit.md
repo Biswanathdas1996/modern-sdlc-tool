@@ -73,3 +73,11 @@ The application uses a GitHub-inspired color palette, JetBrains Mono for code bl
 - **SSE**: sse-starlette.
 - **Database Connectors**: psycopg2-binary, pymongo.
 - **Utilities**: python-dotenv, aiofiles, python-multipart.
+
+## Recent Changes
+
+### Generation History Page (Feb 2026)
+- Added `/generation-history` route and page that lists all generated artifacts grouped by feature request
+- Backend endpoint: `GET /api/generation-history?project_id=xxx` aggregates feature_requests → BRDs → user stories/test cases/test data
+- Sidebar nav entry under "History" section, accessible to all authenticated users (no feature key restriction)
+- Expandable card UI: click feature request to expand and see BRDs, then click BRD to see nested user stories, test cases, and test data

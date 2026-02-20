@@ -22,6 +22,7 @@ import {
   FolderOpen,
   Users,
   FolderKanban,
+  History,
 } from "lucide-react";
 import {
   Sidebar,
@@ -408,6 +409,45 @@ export function AppSidebar({ completedSteps = [] }: AppSidebarProps) {
                 </SidebarGroupContent>
               </SidebarGroup>
             )}
+
+            <SidebarGroup>
+              <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
+                History
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      className={cn(
+                        "group",
+                        location === "/generation-history" && "bg-sidebar-accent text-sidebar-accent-foreground"
+                      )}
+                    >
+                      <Link href="/generation-history" data-testid="link-generation-history">
+                        <div className="flex items-center gap-3 w-full">
+                          <div className={cn(
+                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
+                            location === "/generation-history" 
+                              ? "bg-primary border-primary text-primary-foreground"
+                              : "bg-muted border-border text-muted-foreground"
+                          )}>
+                            <History className="h-4 w-4" />
+                          </div>
+                          <div className="flex flex-col flex-1 min-w-0">
+                            <span className="text-sm font-medium truncate">Generation History</span>
+                            <span className="text-xs text-muted-foreground truncate">All artifacts by feature</span>
+                          </div>
+                          {location === "/generation-history" && (
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </div>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
 
             {visibleAgents.length > 0 && (
               <SidebarGroup>
