@@ -325,7 +325,7 @@ export default function UserStoriesPage() {
           description="Generate a Business Requirements Document first before creating user stories."
           action={{
             label: "Go to BRD",
-            onClick: () => window.location.href = "/brd",
+            onClick: () => window.location.href = brdIdParam ? `/brd?brd_id=${brdIdParam}` : "/brd",
           }}
         />
       </div>
@@ -652,7 +652,7 @@ export default function UserStoriesPage() {
       )}
 
       <div className="flex justify-between mt-8 pt-4 border-t gap-4 flex-wrap">
-        <Link href="/brd">
+        <Link href={brdIdParam ? `/brd?brd_id=${brdIdParam}` : "/brd"}>
           <Button variant="outline" data-testid="button-back-to-brd" disabled={generateTestCasesMutation.isPending}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to BRD

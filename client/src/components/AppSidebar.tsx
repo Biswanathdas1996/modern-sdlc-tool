@@ -1,4 +1,4 @@
-import { useLocation, Link } from "wouter";
+import { useLocation, useSearch, Link } from "wouter";
 import {
   GitBranch,
   FileText,
@@ -148,8 +148,12 @@ interface AppSidebarProps {
   completedSteps?: string[];
 }
 
+const brdScopedPaths = new Set(["/brd", "/user-stories", "/test-cases", "/test-data"]);
+
 export function AppSidebar({ completedSteps = [] }: AppSidebarProps) {
   const [location] = useLocation();
+  const searchString = useSearch();
+  const brdIdParam = new URLSearchParams(searchString).get("brd_id");
   const { user, isAdmin, hasPermission, logout } = useAuth();
   const { projects, currentProject, selectProject, isLoading: projectsLoading, isProjectLocked } = useProject();
 
@@ -162,6 +166,13 @@ export function AppSidebar({ completedSteps = [] }: AppSidebarProps) {
   const visiblePrereqSteps = prerequisiteSteps.filter(s => hasPermission(s.featureKey));
   const visibleWorkflowSteps = workflowSteps.filter(s => hasPermission(s.featureKey));
   const visibleAgents = agentItems.filter(a => hasPermission(a.featureKey));
+
+  const getStepHref = (step: WorkflowStep) => {
+    if (brdIdParam && brdScopedPaths.has(step.path)) {
+      return `${step.path}?brd_id=${brdIdParam}`;
+    }
+    return step.path;
+  };
 
   const renderStepItem = (step: WorkflowStep, index: number, totalSteps: number) => {
     const status = getStepStatus(step);
@@ -177,7 +188,7 @@ export function AppSidebar({ completedSteps = [] }: AppSidebarProps) {
             isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
           )}
         >
-          <Link href={step.path} data-testid={`link-step-${step.id}`}>
+          <Link href={getStepHref(step)} data-testid={`link-step-${step.id}`}>
             <div className="flex items-center gap-3 w-full">
               <div className={cn(
                 "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
