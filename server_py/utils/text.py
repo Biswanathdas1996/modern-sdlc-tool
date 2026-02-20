@@ -130,20 +130,56 @@ def parse_json_response(text: str) -> Any:
         )
 
 
-def chunk_text(text: str, chunk_size: int = 500, overlap: int = 100) -> list[str]:
-    """Split text into overlapping chunks with section-aware boundaries.
+def _split_into_sections(text: str) -> list[str]:
+    """Split text into logical sections based on headings and titled lines.
     
-    Preserves document structure by preferring to break at:
-    1. Section headings (lines starting with # or all-caps lines)
-    2. Double newlines (paragraph boundaries)
-    3. Single newlines
-    4. Sentence endings (period followed by space or newline)
-    5. Any position as last resort
+    Detects section boundaries at:
+    - Markdown headings (# Title)
+    - Title-case lines followed by newlines (e.g. "Customer Onboarding Workflow")
+    - Lines ending with "Workflow", "Process", "Procedure", etc.
+    """
+    lines = text.split('\n')
+    sections = []
+    current_section_lines = []
+    
+    heading_pattern = re.compile(
+        r'^(#{1,6}\s+.+|'
+        r'[A-Z][A-Za-z0-9\s/()&,\-]+\s+(Workflow|Process|Procedure|Policy|Standard|Audit|Review|Assessment|Check|Module|Phase|Stage|Step)s?\s*$|'
+        r'[A-Z][A-Za-z0-9\s/()&,\-]+(Workflow|Process|Procedure|Policy|Standard|Audit|Review|Assessment|Check|Module|Phase|Stage|Step)s?\s*$)',
+        re.MULTILINE
+    )
+    
+    for line in lines:
+        stripped = line.strip()
+        if stripped and heading_pattern.match(stripped) and current_section_lines:
+            section_text = '\n'.join(current_section_lines).strip()
+            if section_text:
+                sections.append(section_text)
+            current_section_lines = [line]
+        else:
+            current_section_lines.append(line)
+    
+    if current_section_lines:
+        section_text = '\n'.join(current_section_lines).strip()
+        if section_text:
+            sections.append(section_text)
+    
+    return sections
+
+
+def chunk_text(text: str, chunk_size: int = 500, overlap: int = 100) -> list[str]:
+    """Split text into chunks that respect section/heading boundaries.
+    
+    Strategy:
+    1. First split text into logical sections (by headings/titles)
+    2. If a section fits in chunk_size, keep it as one chunk
+    3. If a section is too large, split it at paragraph/sentence boundaries
+    4. Merge small consecutive sections into one chunk if they fit together
     
     Args:
         text: The full document text to chunk
-        chunk_size: Target size for each chunk in characters (default: 1500)
-        overlap: Number of overlapping characters between chunks (default: 200)
+        chunk_size: Target size for each chunk in characters (default: 500)
+        overlap: Number of overlapping characters between chunks (default: 100)
     
     Returns:
         List of text chunks covering the entire document
@@ -153,6 +189,43 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 100) -> list[str
     
     text = text.strip()
     
+    if len(text) <= chunk_size:
+        return [text]
+    
+    sections = _split_into_sections(text)
+    
+    if len(sections) <= 1:
+        return _chunk_by_size(text, chunk_size, overlap)
+    
+    chunks = []
+    buffer = ""
+    
+    for section in sections:
+        if len(section) > chunk_size:
+            if buffer.strip():
+                chunks.append(buffer.strip())
+                buffer = ""
+            sub_chunks = _chunk_by_size(section, chunk_size, overlap)
+            chunks.extend(sub_chunks)
+        elif len(buffer) + len(section) + 2 <= chunk_size:
+            buffer = (buffer + "\n\n" + section).strip() if buffer else section
+        else:
+            if buffer.strip():
+                chunks.append(buffer.strip())
+            buffer = section
+    
+    if buffer.strip():
+        chunks.append(buffer.strip())
+    
+    return chunks
+
+
+def _chunk_by_size(text: str, chunk_size: int, overlap: int) -> list[str]:
+    """Fallback: split text by size with overlap, breaking at natural boundaries."""
+    if not text or not text.strip():
+        return []
+    
+    text = text.strip()
     if len(text) <= chunk_size:
         return [text]
     
@@ -170,21 +243,12 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 100) -> list[str
             break
         
         best_break = -1
-        
         search_start = start + chunk_size // 3
         search_region = text[search_start:end]
         
-        heading_patterns = ['\n# ', '\n## ', '\n### ', '\n#### ']
-        for pattern in heading_patterns:
-            idx = search_region.rfind(pattern)
-            if idx != -1:
-                best_break = search_start + idx + 1
-                break
-        
-        if best_break == -1:
-            idx = search_region.rfind('\n\n')
-            if idx != -1:
-                best_break = search_start + idx + 2
+        idx = search_region.rfind('\n\n')
+        if idx != -1:
+            best_break = search_start + idx + 2
         
         if best_break == -1:
             idx = search_region.rfind('\n')
