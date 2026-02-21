@@ -45,7 +45,7 @@ from typing import Dict, Any, Optional, List, Union
 from pathlib import Path
 from dotenv import load_dotenv
 from core.logging import log_debug, log_info, log_error
-from core.langfuse import start_generation, flush as langfuse_flush
+from core.langfuse import start_generation, start_span, extract_usage, flush as langfuse_flush
 
 env_path = Path(__file__).parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
@@ -375,6 +375,7 @@ async def call_pwc_genai_async(
 
     accumulated_text = ""
     original_prompt = prompt
+    usage = None
 
     attempts = max_continuations + 1 if enable_continuation else 1
 
@@ -404,6 +405,7 @@ async def call_pwc_genai_async(
         result = response.json()
         chunk = _extract_text_from_response(result)
         accumulated_text += chunk
+        usage = extract_usage(result)
 
         if enable_continuation:
             finish_reason = _get_finish_reason(result)
@@ -412,10 +414,13 @@ async def call_pwc_genai_async(
         else:
             break
 
-      generation.end(output=accumulated_text[:8000])
+      end_kwargs: Dict[str, Any] = {"output": accumulated_text[:8000]}
+      if usage:
+          end_kwargs["usage"] = usage
+      generation.end(**end_kwargs)
       langfuse_flush()
     except Exception as _exc:
-      generation.end(output=f"ERROR: {_exc}")
+      generation.end(output=f"ERROR: {_exc}", level="ERROR", status_message=str(_exc))
       langfuse_flush()
       raise
 
@@ -570,7 +575,7 @@ async def call_pwc_genai_stream(
         generation.end(output=accumulated_text[:8000])
         langfuse_flush()
     except Exception as _exc:
-        generation.end(output=f"ERROR: {_exc}")
+        generation.end(output=f"ERROR: {_exc}", level="ERROR", status_message=str(_exc))
         langfuse_flush()
         raise
 
@@ -662,6 +667,7 @@ def call_pwc_genai_sync(
 
     accumulated_text = ""
     original_prompt = prompt
+    usage = None
 
     attempts = max_continuations + 1 if enable_continuation else 1
 
@@ -691,6 +697,7 @@ def call_pwc_genai_sync(
         result = response.json()
         chunk = _extract_text_from_response(result)
         accumulated_text += chunk
+        usage = extract_usage(result)
 
         if enable_continuation:
             finish_reason = _get_finish_reason(result)
@@ -699,10 +706,13 @@ def call_pwc_genai_sync(
         else:
             break
 
-      generation.end(output=accumulated_text[:8000])
+      end_kwargs: Dict[str, Any] = {"output": accumulated_text[:8000]}
+      if usage:
+          end_kwargs["usage"] = usage
+      generation.end(**end_kwargs)
       langfuse_flush()
     except Exception as _exc:
-      generation.end(output=f"ERROR: {_exc}")
+      generation.end(output=f"ERROR: {_exc}", level="ERROR", status_message=str(_exc))
       langfuse_flush()
       raise
 
@@ -750,14 +760,28 @@ async def call_pwc_embedding_async(
     request_body = _build_embedding_request_body(texts, resolved_model)
     headers = _build_headers()
 
-    async with httpx.AsyncClient(timeout=timeout_value) as client:
-        response = await client.post(endpoint, json=request_body, headers=headers)
+    span = start_span(
+        name=f"embedding/{task_name or 'adhoc'}",
+        input=f"texts={len(texts)}, model={resolved_model}, first={texts[0][:200] if texts else ''}",
+        metadata={"model": resolved_model, "text_count": len(texts)},
+    )
 
-    if response.status_code != 200:
-        raise ValueError(f"PwC GenAI Embedding API Error: {response.status_code} - {response.text}")
+    try:
+        async with httpx.AsyncClient(timeout=timeout_value) as client:
+            response = await client.post(endpoint, json=request_body, headers=headers)
 
-    result = response.json()
-    return _extract_embeddings_from_response(result)
+        if response.status_code != 200:
+            raise ValueError(f"PwC GenAI Embedding API Error: {response.status_code} - {response.text}")
+
+        result = response.json()
+        embeddings = _extract_embeddings_from_response(result)
+        span.end(output=f"Generated {len(embeddings)} embeddings, dims={len(embeddings[0]) if embeddings else 0}")
+        langfuse_flush()
+        return embeddings
+    except Exception as _exc:
+        span.end(output=f"ERROR: {_exc}")
+        langfuse_flush()
+        raise
 
 
 def call_pwc_embedding_sync(
@@ -797,13 +821,27 @@ def call_pwc_embedding_sync(
     request_body = _build_embedding_request_body(texts, resolved_model)
     headers = _build_headers()
 
-    response = requests.post(endpoint, json=request_body, headers=headers, timeout=timeout_value)
+    span = start_span(
+        name=f"embedding-sync/{task_name or 'adhoc'}",
+        input=f"texts={len(texts)}, model={resolved_model}, first={texts[0][:200] if texts else ''}",
+        metadata={"model": resolved_model, "text_count": len(texts)},
+    )
 
-    if response.status_code != 200:
-        raise ValueError(f"PwC GenAI Embedding API Error: {response.status_code} - {response.text}")
+    try:
+        response = requests.post(endpoint, json=request_body, headers=headers, timeout=timeout_value)
 
-    result = response.json()
-    return _extract_embeddings_from_response(result)
+        if response.status_code != 200:
+            raise ValueError(f"PwC GenAI Embedding API Error: {response.status_code} - {response.text}")
+
+        result = response.json()
+        embeddings = _extract_embeddings_from_response(result)
+        span.end(output=f"Generated {len(embeddings)} embeddings, dims={len(embeddings[0]) if embeddings else 0}")
+        langfuse_flush()
+        return embeddings
+    except Exception as _exc:
+        span.end(output=f"ERROR: {_exc}")
+        langfuse_flush()
+        raise
 
 
 # ============================================================================
@@ -850,14 +888,28 @@ async def call_pwc_transcribe_async(
     request_body = _build_transcription_request_body(audio_data, resolved_model, language)
     headers = _build_headers()
 
-    async with httpx.AsyncClient(timeout=timeout_value) as client:
-        response = await client.post(endpoint, json=request_body, headers=headers)
+    span = start_span(
+        name=f"transcribe/{task_name or 'adhoc'}",
+        input=f"model={resolved_model}, audio_size={len(audio_data)} bytes, language={language or 'auto'}",
+        metadata={"model": resolved_model, "audio_size_bytes": len(audio_data), "language": language},
+    )
 
-    if response.status_code != 200:
-        raise ValueError(f"PwC GenAI Transcription API Error: {response.status_code} - {response.text}")
+    try:
+        async with httpx.AsyncClient(timeout=timeout_value) as client:
+            response = await client.post(endpoint, json=request_body, headers=headers)
 
-    result = response.json()
-    return _extract_transcription_from_response(result)
+        if response.status_code != 200:
+            raise ValueError(f"PwC GenAI Transcription API Error: {response.status_code} - {response.text}")
+
+        result = response.json()
+        text = _extract_transcription_from_response(result)
+        span.end(output=text[:8000])
+        langfuse_flush()
+        return text
+    except Exception as _exc:
+        span.end(output=f"ERROR: {_exc}")
+        langfuse_flush()
+        raise
 
 
 def call_pwc_transcribe_sync(
@@ -900,13 +952,27 @@ def call_pwc_transcribe_sync(
     request_body = _build_transcription_request_body(audio_data, resolved_model, language)
     headers = _build_headers()
 
-    response = requests.post(endpoint, json=request_body, headers=headers, timeout=timeout_value)
+    span = start_span(
+        name=f"transcribe-sync/{task_name or 'adhoc'}",
+        input=f"model={resolved_model}, audio_size={len(audio_data)} bytes, language={language or 'auto'}",
+        metadata={"model": resolved_model, "audio_size_bytes": len(audio_data), "language": language},
+    )
 
-    if response.status_code != 200:
-        raise ValueError(f"PwC GenAI Transcription API Error: {response.status_code} - {response.text}")
+    try:
+        response = requests.post(endpoint, json=request_body, headers=headers, timeout=timeout_value)
 
-    result = response.json()
-    return _extract_transcription_from_response(result)
+        if response.status_code != 200:
+            raise ValueError(f"PwC GenAI Transcription API Error: {response.status_code} - {response.text}")
+
+        result = response.json()
+        text = _extract_transcription_from_response(result)
+        span.end(output=text[:8000])
+        langfuse_flush()
+        return text
+    except Exception as _exc:
+        span.end(output=f"ERROR: {_exc}")
+        langfuse_flush()
+        raise
 
 
 # ============================================================================

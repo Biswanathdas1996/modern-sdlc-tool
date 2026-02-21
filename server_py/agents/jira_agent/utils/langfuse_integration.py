@@ -8,6 +8,8 @@ from core.langfuse import (
     get_langfuse_client,
     create_trace,
     start_generation,
+    start_span,
+    extract_usage,
     flush,
     shutdown,
 )
@@ -17,6 +19,8 @@ __all__ = [
     "get_langfuse_client",
     "create_trace",
     "start_generation",
+    "start_span",
+    "extract_usage",
     "flush",
     "shutdown",
 ]

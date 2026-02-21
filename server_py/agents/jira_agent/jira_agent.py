@@ -208,10 +208,10 @@ class JiraAgent:
                 self.context, conversation_ctx=conversation_ctx,
             )
 
-            # --- Trace direct processing path in Langfuse ---
             session_id_val = conversation_ctx.session_id if conversation_ctx else None
             trace = create_trace(
                 name="jira-agent-interactive",
+                input=user_prompt[:2000],
                 session_id=session_id_val,
                 metadata={
                     "intent": intent["action"].value,
@@ -221,7 +221,7 @@ class JiraAgent:
                 tags=["jira-agent", "interactive", intent["action"].value],
             )
             if trace:
-                trace.update(output=result.get("response", "")[:500])
+                trace.update(output=result.get("response", "")[:2000])
 
             if conversation_ctx:
                 result["conversation_summary"] = conversation_ctx.get_summary()
