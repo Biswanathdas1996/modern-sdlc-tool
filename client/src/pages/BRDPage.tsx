@@ -735,11 +735,16 @@ export default function BRDPage() {
                     {data.relevantComponents?.length > 0 && (
                       <div>
                         <h4 className="text-sm font-medium mb-2">Related Components</h4>
-                        <ul className="space-y-1">
-                          {data.relevantComponents.map((comp: string, i: number) => (
-                            <li key={i} className="text-sm text-muted-foreground flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 bg-primary rounded-full" />
-                              {comp}
+                        <ul className="space-y-2">
+                          {data.relevantComponents.map((comp: any, i: number) => (
+                            <li key={i} className="text-sm text-muted-foreground">
+                              <div className="flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 bg-primary rounded-full shrink-0 mt-0.5" />
+                                <span className="font-medium text-foreground">{typeof comp === 'string' ? comp : comp.name}</span>
+                              </div>
+                              {typeof comp === 'object' && comp.responsibility && (
+                                <p className="ml-3 text-xs text-muted-foreground mt-0.5">{comp.responsibility}</p>
+                              )}
                             </li>
                           ))}
                         </ul>
@@ -748,11 +753,18 @@ export default function BRDPage() {
                     {data.relevantAPIs?.length > 0 && (
                       <div>
                         <h4 className="text-sm font-medium mb-2">Related APIs</h4>
-                        <ul className="space-y-1">
-                          {data.relevantAPIs.map((api: string, i: number) => (
-                            <li key={i} className="text-sm text-muted-foreground flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 bg-success rounded-full" />
-                              {api}
+                        <ul className="space-y-2">
+                          {data.relevantAPIs.map((api: any, i: number) => (
+                            <li key={i} className="text-sm text-muted-foreground">
+                              <div className="flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 bg-success rounded-full shrink-0 mt-0.5" />
+                                <span className="font-medium text-foreground font-mono text-xs">
+                                  {typeof api === 'string' ? api : `${api.method || ''} ${api.endpoint || api}`}
+                                </span>
+                              </div>
+                              {typeof api === 'object' && api.purpose && (
+                                <p className="ml-3 text-xs text-muted-foreground mt-0.5">{api.purpose}</p>
+                              )}
                             </li>
                           ))}
                         </ul>
@@ -761,11 +773,19 @@ export default function BRDPage() {
                     {data.dataModelsAffected?.length > 0 && (
                       <div>
                         <h4 className="text-sm font-medium mb-2">Data Models Affected</h4>
-                        <ul className="space-y-1">
-                          {data.dataModelsAffected.map((model: string, i: number) => (
-                            <li key={i} className="text-sm text-muted-foreground flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 bg-warning rounded-full" />
-                              {model}
+                        <ul className="space-y-2">
+                          {data.dataModelsAffected.map((model: any, i: number) => (
+                            <li key={i} className="text-sm text-muted-foreground">
+                              <div className="flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 bg-warning rounded-full shrink-0 mt-0.5" />
+                                <span className="font-medium text-foreground">{typeof model === 'string' ? model : model.model}</span>
+                                {typeof model === 'object' && model.impact && (
+                                  <Badge variant="outline" className="text-[10px] px-1 py-0 ml-1">{model.impact}</Badge>
+                                )}
+                              </div>
+                              {typeof model === 'object' && model.details && (
+                                <p className="ml-3 text-xs text-muted-foreground mt-0.5">{model.details}</p>
+                              )}
                             </li>
                           ))}
                         </ul>
@@ -774,7 +794,7 @@ export default function BRDPage() {
                   </div>
                   {data.architectureNotes && (
                     <div className="border-t pt-3" data-testid="section-architecture-notes">
-                      <h4 className="text-sm font-medium mb-1">Architecture Notes</h4>
+                      <h4 className="text-sm font-medium mb-1">Architecture & Design Patterns</h4>
                       <p className="text-sm text-muted-foreground whitespace-pre-line" data-testid="text-architecture-notes">{data.architectureNotes}</p>
                     </div>
                   )}
@@ -786,12 +806,30 @@ export default function BRDPage() {
                   )}
                   {data.reusableCode?.length > 0 && (
                     <div className="border-t pt-3" data-testid="section-reusable-code">
-                      <h4 className="text-sm font-medium mb-2">Reusable Code & Patterns</h4>
+                      <h4 className="text-sm font-medium mb-2">Reusable Code & Utilities</h4>
+                      <ul className="space-y-2">
+                        {data.reusableCode.map((item: any, i: number) => (
+                          <li key={i} className="text-sm text-muted-foreground" data-testid={`text-reusable-code-${i}`}>
+                            <div className="flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 bg-accent rounded-full shrink-0 mt-0.5" />
+                              <span className="font-medium text-foreground">{typeof item === 'string' ? item : item.name}</span>
+                            </div>
+                            {typeof item === 'object' && item.purpose && (
+                              <p className="ml-3 text-xs text-muted-foreground mt-0.5">{item.purpose}{item.usage ? ` — ${item.usage}` : ''}</p>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {data.domainRules?.length > 0 && (
+                    <div className="border-t pt-3" data-testid="section-domain-rules">
+                      <h4 className="text-sm font-medium mb-2">Domain Rules & Business Constraints</h4>
                       <ul className="space-y-1">
-                        {data.reusableCode.map((item: string, i: number) => (
-                          <li key={i} className="text-sm text-muted-foreground flex items-center gap-1" data-testid={`text-reusable-code-${i}`}>
-                            <span className="w-1.5 h-1.5 bg-accent rounded-full" />
-                            {item}
+                        {data.domainRules.map((rule: string, i: number) => (
+                          <li key={i} className="text-sm text-muted-foreground flex items-start gap-1" data-testid={`text-domain-rule-${i}`}>
+                            <span className="w-1.5 h-1.5 bg-destructive/60 rounded-full shrink-0 mt-1.5" />
+                            {rule}
                           </li>
                         ))}
                       </ul>

@@ -596,20 +596,57 @@ Features: {', '.join([f.get('name', '') for f in analysis.get('features', [])])}
     existing_system_context_text = ""
     if existing_system_data:
         parts = []
-        if existing_system_data.get("relevantComponents"):
-            parts.append(f"Relevant Components: {', '.join(existing_system_data['relevantComponents'])}")
-        if existing_system_data.get("relevantAPIs"):
-            parts.append(f"Relevant APIs: {', '.join(existing_system_data['relevantAPIs'])}")
-        if existing_system_data.get("dataModelsAffected"):
-            parts.append(f"Data Models Affected: {', '.join(existing_system_data['dataModelsAffected'])}")
+
+        components = existing_system_data.get("relevantComponents", [])
+        if components:
+            parts.append("RELEVANT COMPONENTS & MODULES:")
+            for c in components:
+                if isinstance(c, dict):
+                    parts.append(f"  - {c.get('name', '?')}: {c.get('responsibility', '')} → Relevance: {c.get('relevance', '')}")
+                else:
+                    parts.append(f"  - {c}")
+
+        apis = existing_system_data.get("relevantAPIs", [])
+        if apis:
+            parts.append("\nRELEVANT APIs & INTEGRATION POINTS:")
+            for a in apis:
+                if isinstance(a, dict):
+                    parts.append(f"  - {a.get('method', '?')} {a.get('endpoint', '?')}: {a.get('purpose', '')}")
+                else:
+                    parts.append(f"  - {a}")
+
+        models = existing_system_data.get("dataModelsAffected", [])
+        if models:
+            parts.append("\nDATA MODELS & DATABASE IMPACT:")
+            for m in models:
+                if isinstance(m, dict):
+                    parts.append(f"  - {m.get('model', '?')} [{m.get('impact', '?')}]: {m.get('details', '')}")
+                else:
+                    parts.append(f"  - {m}")
+
         if existing_system_data.get("architectureNotes"):
-            parts.append(f"Architecture Notes: {existing_system_data['architectureNotes']}")
+            parts.append(f"\nARCHITECTURE & DESIGN PATTERNS:\n  {existing_system_data['architectureNotes']}")
+
         if existing_system_data.get("implementationApproach"):
-            parts.append(f"Implementation Approach: {existing_system_data['implementationApproach']}")
-        if existing_system_data.get("reusableCode"):
-            parts.append(f"Reusable Code: {', '.join(existing_system_data['reusableCode'])}")
+            parts.append(f"\nIMPLEMENTATION APPROACH:\n  {existing_system_data['implementationApproach']}")
+
+        reusable = existing_system_data.get("reusableCode", [])
+        if reusable:
+            parts.append("\nREUSABLE CODE & UTILITIES:")
+            for r in reusable:
+                if isinstance(r, dict):
+                    parts.append(f"  - {r.get('name', '?')}: {r.get('purpose', '')} → Usage: {r.get('usage', '')}")
+                else:
+                    parts.append(f"  - {r}")
+
+        domain_rules = existing_system_data.get("domainRules", [])
+        if domain_rules:
+            parts.append("\nDOMAIN RULES & BUSINESS CONSTRAINTS:")
+            for rule in domain_rules:
+                parts.append(f"  - {rule}")
+
         existing_system_context_text = f"""
-=== EXISTING SYSTEM CONTEXT (Codebase Analysis) ===
+=== EXISTING SYSTEM CONTEXT (Pre-Analysis) ===
 {chr(10).join(parts)}
 === END EXISTING SYSTEM CONTEXT ===
 """
