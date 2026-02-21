@@ -36,7 +36,7 @@ repo_analysis:
   max_tokens: 6096
 
 documentation_generation:
-  model: azure.gpt-5.2                            # strong writing — detailed, well-structured docs
+  model: azure.gpt-5.22                           # strong writing — detailed, well-structured docs
   temperature: 0.3
   max_tokens: 6096
 
@@ -190,20 +190,3 @@ web_test_analysis:
   model: vertex_ai.gemini-2.5-flash-image         # fast multimodal — can analyze screenshots + logs
   temperature: 0.4
   max_tokens: 8192
-
-# ---------------------------------------------------------------------------
-# Audio Transcription
-# ---------------------------------------------------------------------------
-audio_transcription:
-  model: openai.whisper                            # speech-to-text — voice input for requirements
-  temperature: 0.0
-  max_tokens: 4096
-  timeout: 120
-
-# ---------------------------------------------------------------------------
-# Embeddings (Knowledge Base)
-# ---------------------------------------------------------------------------
-kb_embedding:
-  model: vertex_ai.text-embedding-005             # 768-dim vectors — semantic search
-  max_tokens: 512
-  timeout: 60
