@@ -294,6 +294,7 @@ def init_postgres_database():
                 answer_relevancy REAL,
                 context_relevancy REAL,
                 context_precision REAL,
+                hallucination_score REAL,
                 overall_score REAL,
                 context_chunks_count INTEGER NOT NULL DEFAULT 0,
                 avg_chunk_score REAL,
@@ -308,6 +309,17 @@ def init_postgres_database():
         cur.execute("CREATE INDEX IF NOT EXISTS idx_rag_eval_brd ON rag_evaluations(brd_id);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_rag_eval_status ON rag_evaluations(status);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_rag_eval_created ON rag_evaluations(created_at DESC);")
+
+        cur.execute("""
+            DO $$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'rag_evaluations' AND column_name = 'hallucination_score'
+                ) THEN
+                    ALTER TABLE rag_evaluations ADD COLUMN hallucination_score REAL;
+                END IF;
+            END $$;
+        """)
 
         for tbl in ["feature_requests", "brds"]:
             cur.execute(f"""

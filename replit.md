@@ -90,8 +90,8 @@ The application uses a GitHub-inspired color palette, JetBrains Mono for code bl
 - Expandable card UI: click feature request to expand and see BRDs, then click BRD to see nested user stories, test cases, and test data
 
 ### RAGAS Evaluation Framework (Feb 2026)
-- **Database**: `rag_evaluations` PostgreSQL table tracking evaluation status, 4 metric scores (faithfulness, answer_relevancy, context_relevancy, context_precision), overall score, chunk metadata, and detailed reasoning
-- **Service**: `server_py/services/ragas_evaluation_service.py` — LLM-as-judge pattern using PWC GenAI (not the `ragas` Python library). Evaluates RAG quality of BRD generation with structured JSON scoring prompts
+- **Database**: `rag_evaluations` PostgreSQL table tracking evaluation status, 5 metric scores (faithfulness, answer_relevancy, context_relevancy, context_precision, hallucination_score), overall score, chunk metadata, and detailed reasoning
+- **Service**: `server_py/services/ragas_evaluation_service.py` — LLM-as-judge pattern using PWC GenAI (not the `ragas` Python library). Evaluates RAG quality of BRD generation with structured JSON scoring prompts. Includes hallucination detection that specifically identifies fabricated claims not grounded in retrieved context
 - **Async Trigger**: Evaluations run asynchronously via `asyncio.create_task()` after BRD generation completes (in `server_py/api/v1/requirements.py`), avoiding blocking the SSE stream
 - **API Endpoints**: `GET /api/ragas/evaluations` (list with pagination/project filter), `GET /api/ragas/stats` (aggregate scores, quality tiers, trends), `GET /api/ragas/evaluations/{id}` (detail)
 - **Admin Dashboard**: New "RAG Metrics" tab at `/admin/rag-metrics` with summary cards (overall score, faithfulness, answer relevancy, context quality), score bar visualizations, quality distribution tiers, and expandable evaluation detail table with per-metric reasoning

@@ -14,10 +14,10 @@ from core.logging import log_info, log_error, log_warning
 from repositories.storage import storage
 
 
-FAITHFULNESS_PROMPT = """You are an expert evaluator assessing FAITHFULNESS of a generated document.
+FAITHFULNESS_PROMPT = """You are an expert evaluator assessing FAITHFULNESS — whether the generated BRD is grounded in and aligned with the retrieved context.
 
-TASK: Evaluate whether the claims and statements in the GENERATED BRD are factually supported by the RETRIEVED CONTEXT. 
-A faithful BRD only makes claims that can be verified from the provided context or are reasonable inferences from it.
+TASK: Evaluate whether the claims, technical details, and statements in the GENERATED BRD are factually supported by and aligned with the RETRIEVED CONTEXT.
+A faithful BRD only makes project-specific claims that can be directly traced back to the provided context documents. General software engineering best practices are acceptable without context support.
 
 FEATURE REQUEST:
 {question}
@@ -29,15 +29,18 @@ GENERATED BRD OUTPUT (excerpt):
 {answer}
 
 EVALUATION INSTRUCTIONS:
-1. Identify key factual claims made in the BRD output
-2. Check if each claim is supported by the retrieved context
-3. Claims about general software practices are acceptable even without context support
-4. Claims specific to the project/system MUST be supported by context
+1. Identify all project-specific factual claims in the BRD (system names, integrations, business rules, constraints, technology choices, API details)
+2. For each project-specific claim, verify it is explicitly stated or directly inferable from the retrieved context
+3. General best-practice statements (e.g., "use HTTPS", "follow SOLID principles") are acceptable without context backing
+4. If the BRD introduces project-specific details not found in the context, it is NOT faithful — flag it as unsupported
+5. Pay special attention to: system architecture claims, existing feature descriptions, data model assertions, and integration details
 
 Score from 0.0 to 1.0 where:
-- 1.0 = All project-specific claims are supported by context
-- 0.5 = Some claims are supported, some are not
-- 0.0 = Most claims are fabricated/unsupported
+- 1.0 = All project-specific claims are directly traceable to the context
+- 0.7 = Most claims are supported, minor details lack context backing
+- 0.5 = Mix of supported and unsupported project-specific claims
+- 0.3 = Many project-specific claims cannot be traced to context
+- 0.0 = BRD makes project-specific claims entirely unrelated to context
 
 Respond ONLY with valid JSON:
 {{"score": <float>, "reasoning": "<brief explanation>"}}"""
@@ -115,6 +118,43 @@ Score from 0.0 to 1.0 where:
 
 Respond ONLY with valid JSON:
 {{"score": <float>, "reasoning": "<brief explanation>"}}"""
+
+HALLUCINATION_PROMPT = """You are an expert evaluator detecting HALLUCINATIONS in a generated document.
+
+TASK: Identify whether the GENERATED BRD contains fabricated, invented, or hallucinated information — claims that are NOT present in the RETRIEVED CONTEXT and are NOT general software engineering knowledge.
+
+Hallucinations include:
+- Invented system names, API endpoints, database tables, or services that don't exist in the context
+- Fabricated business rules, constraints, or requirements not mentioned in context
+- Made-up integration details, third-party service references, or technical specifications
+- False claims about existing system behavior, architecture, or data flows
+- Invented user roles, workflows, or process steps not supported by context
+
+FEATURE REQUEST:
+{question}
+
+RETRIEVED CONTEXT (Knowledge Base chunks):
+{context}
+
+GENERATED BRD OUTPUT (excerpt):
+{answer}
+
+EVALUATION INSTRUCTIONS:
+1. Carefully read the generated BRD and identify all specific, project-level claims
+2. For each claim, check: Is it present in the context? Is it a reasonable general practice? Or is it fabricated?
+3. List the hallucinated claims you find (if any)
+4. A HIGHER score means FEWER hallucinations (the BRD is more trustworthy)
+5. Even one significant hallucination (e.g., inventing a non-existent API or system component) should notably reduce the score
+
+Score from 0.0 to 1.0 where:
+- 1.0 = No hallucinations detected; all project-specific claims are grounded in context or are clearly general practices
+- 0.8 = Minor hallucinations only (e.g., slightly embellished details that don't change meaning)
+- 0.5 = Several hallucinated claims mixed with grounded ones
+- 0.3 = Significant hallucinations — invented systems, APIs, or business rules
+- 0.0 = Heavily hallucinated — most project-specific content is fabricated
+
+Respond ONLY with valid JSON:
+{{"score": <float>, "reasoning": "<list the specific hallucinations found, or state none were found>"}}"""
 
 
 def _parse_score_response(response_text: str) -> Dict[str, Any]:
@@ -255,12 +295,18 @@ async def run_ragas_evaluation(
                 {"question": question, "ranked_context": ranked_context},
                 "context_precision",
             )
+            hallucination_task = _evaluate_metric(
+                call_genai, HALLUCINATION_PROMPT,
+                {"question": question, "context": context, "answer": answer},
+                "hallucination",
+            )
         else:
             async def _null_result():
                 return {"score": None, "reasoning": "No context chunks retrieved"}
             faithfulness_task = _null_result()
             context_relevancy_task = _null_result()
             context_precision_task = _null_result()
+            hallucination_task = _null_result()
 
         answer_relevancy_task = _evaluate_metric(
             call_genai, ANSWER_RELEVANCY_PROMPT,
@@ -273,11 +319,12 @@ async def run_ragas_evaluation(
             answer_relevancy_task,
             context_relevancy_task,
             context_precision_task,
+            hallucination_task,
             return_exceptions=True,
         )
 
         metrics: Dict[str, Any] = {}
-        metric_names = ["faithfulness", "answer_relevancy", "context_relevancy", "context_precision"]
+        metric_names = ["faithfulness", "answer_relevancy", "context_relevancy", "context_precision", "hallucination"]
         details: Dict[str, Any] = {}
         for name, result in zip(metric_names, results):
             if isinstance(result, BaseException):
@@ -300,6 +347,7 @@ async def run_ragas_evaluation(
             "answerRelevancy": metrics.get("answer_relevancy"),
             "contextRelevancy": metrics.get("context_relevancy"),
             "contextPrecision": metrics.get("context_precision"),
+            "hallucinationScore": metrics.get("hallucination"),
             "overallScore": overall,
             "evaluationDetails": details,
             "completedAt": datetime.utcnow().isoformat(),
@@ -310,7 +358,7 @@ async def run_ragas_evaluation(
             f"RAGAS evaluation completed: {eval_id} — "
             f"F:{metrics.get('faithfulness')}, AR:{metrics.get('answer_relevancy')}, "
             f"CR:{metrics.get('context_relevancy')}, CP:{metrics.get('context_precision')}, "
-            f"Overall:{overall}",
+            f"H:{metrics.get('hallucination')}, Overall:{overall}",
             "ragas",
         )
         return eval_id

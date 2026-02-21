@@ -538,6 +538,7 @@ def _build_rag_evaluation_repo():
             "answerRelevancy": "answer_relevancy",
             "contextRelevancy": "context_relevancy",
             "contextPrecision": "context_precision",
+            "hallucinationScore": "hallucination_score",
             "overallScore": "overall_score",
             "contextChunksCount": "context_chunks_count",
             "avgChunkScore": "avg_chunk_score",

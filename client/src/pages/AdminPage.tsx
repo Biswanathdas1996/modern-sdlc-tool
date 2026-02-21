@@ -86,6 +86,7 @@ interface RagEvaluation {
   answerRelevancy: number | null;
   contextRelevancy: number | null;
   contextPrecision: number | null;
+  hallucinationScore: number | null;
   overallScore: number | null;
   contextChunksCount: number;
   avgChunkScore: number | null;
@@ -105,6 +106,7 @@ interface RagStats {
   avgAnswerRelevancy: number | null;
   avgContextRelevancy: number | null;
   avgContextPrecision: number | null;
+  avgHallucinationScore: number | null;
   avgOverallScore: number | null;
   avgChunksCount: number | null;
   avgRetrievalScore: number | null;
@@ -228,7 +230,7 @@ function RagMetricsTab({ projects }: { projects: any[] }) {
         </Card>
       ) : stats && stats.totalEvaluations > 0 ? (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <Card>
               <CardContent className="pt-4 pb-3">
                 <div className="flex items-center gap-2 mb-1">
@@ -268,6 +270,20 @@ function RagMetricsTab({ projects }: { projects: any[] }) {
             <Card>
               <CardContent className="pt-4 pb-3">
                 <div className="flex items-center gap-2 mb-1">
+                  <AlertTriangle className="h-4 w-4 text-orange-500" />
+                  <span className="text-xs text-muted-foreground">Hallucination</span>
+                </div>
+                <div className="text-2xl font-bold" data-testid="text-avg-hallucination">
+                  {stats.avgHallucinationScore !== null ? `${Math.round(stats.avgHallucinationScore * 100)}%` : "N/A"}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  higher = less hallucination
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2 mb-1">
                   <BarChart3 className="h-4 w-4 text-purple-500" />
                   <span className="text-xs text-muted-foreground">Context Quality</span>
                 </div>
@@ -289,6 +305,7 @@ function RagMetricsTab({ projects }: { projects: any[] }) {
               <CardContent className="space-y-3">
                 <ScoreBar score={stats.avgFaithfulness} label="Faithfulness" />
                 <ScoreBar score={stats.avgAnswerRelevancy} label="Answer Relevancy" />
+                <ScoreBar score={stats.avgHallucinationScore} label="Hallucination (higher = less)" />
                 <ScoreBar score={stats.avgContextRelevancy} label="Context Relevancy" />
                 <ScoreBar score={stats.avgContextPrecision} label="Context Precision" />
               </CardContent>
@@ -402,9 +419,10 @@ function RagMetricsTab({ projects }: { projects: any[] }) {
                   </div>
                   {expandedRow === ev.id && (
                     <div className="px-3 pb-3 border-t pt-3 space-y-3" data-testid={`detail-${ev.id}`}>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                         <ScoreBar score={ev.faithfulness} label="Faithfulness" />
                         <ScoreBar score={ev.answerRelevancy} label="Answer Relevancy" />
+                        <ScoreBar score={ev.hallucinationScore} label="Hallucination" />
                         <ScoreBar score={ev.contextRelevancy} label="Context Relevancy" />
                         <ScoreBar score={ev.contextPrecision} label="Context Precision" />
                       </div>
