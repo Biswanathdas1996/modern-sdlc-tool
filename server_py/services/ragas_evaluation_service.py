@@ -272,13 +272,16 @@ def _build_system_context(
         for table in database_schema.get("tables", [])[:20]:
             columns = []
             for col in table.get("columns", [])[:15]:
-                desc = f"    - {col['name']}: {col['dataType']}"
+                col_name = col.get("name", "unknown")
+                col_type = col.get("dataType", "unknown")
+                desc = f"    - {col_name}: {col_type}"
                 if col.get("isPrimaryKey"):
                     desc += " (PK)"
                 if col.get("isForeignKey"):
                     desc += f" (FK -> {col.get('references', '?')})"
                 columns.append(desc)
-            table_descriptions.append(f"  {table['name']}:\n" + "\n".join(columns))
+            table_name = table.get("name", "unknown_table")
+            table_descriptions.append(f"  {table_name}:\n" + "\n".join(columns))
         parts.append("Database Schema:\n" + "\n".join(table_descriptions))
 
     if analysis:
