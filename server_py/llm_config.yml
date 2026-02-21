@@ -246,3 +246,11 @@ web_test_analysis:
   model: vertex_ai.gemini-2.5-flash-image         # fast multimodal — can analyze screenshots + logs
   temperature: 0.4
   max_tokens: 8192
+
+# ---------------------------------------------------------------------------
+# RAGAS Evaluation (LLM-as-Judge)
+# ---------------------------------------------------------------------------
+ragas_evaluation:
+  model: vertex_ai.gemini-2.5-flash-image         # fast — runs 4 metric evaluations per BRD
+  temperature: 0.1
+  max_tokens: 2048

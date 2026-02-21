@@ -23,6 +23,7 @@ import {
   Users,
   FolderKanban,
   History,
+  BarChart3,
 } from "lucide-react";
 import {
   Sidebar,
@@ -248,6 +249,7 @@ export function AppSidebar({ completedSteps = [] }: AppSidebarProps) {
                   {[
                     { path: "/admin/projects", icon: FolderKanban, title: "Project Management", description: "Create & manage projects", testId: "link-admin-projects" },
                     { path: "/admin/users", icon: Users, title: "User Management", description: "Manage users & access", testId: "link-admin-users" },
+                    { path: "/admin/rag-metrics", icon: BarChart3, title: "RAG Metrics", description: "BRD generation quality", testId: "link-admin-rag-metrics" },
                     { path: "/admin/settings", icon: Settings, title: "Settings", description: "System configuration", testId: "link-admin-settings" },
                   ].map((item) => {
                     const isActive = location === item.path;

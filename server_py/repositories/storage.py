@@ -12,6 +12,7 @@ from repositories.pg_repository import (
     _build_user_story_repo,
     _build_db_schema_repo,
     _build_knowledge_doc_repo,
+    _build_rag_evaluation_repo,
 )
 
 
@@ -30,6 +31,7 @@ class StorageManager:
         self.bpmn_repo = _build_bpmn_repo()
         self.db_schemas_repo = _build_db_schema_repo()
         self.kb_docs_repo = _build_knowledge_doc_repo()
+        self.rag_evaluations_repo = _build_rag_evaluation_repo()
 
         self.current_project_id: Optional[str] = None
         self.current_feature_request_id: Optional[str] = None
@@ -191,6 +193,21 @@ class StorageManager:
 
     def create_knowledge_document(self, data: dict) -> Dict:
         return self.kb_docs_repo.create(data)
+
+    def create_rag_evaluation(self, data: dict) -> Dict:
+        return self.rag_evaluations_repo.create(data)
+
+    def update_rag_evaluation(self, id: str, updates: dict) -> Optional[Dict]:
+        return self.rag_evaluations_repo.update(id, updates)
+
+    def get_rag_evaluation(self, id: str) -> Optional[Dict]:
+        return self.rag_evaluations_repo.get_by_id(id)
+
+    def get_rag_evaluations_by_project(self, project_id: str) -> List[Dict]:
+        return self.rag_evaluations_repo.get_by_project(project_id)
+
+    def get_all_rag_evaluations(self) -> List[Dict]:
+        return self.rag_evaluations_repo.get_all()
 
 
 storage = StorageManager()

@@ -41,6 +41,15 @@ import {
   GitBranch,
   Settings,
   Info,
+  BarChart3,
+  TrendingUp,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  Target,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -64,6 +73,370 @@ interface UserData {
   permissions: string[];
   project_id: string | null;
   project_ids: string[];
+}
+
+interface RagEvaluation {
+  id: string;
+  projectId: string;
+  featureRequestId: string | null;
+  brdId: string | null;
+  featureTitle: string;
+  status: string;
+  faithfulness: number | null;
+  answerRelevancy: number | null;
+  contextRelevancy: number | null;
+  contextPrecision: number | null;
+  overallScore: number | null;
+  contextChunksCount: number;
+  avgChunkScore: number | null;
+  evaluationDetails: Record<string, any>;
+  errorMessage: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+interface RagStats {
+  totalEvaluations: number;
+  completed: number;
+  running: number;
+  failed: number;
+  pending: number;
+  avgFaithfulness: number | null;
+  avgAnswerRelevancy: number | null;
+  avgContextRelevancy: number | null;
+  avgContextPrecision: number | null;
+  avgOverallScore: number | null;
+  avgChunksCount: number | null;
+  avgRetrievalScore: number | null;
+  minOverallScore: number | null;
+  maxOverallScore: number | null;
+  qualityTiers: Record<string, number>;
+  trend: Array<{ date: string; count: number; avgScore: number | null }>;
+}
+
+function ScoreBar({ score, label }: { score: number | null; label: string }) {
+  if (score === null || score === undefined) return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="text-muted-foreground">N/A</span>
+      </div>
+      <div className="h-2 rounded-full bg-muted" />
+    </div>
+  );
+  const pct = Math.round(score * 100);
+  const color = pct >= 80 ? "bg-green-500" : pct >= 60 ? "bg-yellow-500" : pct >= 40 ? "bg-orange-500" : "bg-red-500";
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-medium">{pct}%</span>
+      </div>
+      <div className="h-2 rounded-full bg-muted overflow-hidden">
+        <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const variants: Record<string, string> = {
+    completed: "bg-green-500/10 text-green-600 border-green-500/20",
+    running: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+    pending: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20",
+    failed: "bg-red-500/10 text-red-600 border-red-500/20",
+  };
+  const icons: Record<string, any> = {
+    completed: CheckCircle2,
+    running: Loader2,
+    pending: Clock,
+    failed: AlertTriangle,
+  };
+  const Icon = icons[status] || Clock;
+  return (
+    <Badge variant="outline" className={cn("gap-1", variants[status] || "")} data-testid={`badge-status-${status}`}>
+      <Icon className={cn("h-3 w-3", status === "running" ? "animate-spin" : "")} />
+      {status}
+    </Badge>
+  );
+}
+
+function RagMetricsTab({ projects }: { projects: any[] }) {
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
+
+  const effectiveProjectId = selectedProjectId && selectedProjectId !== "all" ? selectedProjectId : "";
+
+  const statsUrl = effectiveProjectId
+    ? `/api/ragas/stats?project_id=${effectiveProjectId}`
+    : "/api/ragas/stats";
+
+  const evalsUrl = effectiveProjectId
+    ? `/api/ragas/evaluations?project_id=${effectiveProjectId}&limit=50`
+    : "/api/ragas/evaluations?limit=50";
+
+  const statsQuery = useQuery<{ data: RagStats }>({
+    queryKey: [statsUrl],
+    refetchInterval: 15000,
+  });
+
+  const evalsQuery = useQuery<{ data: RagEvaluation[] }>({
+    queryKey: [evalsUrl],
+    refetchInterval: 15000,
+  });
+
+  const stats = statsQuery.data?.data;
+  const evaluations = evalsQuery.data?.data || [];
+
+  const getProjectName = (projectId: string) => {
+    const p = projects.find((pr) => pr.id === projectId);
+    return p ? p.name : projectId.slice(0, 8);
+  };
+
+  return (
+    <div className="space-y-4" data-testid="section-rag-metrics">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          RAGAS evaluation metrics for BRD generation quality
+        </p>
+        <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+          <SelectTrigger className="w-[200px]" data-testid="select-rag-project">
+            <SelectValue placeholder="All Projects" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Projects</SelectItem>
+            {projects.map((p) => (
+              <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {statsQuery.isLoading ? (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : statsQuery.isError ? (
+        <Card>
+          <CardContent className="py-8">
+            <div className="text-center text-muted-foreground">
+              <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-red-500 opacity-50" />
+              <p className="text-sm font-medium">Failed to load metrics</p>
+              <p className="text-xs mt-1">Please try again later.</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : stats && stats.totalEvaluations > 0 ? (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Target className="h-4 w-4 text-primary" />
+                  <span className="text-xs text-muted-foreground">Overall Score</span>
+                </div>
+                <div className="text-2xl font-bold" data-testid="text-avg-overall">
+                  {stats.avgOverallScore !== null ? `${Math.round(stats.avgOverallScore * 100)}%` : "N/A"}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {stats.completed} evaluations
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Sparkles className="h-4 w-4 text-green-500" />
+                  <span className="text-xs text-muted-foreground">Faithfulness</span>
+                </div>
+                <div className="text-2xl font-bold" data-testid="text-avg-faithfulness">
+                  {stats.avgFaithfulness !== null ? `${Math.round(stats.avgFaithfulness * 100)}%` : "N/A"}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <TrendingUp className="h-4 w-4 text-blue-500" />
+                  <span className="text-xs text-muted-foreground">Answer Relevancy</span>
+                </div>
+                <div className="text-2xl font-bold" data-testid="text-avg-relevancy">
+                  {stats.avgAnswerRelevancy !== null ? `${Math.round(stats.avgAnswerRelevancy * 100)}%` : "N/A"}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <BarChart3 className="h-4 w-4 text-purple-500" />
+                  <span className="text-xs text-muted-foreground">Context Quality</span>
+                </div>
+                <div className="text-2xl font-bold" data-testid="text-avg-context">
+                  {stats.avgContextRelevancy !== null ? `${Math.round(stats.avgContextRelevancy * 100)}%` : "N/A"}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4" />
+                  Average Scores
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <ScoreBar score={stats.avgFaithfulness} label="Faithfulness" />
+                <ScoreBar score={stats.avgAnswerRelevancy} label="Answer Relevancy" />
+                <ScoreBar score={stats.avgContextRelevancy} label="Context Relevancy" />
+                <ScoreBar score={stats.avgContextPrecision} label="Context Precision" />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Info className="h-4 w-4" />
+                  Quality Distribution
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { tier: "excellent", label: "Excellent (80%+)", color: "text-green-600" },
+                    { tier: "good", label: "Good (60-79%)", color: "text-blue-600" },
+                    { tier: "fair", label: "Fair (40-59%)", color: "text-yellow-600" },
+                    { tier: "poor", label: "Poor (<40%)", color: "text-red-600" },
+                  ].map(({ tier, label, color }) => (
+                    <div key={tier} className="space-y-1">
+                      <p className={cn("text-xs font-medium", color)}>{label}</p>
+                      <p className="text-lg font-bold" data-testid={`text-tier-${tier}`}>
+                        {stats.qualityTiers?.[tier] || 0}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <div className="border-t pt-2 mt-2">
+                  <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                    <div>Avg Chunks: <span className="font-medium text-foreground">{stats.avgChunksCount?.toFixed(1) || "N/A"}</span></div>
+                    <div>Avg Retrieval: <span className="font-medium text-foreground">{stats.avgRetrievalScore ? `${Math.round(stats.avgRetrievalScore * 100)}%` : "N/A"}</span></div>
+                    <div>Running: <span className="font-medium text-foreground">{stats.running}</span></div>
+                    <div>Failed: <span className="font-medium text-foreground">{stats.failed}</span></div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      ) : (
+        <Card>
+          <CardContent className="py-8">
+            <div className="text-center text-muted-foreground">
+              <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm font-medium">No RAGAS Evaluations Yet</p>
+              <p className="text-xs mt-1">Evaluations are automatically triggered when BRDs are generated with knowledge base context.</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Clock className="h-4 w-4" />
+            Recent Evaluations ({evaluations.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {evalsQuery.isLoading ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : evalsQuery.isError ? (
+            <p className="text-sm text-red-500 text-center py-4">
+              Failed to load evaluations
+            </p>
+          ) : evaluations.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No evaluations recorded yet
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {evaluations.map((ev) => (
+                <div key={ev.id} className="border rounded-lg" data-testid={`row-eval-${ev.id}`}>
+                  <div
+                    className="flex items-center justify-between p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => setExpandedRow(expandedRow === ev.id ? null : ev.id)}
+                    data-testid={`button-expand-${ev.id}`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <StatusBadge status={ev.status} />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate" data-testid={`text-title-${ev.id}`}>
+                          {ev.featureTitle || "Untitled"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {getProjectName(ev.projectId)} &middot; {new Date(ev.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {ev.overallScore !== null && (
+                        <div className={cn(
+                          "text-sm font-bold px-2 py-0.5 rounded",
+                          ev.overallScore >= 0.8 ? "bg-green-500/10 text-green-600" :
+                          ev.overallScore >= 0.6 ? "bg-blue-500/10 text-blue-600" :
+                          ev.overallScore >= 0.4 ? "bg-yellow-500/10 text-yellow-600" :
+                          "bg-red-500/10 text-red-600"
+                        )} data-testid={`text-score-${ev.id}`}>
+                          {Math.round(ev.overallScore * 100)}%
+                        </div>
+                      )}
+                      {expandedRow === ev.id ? (
+                        <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </div>
+                  </div>
+                  {expandedRow === ev.id && (
+                    <div className="px-3 pb-3 border-t pt-3 space-y-3" data-testid={`detail-${ev.id}`}>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <ScoreBar score={ev.faithfulness} label="Faithfulness" />
+                        <ScoreBar score={ev.answerRelevancy} label="Answer Relevancy" />
+                        <ScoreBar score={ev.contextRelevancy} label="Context Relevancy" />
+                        <ScoreBar score={ev.contextPrecision} label="Context Precision" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                        <div>Chunks Retrieved: <span className="font-medium text-foreground">{ev.contextChunksCount}</span></div>
+                        <div>Avg Chunk Score: <span className="font-medium text-foreground">{ev.avgChunkScore ? `${Math.round(ev.avgChunkScore * 100)}%` : "N/A"}</span></div>
+                        {ev.completedAt && <div>Completed: <span className="font-medium text-foreground">{new Date(ev.completedAt).toLocaleString()}</span></div>}
+                        {ev.errorMessage && <div className="col-span-2 text-red-500">Error: {ev.errorMessage}</div>}
+                      </div>
+                      {ev.evaluationDetails && Object.keys(ev.evaluationDetails).length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground">Evaluation Reasoning</p>
+                          {Object.entries(ev.evaluationDetails).map(([metric, detail]: [string, any]) => (
+                            detail?.reasoning && (
+                              <div key={metric} className="text-xs bg-muted/50 rounded p-2">
+                                <span className="font-medium capitalize">{metric.replace(/_/g, " ")}:</span>{" "}
+                                {detail.reasoning}
+                              </div>
+                            )
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
 
 export default function AdminPage({ initialTab = "projects" }: { initialTab?: string }) {
@@ -310,6 +683,10 @@ export default function AdminPage({ initialTab = "projects" }: { initialTab?: st
             <TabsTrigger value="users" data-testid="tab-users">
               <Users className="h-4 w-4 mr-2" />
               Users ({users.length})
+            </TabsTrigger>
+            <TabsTrigger value="rag-metrics" data-testid="tab-rag-metrics">
+              <BarChart3 className="h-4 w-4 mr-2" />
+              RAG Metrics
             </TabsTrigger>
             <TabsTrigger value="settings" data-testid="tab-settings">
               <Settings className="h-4 w-4 mr-2" />
@@ -837,6 +1214,10 @@ export default function AdminPage({ initialTab = "projects" }: { initialTab?: st
           </DialogContent>
         </Dialog>
 
+          </TabsContent>
+
+          <TabsContent value="rag-metrics" className="space-y-4 mt-4">
+            <RagMetricsTab projects={projects} />
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-4 mt-4">

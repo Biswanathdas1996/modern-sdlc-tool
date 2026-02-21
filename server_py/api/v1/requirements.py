@@ -1,5 +1,6 @@
 """Requirements, BRD, test cases, test data, and user stories API router."""
 import json
+import asyncio
 from fastapi import APIRouter, HTTPException, File, UploadFile, Form, Query, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
@@ -10,6 +11,7 @@ from services import ai_service
 from api.v1.auth import get_current_user
 from services.jira_service import jira_service
 from services.knowledge_base_service import get_kb_service
+from services.ragas_evaluation_service import run_ragas_evaluation
 from services.session_restore_service import (
     restore_feature_request, restore_brd, restore_analysis,
     restore_documentation, restore_database_schema,
@@ -183,8 +185,21 @@ async def generate_brd_endpoint(http_request: Request, request: GenerateBRDReque
                 if brd:
                     brd["knowledgeSources"] = knowledge_sources if knowledge_sources else None
                     brd["createdBy"] = user_id
-                    storage.create_brd(brd)
+                    saved_brd = storage.create_brd(brd)
                     yield {"data": json.dumps({"brd": json.dumps(brd.get("content", {}))})}
+
+                    try:
+                        asyncio.create_task(run_ragas_evaluation(
+                            feature_request=feature_request,
+                            knowledge_sources=knowledge_sources,
+                            brd_content=brd.get("content", {}),
+                            project_id=project_id or "global",
+                            feature_request_id=brd.get("featureRequestId"),
+                            brd_id=saved_brd.get("id"),
+                        ))
+                        log_info("RAGAS evaluation triggered in background", "requirements")
+                    except Exception as ragas_err:
+                        log_error("Failed to trigger RAGAS evaluation", "requirements", ragas_err)
 
                 yield {"data": json.dumps({"done": True})}
             except Exception as gen_error:

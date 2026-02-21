@@ -282,6 +282,33 @@ def init_postgres_database():
         cur.execute("CREATE INDEX IF NOT EXISTS idx_db_schemas_project ON database_schemas(project_id);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_kb_docs_project ON knowledge_documents(project_id);")
 
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS rag_evaluations (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                feature_request_id TEXT,
+                brd_id TEXT,
+                feature_title TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'pending',
+                faithfulness REAL,
+                answer_relevancy REAL,
+                context_relevancy REAL,
+                context_precision REAL,
+                overall_score REAL,
+                context_chunks_count INTEGER NOT NULL DEFAULT 0,
+                avg_chunk_score REAL,
+                model_used TEXT,
+                evaluation_details JSONB NOT NULL DEFAULT '{}'::jsonb,
+                error_message TEXT,
+                created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                completed_at TIMESTAMP
+            );
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_rag_eval_project ON rag_evaluations(project_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_rag_eval_brd ON rag_evaluations(brd_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_rag_eval_status ON rag_evaluations(status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_rag_eval_created ON rag_evaluations(created_at DESC);")
+
         for tbl in ["feature_requests", "brds"]:
             cur.execute(f"""
                 DO $$ BEGIN

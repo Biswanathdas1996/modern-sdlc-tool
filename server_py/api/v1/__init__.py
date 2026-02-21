@@ -10,6 +10,7 @@ from . import documentation
 from . import database_schema
 from . import requirements
 from . import confluence
+from . import ragas
 from . import sessions
 from . import user_projects
 
@@ -24,6 +25,7 @@ __all__ = [
     "database_schema",
     "requirements",
     "confluence",
+    "ragas",
     "sessions",
     "user_projects",
 ]

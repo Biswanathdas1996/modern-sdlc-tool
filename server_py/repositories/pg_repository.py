@@ -522,3 +522,30 @@ def _build_knowledge_doc_repo():
         },
         json_fields=set(),
     )
+
+
+def _build_rag_evaluation_repo():
+    return GenericPgRepository(
+        table="rag_evaluations",
+        field_map={
+            "id": "id",
+            "projectId": "project_id",
+            "featureRequestId": "feature_request_id",
+            "brdId": "brd_id",
+            "featureTitle": "feature_title",
+            "status": "status",
+            "faithfulness": "faithfulness",
+            "answerRelevancy": "answer_relevancy",
+            "contextRelevancy": "context_relevancy",
+            "contextPrecision": "context_precision",
+            "overallScore": "overall_score",
+            "contextChunksCount": "context_chunks_count",
+            "avgChunkScore": "avg_chunk_score",
+            "modelUsed": "model_used",
+            "evaluationDetails": "evaluation_details",
+            "errorMessage": "error_message",
+            "createdAt": "created_at",
+            "completedAt": "completed_at",
+        },
+        json_fields={"evaluation_details"},
+    )
