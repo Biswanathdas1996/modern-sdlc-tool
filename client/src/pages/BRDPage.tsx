@@ -65,7 +65,9 @@ const workflowSteps = [
 
 export default function BRDPage() {
   const [streamingContent, setStreamingContent] = useState<string>("");
+  const [displayedContent, setDisplayedContent] = useState<string>("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
   const [streamingKnowledgeSources, setStreamingKnowledgeSources] = useState<KnowledgeSource[]>([]);
   const [, navigate] = useLocation();
   const searchString = useSearch();
@@ -106,7 +108,9 @@ export default function BRDPage() {
   const regenerateMutation = useMutation({
     mutationFn: async () => {
       setIsStreaming(true);
+      setIsWaitingForResponse(true);
       setStreamingContent("");
+      setDisplayedContent("");
       setStreamingKnowledgeSources([]);
 
       const cachedDocumentation = getSessionArtifact("documentation");
@@ -133,6 +137,36 @@ export default function BRDPage() {
       let content = "";
       let buffer = "";
 
+      const processLine = (trimmed: string) => {
+        if (!trimmed.startsWith("data: ")) return;
+        try {
+          const data = JSON.parse(trimmed.slice(6));
+          if (data.knowledgeSources) {
+            setStreamingKnowledgeSources(data.knowledgeSources);
+          }
+          if (data.content) {
+            content += data.content;
+            setStreamingContent(content);
+            setIsWaitingForResponse(false);
+          }
+          if (data.brd) {
+            try {
+              const parsedBrd = JSON.parse(data.brd);
+              saveSessionArtifact("brd", { content: parsedBrd });
+            } catch (_) {}
+          }
+          if (data.error) {
+            throw new Error(data.error);
+          }
+          if (data.done) {
+            setIsStreaming(false);
+            setIsWaitingForResponse(false);
+          }
+        } catch (e) {
+          if (e instanceof Error && e.message === "Generation failed") throw e;
+        }
+      };
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -142,35 +176,16 @@ export default function BRDPage() {
         buffer = lines.pop() || "";
 
         for (const line of lines) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(trimmed.slice(6));
-              if (data.knowledgeSources) {
-                setStreamingKnowledgeSources(data.knowledgeSources);
-              }
-              if (data.content) {
-                content += data.content;
-                setStreamingContent(content);
-              }
-              if (data.brd) {
-                try {
-                  const parsedBrd = JSON.parse(data.brd);
-                  saveSessionArtifact("brd", { content: parsedBrd });
-                } catch (_) {}
-              }
-              if (data.error) {
-                throw new Error(data.error);
-              }
-              if (data.done) {
-                setIsStreaming(false);
-              }
-            } catch (e) {
-              if (e instanceof Error && e.message === "Generation failed") throw e;
-            }
-          }
+          processLine(line.trim());
         }
       }
+
+      if (buffer.trim()) {
+        processLine(buffer.trim());
+      }
+
+      setIsStreaming(false);
+      setIsWaitingForResponse(false);
 
       return content;
     },
@@ -179,6 +194,7 @@ export default function BRDPage() {
     },
     onError: () => {
       setIsStreaming(false);
+      setIsWaitingForResponse(false);
     },
   });
 
@@ -294,12 +310,22 @@ export default function BRDPage() {
     }
   };
 
-  // Auto-scroll during streaming
+  useEffect(() => {
+    if (streamingContent.length > displayedContent.length) {
+      const remaining = streamingContent.length - displayedContent.length;
+      const charsPerTick = Math.max(3, Math.ceil(remaining / 200));
+      const timer = setTimeout(() => {
+        setDisplayedContent(streamingContent.slice(0, displayedContent.length + charsPerTick));
+      }, 10);
+      return () => clearTimeout(timer);
+    }
+  }, [streamingContent, displayedContent]);
+
   useEffect(() => {
     if (isStreaming && contentRef.current) {
       contentRef.current.scrollTop = contentRef.current.scrollHeight;
     }
-  }, [streamingContent, isStreaming]);
+  }, [displayedContent, isStreaming]);
 
   const mockBRD: BRD = brd || {
     id: "1",
@@ -696,14 +722,40 @@ export default function BRDPage() {
             <Card className="border-primary/50 bg-primary/5">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                  Generating BRD...
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  {isWaitingForResponse ? "Analyzing requirements and generating BRD..." : "Rendering BRD content..."}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <pre className="whitespace-pre-wrap font-mono text-sm text-foreground">
-                  {streamingContent}
-                </pre>
+                {isWaitingForResponse ? (
+                  <div className="space-y-4 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                      <span className="text-sm text-muted-foreground">Gathering context from documentation and knowledge base...</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="h-2 w-2 rounded-full bg-muted animate-pulse" style={{ animationDelay: "0.5s" }} />
+                      <span className="text-sm text-muted-foreground">AI is composing the business requirements document...</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="h-2 w-2 rounded-full bg-muted animate-pulse" style={{ animationDelay: "1s" }} />
+                      <span className="text-sm text-muted-foreground">This may take 30-60 seconds depending on complexity...</span>
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      <div className="h-3 bg-muted/50 rounded animate-pulse w-3/4" />
+                      <div className="h-3 bg-muted/50 rounded animate-pulse w-full" style={{ animationDelay: "0.2s" }} />
+                      <div className="h-3 bg-muted/50 rounded animate-pulse w-5/6" style={{ animationDelay: "0.4s" }} />
+                      <div className="h-3 bg-muted/50 rounded animate-pulse w-2/3" style={{ animationDelay: "0.6s" }} />
+                    </div>
+                  </div>
+                ) : (
+                  <pre className="whitespace-pre-wrap font-mono text-sm text-foreground leading-relaxed">
+                    {displayedContent}
+                    {displayedContent.length < streamingContent.length && (
+                      <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-0.5" />
+                    )}
+                  </pre>
+                )}
               </CardContent>
             </Card>
           )}

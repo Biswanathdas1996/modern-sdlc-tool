@@ -501,7 +501,13 @@ async def call_pwc_genai_stream(
                 is_sse = "text/event-stream" in content_type
                 got_chunks = False
 
+                log_info(
+                    f"[stream] Response content-type: {content_type} | is_sse: {is_sse}",
+                    "pwc_llm",
+                )
+
                 buffer = ""
+                chunk_count = 0
                 async for raw_chunk in response.aiter_text():
                     buffer += raw_chunk
                     while "\n" in buffer:
@@ -535,6 +541,7 @@ async def call_pwc_genai_stream(
 
                             if delta_text:
                                 got_chunks = True
+                                chunk_count += 1
                                 accumulated_text += delta_text
                                 yield delta_text
                         except json.JSONDecodeError:
@@ -545,10 +552,20 @@ async def call_pwc_genai_stream(
                         chunk_data = json.loads(buffer.strip())
                         text = _extract_text_from_response(chunk_data)
                         if text and not got_chunks:
+                            log_info(
+                                f"[stream] Non-streaming fallback: got full response ({len(text)} chars)",
+                                "pwc_llm",
+                            )
                             accumulated_text += text
                             yield text
                     except (json.JSONDecodeError, ValueError):
                         pass
+
+                log_info(
+                    f"[stream] Complete: {chunk_count} SSE chunks, "
+                    f"got_chunks={got_chunks}, total={len(accumulated_text)} chars",
+                    "pwc_llm",
+                )
 
         generation.end(output=accumulated_text[:8000])
         langfuse_flush()
