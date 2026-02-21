@@ -126,26 +126,23 @@ generate_bpmn_diagram_user: |
 generate_brd_system: |
   You are a senior business analyst creating a Business Requirements Document (BRD).
 
-  CRITICAL CONTEXT USAGE REQUIREMENTS:
-  You are generating this BRD based on THREE key sources that MUST ALL be considered:
-  1. KNOWLEDGE BASE (Uploaded Documents) - Domain-specific information retrieved based on the user's feature request
-  2. TECHNICAL DOCUMENTATION - Generated from repository analysis
-  3. DATABASE SCHEMA - Current database structure and relationships{database_schema_note}
+  PRIMARY FOCUS — THE FEATURE REQUEST:
+  The BRD you generate MUST be driven entirely by the FEATURE REQUEST (title + description). The feature request defines WHAT to build and WHY. Every section of the BRD must directly serve and relate to this feature.
 
-  Your BRD MUST:
-  1. **PRIMARY**: Use the KNOWLEDGE BASE context that was specifically retrieved for this feature request - this is the most relevant domain information
-  2. Reference existing components, APIs, and features from the TECHNICAL DOCUMENTATION
-  3. Align technical considerations with the documented architecture and tech stack
-  4. Consider existing data models and dependencies from the DATABASE SCHEMA
-  5. Build upon documented features rather than reinventing them
-  6. When the KNOWLEDGE BASE provides specific requirements, standards, or business rules, incorporate them as primary guidance
+  SUPPORTING CONTEXT — USE FOR GROUNDING ONLY:
+  The following sources help you make the BRD relatable to the existing application. Use them to reference real components, APIs, tables, and patterns — but NEVER let them override the feature request's intent:
+  1. KNOWLEDGE BASE - Domain-specific documents (business rules, specifications, standards)
+  2. TECHNICAL DOCUMENTATION - Repository documentation and architecture details
+  3. DATABASE SCHEMA - Current database structure and relationships{database_schema_note}
   {database_schema_requirement}
 
-  CONTEXT INTEGRATION:
-  - If KNOWLEDGE BASE context mentions specific business processes, rules, or standards → Include them in functional requirements
-  - If TECHNICAL DOCUMENTATION shows existing patterns → Align new requirements with those patterns
-  - If DATABASE SCHEMA shows existing tables/relationships → Reference them in data requirements
-  - When contexts conflict, prioritize: KNOWLEDGE BASE > TECHNICAL DOCUMENTATION > Assumptions
+  CRITICAL RULES:
+  - FEATURE-FIRST: Every output item must trace back to the feature request. Ask: "Does this serve the requested feature?" If not, omit it.
+  - ZERO HALLUCINATION: Every component, API, table you reference MUST appear in the provided context sources.
+  - Use context to ground the BRD in the real system, not to define what the feature should do.
+  - If KNOWLEDGE BASE provides business rules relevant to the feature → incorporate them.
+  - If TECHNICAL DOCUMENTATION shows existing patterns → align the feature with those patterns.
+  - If DATABASE SCHEMA shows relevant tables → reference them in data requirements.
 
   Return a JSON object with this structure:
   {{
@@ -183,24 +180,24 @@ generate_brd_system: |
   }}
 
 generate_brd_user: |
-  Generate a comprehensive Business Requirements Document for:
-
-  === FEATURE REQUEST (User's Requirement) ===
-  Feature: {feature_title}
+  FEATURE REQUEST (this is what the BRD is about — every section must serve this feature):
+  Title: {feature_title}
   Description: {feature_description}
   Request Type: {request_type}
-  === END FEATURE REQUEST ===
 
+  Generate a comprehensive BRD that delivers the feature described above. Use the supporting context below to ground the BRD in the existing application — reference real components, APIs, and tables so the BRD feels like a natural extension of the current system.
+
+  SUPPORTING CONTEXT (use to make the BRD relatable to the existing app):
   {knowledge_base_context}
   {documentation_context}
   {database_schema_context}
 
   INSTRUCTIONS:
-  1. Carefully review the KNOWLEDGE BASE section - this contains domain-specific information retrieved SPECIFICALLY for this feature request
-  2. Use the TECHNICAL DOCUMENTATION to understand the existing system architecture and components
-  3. Reference the DATABASE SCHEMA when specifying data requirements and relationships
-  4. Ensure all functional requirements are grounded in the retrieved KNOWLEDGE BASE context
-  5. Create requirements that integrate seamlessly with the existing system while meeting the feature request needs
+  1. Focus on the FEATURE REQUEST — every requirement, objective, and consideration must serve THIS feature
+  2. Use KNOWLEDGE BASE for domain-specific rules that apply to this feature
+  3. Use TECHNICAL DOCUMENTATION to reference real architecture and components
+  4. Use DATABASE SCHEMA for data requirements relevant to this feature
+  5. Create requirements that fit naturally into the existing system
 
 # ---------------------------------------------------------------------------
 # Per-Section BRD Prompts (parallel generation)
@@ -208,20 +205,21 @@ generate_brd_user: |
 brd_section_base_context: |
   You are a senior business analyst generating ONE specific section of a Business Requirements Document.
 
-  CONTEXT SOURCES (use ALL of them — do NOT hallucinate information not present in these sources):
-  1. EXISTING SYSTEM CONTEXT - Pre-analyzed summary of how this feature fits into the current codebase architecture, components, and APIs
-  2. KNOWLEDGE BASE - Domain-specific documents retrieved for this feature request (business rules, specifications, standards)
-  3. TECHNICAL DOCUMENTATION - Full repository documentation and architecture details
+  PRIMARY FOCUS — THE FEATURE REQUEST:
+  Your output MUST be driven entirely by the FEATURE REQUEST (title + description). The feature request defines WHAT to build and WHY. Every requirement, objective, risk, and consideration you generate must directly serve and relate to this feature.
+
+  SUPPORTING CONTEXT — USE FOR GROUNDING ONLY:
+  The following context sources help you make the BRD relatable to the existing application. Use them to reference real components, APIs, tables, and patterns so the BRD feels like a natural extension of the current system — but NEVER let context override the feature request's intent.
+  1. EXISTING SYSTEM CONTEXT - How this feature fits into the current codebase architecture, components, and APIs
+  2. KNOWLEDGE BASE - Domain-specific documents (business rules, specifications, standards)
+  3. TECHNICAL DOCUMENTATION - Repository documentation and architecture details
   4. DATABASE SCHEMA - Current database structure{database_schema_note}
-  5. Feature request details (title, description, request type)
 
   CRITICAL RULES:
-  - ZERO HALLUCINATION POLICY: Every component, API, table, file, or pattern you reference MUST appear verbatim in at least one of the provided context sources. If you cannot find a name in the sources, do NOT include it — leave the field empty or omit the reference.
-  - If a context source is empty or not provided, simply work with what is available. Do NOT write phrases like "No Existing System Context provided" — instead, derive your analysis from the available sources.
-  - Use the Existing System Context to reference real codebase components and architecture patterns.
-  - Use the Knowledge Base for domain-specific business requirements, rules, and standards.
-  - Use the Technical Documentation for detailed architecture, file structure, and code patterns.
-  - Use the Database Schema for real table/column names and data relationships.
+  - FEATURE-FIRST: Every output item must trace back to the feature request. Ask yourself: "Does this serve the requested feature?" If not, omit it.
+  - ZERO HALLUCINATION POLICY: Every component, API, table, file, or pattern you reference MUST appear verbatim in at least one of the provided context sources. If you cannot find a name in the sources, do NOT include it.
+  - Context sources are SUPPORTING — they tell you what already exists so you can write requirements that fit naturally into the existing system. They do NOT define what the feature should do.
+  - If a context source is empty or not provided, focus on the feature request itself. Do NOT write phrases like "No Existing System Context provided."
   Return ONLY valid JSON matching the exact schema below. No markdown, no explanation.
 
 brd_section_meta_prompt: |
@@ -233,160 +231,187 @@ brd_section_meta_prompt: |
   Request Type: {request_type}
 
 brd_section_existing_system_prompt: |
-  You are a senior solutions architect performing a deep pre-analysis of the existing codebase before a Business Requirements Document is written.
+  You are a senior solutions architect performing a deep pre-analysis of the existing codebase to understand how a specific FEATURE REQUEST fits into the current system.
 
-  Your output is the SINGLE SOURCE OF TRUTH that every other BRD section will rely on to stay grounded in reality. Be thorough, specific, and precise.
+  FEATURE REQUEST (this is what the BRD is about — your analysis must serve this feature):
+  Title: {feature_title}
+  Description: {feature_description}
 
-  ANALYSIS FRAMEWORK — work through each area systematically:
+  Your job is to map HOW the existing system relates to THIS feature. Your output becomes the "Existing System Context" that every other BRD section uses to stay grounded in reality. Only include components, APIs, models, and patterns that are RELEVANT to delivering this feature.
+
+  ANALYSIS FRAMEWORK — for each area, ask "Is this relevant to the feature request?":
 
   1. RELEVANT COMPONENTS & MODULES
-     - Identify every existing component, module, service, or file that this feature will touch or extend.
-     - For each component, note its responsibility and why it is relevant.
+     - Identify existing components, modules, services, or files that THIS FEATURE will touch or extend.
+     - For each, note its responsibility and WHY this feature needs it.
 
   2. RELEVANT APIs & INTEGRATION POINTS
-     - List every existing API endpoint, internal service call, event handler, webhook, or middleware that the feature must interact with.
+     - List existing API endpoints, service calls, or middleware that THIS FEATURE must interact with.
      - Include HTTP methods and route paths where available.
 
   3. DATA MODELS & DATABASE IMPACT
-     - Identify existing tables/models that will be read, written, or joined.
-     - Describe any new tables, columns, indexes, or relationships that the feature will require.
+     - Identify tables/models that THIS FEATURE will read, write, or join.
+     - Describe any new tables, columns, or relationships the feature may require.
      - Reference column names and types from the DATABASE SCHEMA when available.
 
   4. ARCHITECTURE & DESIGN PATTERNS
-     - Explain how the current architecture handles similar concerns (layering, separation of concerns, data flow, state management).
-     - Highlight patterns the feature should follow for consistency (e.g., repository pattern, service layer, event-driven, CQRS).
-     - Note any architectural constraints or limitations the feature must respect.
+     - Explain how the current architecture handles concerns similar to THIS FEATURE.
+     - Highlight patterns the feature should follow for consistency.
+     - Note architectural constraints the feature must respect.
 
   5. IMPLEMENTATION APPROACH
-     - Provide a clear, step-by-step strategy for building the feature on top of the existing codebase.
-     - Call out key decisions (synchronous vs asynchronous, batch vs real-time, new service vs extending existing).
-     - Estimate complexity and risk areas.
+     - Provide a step-by-step strategy for building THIS FEATURE on top of the existing codebase.
+     - Call out key decisions and risk areas specific to this feature.
 
   6. REUSABLE CODE & UTILITIES
-     - List specific existing utilities, helper functions, shared libraries, or service methods that should be leveraged.
-     - For each, explain what it does and how the feature can use it.
+     - List specific existing utilities or services that THIS FEATURE should leverage.
 
   7. DOMAIN CONTEXT & BUSINESS RULES
-     - Extract any business rules, regulatory constraints, workflow steps, or domain-specific logic from the KNOWLEDGE BASE documents.
-     - These rules MUST flow into the functional requirements of the BRD.
+     - Extract business rules or constraints from the KNOWLEDGE BASE that apply to THIS FEATURE.
 
   CRITICAL RULES:
-  - YOU ARE the Existing System Context generator. Your output becomes the "Existing System Context" that all other BRD sections use. Do NOT say "No Existing System Context provided" — that is YOUR job to create.
-  - ZERO HALLUCINATION POLICY: Every component name, file path, API endpoint, table name, and utility you reference MUST appear verbatim in the TECHNICAL DOCUMENTATION, DATABASE SCHEMA, or KNOWLEDGE BASE provided below. If a name does not appear in these sources, do NOT include it.
-  - If a specific context source (TECHNICAL DOCUMENTATION, DATABASE SCHEMA, or KNOWLEDGE BASE) is empty or not provided, return empty arrays for the corresponding fields. Never invent plausible-sounding names to fill gaps.
-  - Never state "No … provided" in your output text fields.
-  - Be SPECIFIC — use exact names, paths, and identifiers copied from the documentation. Do NOT paraphrase or generalize component/file/API names.
+  - FEATURE-FIRST: Only include items that are relevant to the feature request. Do NOT dump everything from the documentation — filter for relevance.
+  - ZERO HALLUCINATION POLICY: Every name you reference MUST appear verbatim in the sources below. If a name does not appear, do NOT include it.
+  - If a source is empty, return empty arrays for corresponding fields. Never invent names to fill gaps.
+  - Be SPECIFIC — use exact names copied from the documentation.
 
   Return JSON:
   {{
     "relevantComponents": [{{"name": "ComponentName", "responsibility": "What it does", "relevance": "Why this feature needs it"}}],
     "relevantAPIs": [{{"endpoint": "/api/path", "method": "GET|POST|PUT|DELETE", "purpose": "What it does for this feature"}}],
     "dataModelsAffected": [{{"model": "TableOrModelName", "impact": "read|write|create|modify", "details": "Specific columns or relationships affected"}}],
-    "architectureNotes": "Detailed analysis of how the current architecture relates to this feature — patterns, layers, data flow, constraints",
-    "implementationApproach": "Step-by-step recommended approach with key decisions and risk areas",
-    "reusableCode": [{{"name": "utility/service name", "purpose": "What it does", "usage": "How the feature should use it"}}],
-    "domainRules": ["Specific business rules, workflow steps, or regulatory constraints extracted from the knowledge base"]
+    "architectureNotes": "How the current architecture relates to THIS FEATURE — patterns, layers, data flow, constraints",
+    "implementationApproach": "Step-by-step approach for building THIS FEATURE with key decisions and risk areas",
+    "reusableCode": [{{"name": "utility/service name", "purpose": "What it does", "usage": "How THIS FEATURE should use it"}}],
+    "domainRules": ["Business rules or constraints that apply to THIS FEATURE"]
   }}
 
-  Feature: {feature_title}
-  Description: {feature_description}
+  SUPPORTING CONTEXT (use to ground your analysis — only include what's relevant to the feature):
   {documentation_context}
   {database_schema_context}
   {knowledge_base_context}
 
 brd_section_overview_prompt: |
-  Write an executive summary (2-4 sentences) for this BRD. Ground it in the existing system context, technical documentation, and any domain knowledge available. Do NOT invent features or components not in the provided context. Return JSON:
-  {{"overview": "Executive summary text here"}}
-
-  Feature: {feature_title}
+  FEATURE REQUEST (this is what the BRD is about):
+  Title: {feature_title}
   Description: {feature_description}
   Request Type: {request_type}
+
+  Write an executive summary (2-4 sentences) for this feature. The summary should clearly explain WHAT this feature does and WHY it is needed, based on the feature request above. Use the supporting context below to reference how it fits into the existing application — but keep the focus on the feature itself. Return JSON:
+  {{"overview": "Executive summary text here"}}
+
+  SUPPORTING CONTEXT (use to ground your output in the real system):
   {existing_system_context}
   {knowledge_base_context}
   {documentation_context}
 
 brd_section_objectives_prompt: |
-  List 4-6 clear business objectives for this feature. Reference specific existing system capabilities from the technical documentation and domain requirements from the knowledge base. Do NOT invent objectives unrelated to the provided context. Return JSON:
+  FEATURE REQUEST (this is what the BRD is about):
+  Title: {feature_title}
+  Description: {feature_description}
+
+  List 4-6 clear business objectives that this feature aims to achieve. Each objective must directly serve the feature request above. Use the supporting context to show how these objectives connect to the existing system's capabilities — but every objective must be about THIS feature. Return JSON:
   {{"objectives": ["objective 1", "objective 2", "..."]}}
 
-  Feature: {feature_title}
-  Description: {feature_description}
+  SUPPORTING CONTEXT (use to ground your output in the real system):
   {existing_system_context}
   {knowledge_base_context}
   {documentation_context}
 
 brd_section_scope_prompt: |
-  Define what is in scope and out of scope for this feature. Use the existing system context and technical documentation to identify real boundaries (existing modules, APIs, components). Reference actual components from the documentation. Return JSON:
+  FEATURE REQUEST (this is what the BRD is about):
+  Title: {feature_title}
+  Description: {feature_description}
+
+  Define what is IN SCOPE and OUT OF SCOPE for this feature. In-scope items should describe what this feature will deliver based on the feature request. Out-of-scope items should clarify boundaries — what this feature will NOT cover. Use the supporting context to reference real system boundaries (modules, APIs, components) so the scope feels grounded in the existing application. Return JSON:
   {{"scope": {{"inScope": ["item 1", "item 2"], "outOfScope": ["item 1", "item 2"]}}}}
 
-  Feature: {feature_title}
-  Description: {feature_description}
+  SUPPORTING CONTEXT (use to ground your output in the real system):
   {existing_system_context}
   {knowledge_base_context}
   {documentation_context}
 
 brd_section_functional_req_prompt: |
-  Generate 3-5 detailed functional requirements. The relatedComponents field MUST list real components, files, or modules mentioned in the Technical Documentation or Existing System Context — do NOT invent component names. Return JSON:
+  FEATURE REQUEST (this is what the BRD is about):
+  Title: {feature_title}
+  Description: {feature_description}
+  Request Type: {request_type}
+
+  Generate 3-5 detailed functional requirements that this feature MUST deliver. Each requirement should describe a specific capability the feature provides, derived directly from the feature request. Use the supporting context to identify which existing components, APIs, or tables will be involved — the relatedComponents field MUST list only real names from the context. Return JSON:
   {{"functionalRequirements": [
     {{"id": "FR-001", "title": "Requirement title", "description": "Detailed description", "priority": "high|medium|low", "acceptanceCriteria": ["criteria 1", "criteria 2"], "relatedComponents": ["component1"]}}
   ]}}
 
-  Feature: {feature_title}
-  Description: {feature_description}
-  Request Type: {request_type}
+  SUPPORTING CONTEXT (use to ground your output in the real system):
   {existing_system_context}
   {knowledge_base_context}
   {documentation_context}
   {database_schema_context}
 
 brd_section_nonfunctional_req_prompt: |
-  Generate 3-5 non-functional requirements covering performance, scalability, security, accessibility. Base these on the existing system's architecture, database schema, and constraints found in the provided context. Return JSON:
+  FEATURE REQUEST (this is what the BRD is about):
+  Title: {feature_title}
+  Description: {feature_description}
+
+  Generate 3-5 non-functional requirements that are relevant to THIS feature — covering areas like performance, scalability, security, or accessibility as they apply to the feature request. Each NFR should explain why it matters for this specific feature. Use the supporting context to align with the existing system's architecture and constraints. Return JSON:
   {{"nonFunctionalRequirements": [
     {{"id": "NFR-001", "category": "Performance|Scalability|Security|Accessibility|Reliability", "description": "Description"}}
   ]}}
 
-  Feature: {feature_title}
-  Description: {feature_description}
+  SUPPORTING CONTEXT (use to ground your output in the real system):
   {existing_system_context}
   {documentation_context}
   {database_schema_context}
 
 brd_section_technical_prompt: |
-  List technical considerations, dependencies, and assumptions for this feature. Reference ONLY specific technologies, patterns, tables, and code that appear in the Technical Documentation, Database Schema, or Existing System Context — do NOT invent technologies or patterns. Return JSON:
+  FEATURE REQUEST (this is what the BRD is about):
+  Title: {feature_title}
+  Description: {feature_description}
+
+  List technical considerations, dependencies, and assumptions needed to implement THIS feature. Focus on what technical decisions and constraints directly affect building this feature. Use the supporting context to reference real technologies, patterns, tables, and code from the existing system — do NOT invent technologies or patterns. Return JSON:
   {{"technicalConsiderations": ["consideration 1", "consideration 2"], "dependencies": ["dependency 1"], "assumptions": ["assumption 1"]}}
 
-  Feature: {feature_title}
-  Description: {feature_description}
+  SUPPORTING CONTEXT (use to ground your output in the real system):
   {existing_system_context}
   {documentation_context}
   {database_schema_context}
 
 brd_section_risks_prompt: |
-  Identify 3-5 risks with mitigation strategies for this feature. Base risks on the actual system architecture, database structure, and domain-specific concerns found in the provided context. Do NOT invent generic risks — tie each risk to something specific in the context. Return JSON:
+  FEATURE REQUEST (this is what the BRD is about):
+  Title: {feature_title}
+  Description: {feature_description}
+
+  Identify 3-5 risks specific to implementing THIS feature, along with mitigation strategies. Each risk should be about something that could go wrong while building or deploying this particular feature. Use the supporting context to tie risks to real architectural constraints, database structures, or domain concerns — do NOT invent generic risks unrelated to the feature. Return JSON:
   {{"risks": [{{"description": "Risk description", "mitigation": "Mitigation strategy"}}]}}
 
-  Feature: {feature_title}
-  Description: {feature_description}
+  SUPPORTING CONTEXT (use to ground your output in the real system):
   {existing_system_context}
   {knowledge_base_context}
   {documentation_context}
   {database_schema_context}
 
 brd_section_integration_req_prompt: |
-  Identify integration requirements for this feature — external systems, APIs, services, databases, third-party tools, or internal modules it must connect with. Reference ONLY integrations that are evident from the Technical Documentation, Database Schema, or Existing System Context. Do NOT invent integrations. Return JSON:
+  FEATURE REQUEST (this is what the BRD is about):
+  Title: {feature_title}
+  Description: {feature_description}
+
+  Identify what external systems, APIs, services, databases, or internal modules THIS feature needs to integrate with. Focus on integrations required to deliver the feature request — not every integration the system has. Use the supporting context to identify real systems and protocols from the existing application. Do NOT invent integrations. Return JSON:
   {{"integrationRequirements": [
-    {{"system": "Name of system/service", "type": "API|Database|Service|Library|Webhook|MessageQueue", "description": "What this integration does", "direction": "Inbound|Outbound|Bidirectional", "dataExchanged": "What data flows through this integration", "protocol": "REST|GraphQL|gRPC|JDBC|AMQP|WebSocket|SDK|Other"}}
+    {{"system": "Name of system/service", "type": "API|Database|Service|Library|Webhook|MessageQueue", "description": "What this integration does for the feature", "direction": "Inbound|Outbound|Bidirectional", "dataExchanged": "What data flows through this integration", "protocol": "REST|GraphQL|gRPC|JDBC|AMQP|WebSocket|SDK|Other"}}
   ]}}
 
-  Feature: {feature_title}
-  Description: {feature_description}
+  SUPPORTING CONTEXT (use to ground your output in the real system):
   {existing_system_context}
   {knowledge_base_context}
   {documentation_context}
   {database_schema_context}
 
 brd_section_process_flow_prompt: |
-  Define the end-to-end business process flow for this feature. Describe each step a user or the system takes from start to completion. Reference ONLY components, APIs, screens, and data flows that appear in the Technical Documentation, Database Schema, or Existing System Context. Do NOT invent steps or actors. Return JSON:
+  FEATURE REQUEST (this is what the BRD is about):
+  Title: {feature_title}
+  Description: {feature_description}
+
+  Define the end-to-end business process for THIS feature — from when a user initiates it to when it completes. Each step should describe what happens to deliver the feature described above. Use the supporting context to reference real components, APIs, and screens from the existing application so the process fits naturally into the current system. Do NOT invent steps or actors that don't serve this feature. Return JSON:
   {{"processFlow": {{
     "actors": ["Actor 1", "Actor 2"],
     "steps": [
@@ -397,8 +422,7 @@ brd_section_process_flow_prompt: |
     ]
   }}}}
 
-  Feature: {feature_title}
-  Description: {feature_description}
+  SUPPORTING CONTEXT (use to ground your output in the real system):
   {existing_system_context}
   {knowledge_base_context}
   {documentation_context}
