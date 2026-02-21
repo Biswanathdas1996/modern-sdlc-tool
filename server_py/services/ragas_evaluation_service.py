@@ -1,10 +1,16 @@
 """RAGAS-style evaluation service for BRD generation RAG calls.
 
-Implements LLM-as-judge evaluation of 4 RAGAS metrics:
+Implements LLM-as-judge evaluation of 5 RAGAS metrics:
 - Faithfulness: Is the BRD factually consistent with retrieved context?
 - Answer Relevancy: Is the BRD relevant to the feature request?
-- Context Relevancy: Are the retrieved KB chunks relevant to the feature request?
+- Context Relevancy: Are the retrieved context sources relevant to the feature request?
 - Context Precision: Are the most relevant chunks ranked highest?
+- Hallucination: Does the BRD contain fabricated claims not grounded in context?
+
+Context for evaluation combines three sources:
+1. MongoDB Knowledge Base chunks (retrieved via vector/keyword search)
+2. Code Documentation (generated technical docs from repo analysis)
+3. Existing System Context (database schema, architecture, tech stack)
 """
 import json
 import asyncio
@@ -19,10 +25,15 @@ FAITHFULNESS_PROMPT = """You are an expert evaluator assessing FAITHFULNESS — 
 TASK: Evaluate whether the claims, technical details, and statements in the GENERATED BRD are factually supported by and aligned with the RETRIEVED CONTEXT.
 A faithful BRD only makes project-specific claims that can be directly traced back to the provided context documents. General software engineering best practices are acceptable without context support.
 
+The RETRIEVED CONTEXT below combines three sources:
+1. Knowledge Base documents (uploaded project-specific docs)
+2. Code Documentation (auto-generated technical docs from repo analysis)
+3. Existing System Context (database schema, architecture, tech stack)
+
 FEATURE REQUEST:
 {question}
 
-RETRIEVED CONTEXT (Knowledge Base chunks):
+RETRIEVED CONTEXT (Combined: KB Documents + Code Documentation + System Context):
 {context}
 
 GENERATED BRD OUTPUT (excerpt):
@@ -72,37 +83,46 @@ Respond ONLY with valid JSON:
 
 CONTEXT_RELEVANCY_PROMPT = """You are an expert evaluator assessing CONTEXT RELEVANCY.
 
-TASK: Evaluate whether the RETRIEVED CONTEXT chunks are relevant to the FEATURE REQUEST.
+TASK: Evaluate whether the RETRIEVED CONTEXT is relevant to the FEATURE REQUEST.
 Relevant context provides useful information for generating requirements about the requested feature.
+
+The RETRIEVED CONTEXT below combines three sources:
+1. Knowledge Base documents (uploaded project-specific docs)
+2. Code Documentation (auto-generated technical docs from repo analysis)
+3. Existing System Context (database schema, architecture, tech stack)
 
 FEATURE REQUEST:
 {question}
 
-RETRIEVED CONTEXT (Knowledge Base chunks):
+RETRIEVED CONTEXT (Combined: KB Documents + Code Documentation + System Context):
 {context}
 
 EVALUATION INSTRUCTIONS:
-1. For each context chunk, assess if it contains information useful for the feature request
-2. Consider whether the chunks provide: technical details, business rules, constraints, related functionality, or domain knowledge
-3. Irrelevant chunks waste LLM context and may cause hallucinations
+1. For each context section/chunk, assess if it contains information useful for the feature request
+2. Consider whether the context provides: technical details, business rules, constraints, related functionality, domain knowledge, architecture info, or data model details
+3. Irrelevant context wastes LLM capacity and may cause hallucinations
+4. Evaluate each source type separately — KB docs, code documentation, and system context may each contribute differently
 
 Score from 0.0 to 1.0 where:
-- 1.0 = All retrieved chunks are highly relevant to the feature request
-- 0.5 = Some chunks are relevant, some are not
-- 0.0 = Retrieved chunks are mostly irrelevant
+- 1.0 = All retrieved context is highly relevant to the feature request
+- 0.5 = Some context is relevant, some is not
+- 0.0 = Retrieved context is mostly irrelevant
 
 Respond ONLY with valid JSON:
 {{"score": <float>, "reasoning": "<brief explanation>"}}"""
 
 CONTEXT_PRECISION_PROMPT = """You are an expert evaluator assessing CONTEXT PRECISION (ranking quality).
 
-TASK: Evaluate whether the most relevant context chunks are ranked first (highest relevance scores).
-Good precision means the retrieval system puts the best information at the top.
+TASK: Evaluate whether the most relevant context sources are ranked and ordered effectively.
+Good precision means the retrieval system puts the best information first and the most useful sources are prioritized.
+
+Note: Context includes KB chunks (with relevance scores), code documentation, and system context.
+KB chunks are ranked by retrieval score; documentation and system context are included as supplementary sources.
 
 FEATURE REQUEST:
 {question}
 
-RETRIEVED CONTEXT CHUNKS (ordered by retrieval rank, with scores):
+RETRIEVED CONTEXT SOURCES (ordered by retrieval rank, with scores where applicable):
 {ranked_context}
 
 EVALUATION INSTRUCTIONS:
@@ -130,10 +150,15 @@ Hallucinations include:
 - False claims about existing system behavior, architecture, or data flows
 - Invented user roles, workflows, or process steps not supported by context
 
+The RETRIEVED CONTEXT below combines three sources:
+1. Knowledge Base documents (uploaded project-specific docs)
+2. Code Documentation (auto-generated technical docs from repo analysis)
+3. Existing System Context (database schema, architecture, tech stack)
+
 FEATURE REQUEST:
 {question}
 
-RETRIEVED CONTEXT (Knowledge Base chunks):
+RETRIEVED CONTEXT (Combined: KB Documents + Code Documentation + System Context):
 {context}
 
 GENERATED BRD OUTPUT (excerpt):
@@ -198,27 +223,134 @@ def _build_question(feature_request: Dict[str, Any]) -> str:
     return f"[{request_type.upper()}] {title}\n{description}"
 
 
-def _build_context_text(knowledge_sources: List[Dict[str, Any]]) -> str:
+def _build_kb_context(knowledge_sources: List[Dict[str, Any]]) -> str:
     if not knowledge_sources:
-        return "(No context retrieved)"
+        return ""
     parts = []
     for i, src in enumerate(knowledge_sources, 1):
         preview = src.get("chunkPreview", src.get("content", ""))[:500]
         filename = src.get("filename", "Unknown")
         score = src.get("relevanceScore", src.get("score", 0))
-        parts.append(f"--- Chunk {i} (source: {filename}, score: {score:.3f}) ---\n{preview}")
+        parts.append(f"--- KB Chunk {i} (source: {filename}, score: {score:.3f}) ---\n{preview}")
     return "\n\n".join(parts)
 
 
-def _build_ranked_context(knowledge_sources: List[Dict[str, Any]]) -> str:
-    if not knowledge_sources:
-        return "(No context retrieved)"
+def _build_documentation_context(documentation: Optional[Dict[str, Any]]) -> str:
+    if not documentation:
+        return ""
     parts = []
+    title = documentation.get("title", "")
+    if title:
+        parts.append(f"Project: {title}")
+
+    summary = documentation.get("content", "")
+    if summary:
+        parts.append(f"Summary: {summary[:1000]}")
+
+    sections = documentation.get("sections", [])
+    if sections and isinstance(sections, list):
+        for section in sections[:10]:
+            if isinstance(section, dict):
+                sec_title = section.get("title", "Untitled")
+                sec_content = section.get("content", "")
+                if sec_content:
+                    parts.append(f"--- {sec_title} ---\n{sec_content[:500]}")
+            elif isinstance(section, str):
+                parts.append(section[:500])
+
+    return "\n\n".join(parts)
+
+
+def _build_system_context(
+    analysis: Optional[Dict[str, Any]],
+    database_schema: Optional[Dict[str, Any]],
+) -> str:
+    parts = []
+
+    if database_schema:
+        table_descriptions = []
+        for table in database_schema.get("tables", [])[:20]:
+            columns = []
+            for col in table.get("columns", [])[:15]:
+                desc = f"    - {col['name']}: {col['dataType']}"
+                if col.get("isPrimaryKey"):
+                    desc += " (PK)"
+                if col.get("isForeignKey"):
+                    desc += f" (FK -> {col.get('references', '?')})"
+                columns.append(desc)
+            table_descriptions.append(f"  {table['name']}:\n" + "\n".join(columns))
+        parts.append("Database Schema:\n" + "\n".join(table_descriptions))
+
+    if analysis:
+        arch = analysis.get("architecture", "")
+        if arch:
+            parts.append(f"Architecture: {arch[:500]}")
+        tech_stack = analysis.get("techStack", {})
+        if tech_stack:
+            parts.append(f"Tech Stack: {json.dumps(tech_stack)[:500]}")
+        features = analysis.get("features", [])
+        if features:
+            feature_names = ", ".join(f.get("name", "") for f in features[:20])
+            parts.append(f"Features: {feature_names}")
+
+    return "\n\n".join(parts)
+
+
+def _build_context_text(
+    knowledge_sources: List[Dict[str, Any]],
+    documentation: Optional[Dict[str, Any]] = None,
+    analysis: Optional[Dict[str, Any]] = None,
+    database_schema: Optional[Dict[str, Any]] = None,
+) -> str:
+    sections = []
+
+    kb_text = _build_kb_context(knowledge_sources)
+    if kb_text:
+        sections.append(f"=== KNOWLEDGE BASE DOCUMENTS ===\n{kb_text}\n=== END KNOWLEDGE BASE ===")
+
+    doc_text = _build_documentation_context(documentation)
+    if doc_text:
+        sections.append(f"=== CODE DOCUMENTATION ===\n{doc_text}\n=== END CODE DOCUMENTATION ===")
+
+    sys_text = _build_system_context(analysis, database_schema)
+    if sys_text:
+        sections.append(f"=== EXISTING SYSTEM CONTEXT ===\n{sys_text}\n=== END EXISTING SYSTEM CONTEXT ===")
+
+    if not sections:
+        return "(No context retrieved)"
+
+    return "\n\n".join(sections)
+
+
+def _build_ranked_context(
+    knowledge_sources: List[Dict[str, Any]],
+    documentation: Optional[Dict[str, Any]] = None,
+    analysis: Optional[Dict[str, Any]] = None,
+    database_schema: Optional[Dict[str, Any]] = None,
+) -> str:
+    parts = []
+
     for i, src in enumerate(knowledge_sources, 1):
         preview = src.get("chunkPreview", src.get("content", ""))[:500]
         filename = src.get("filename", "Unknown")
         score = src.get("relevanceScore", src.get("score", 0))
-        parts.append(f"Rank {i} | Score: {score:.4f} | Source: {filename}\n{preview}")
+        parts.append(f"Rank {i} | Score: {score:.4f} | Source: {filename} [KB]\n{preview}")
+
+    rank_offset = len(knowledge_sources)
+
+    doc_text = _build_documentation_context(documentation)
+    if doc_text:
+        rank_offset += 1
+        parts.append(f"Rank {rank_offset} | Source: Code Documentation [DOC]\n{doc_text[:800]}")
+
+    sys_text = _build_system_context(analysis, database_schema)
+    if sys_text:
+        rank_offset += 1
+        parts.append(f"Rank {rank_offset} | Source: System Context [SYS]\n{sys_text[:800]}")
+
+    if not parts:
+        return "(No context retrieved)"
+
     return "\n\n".join(parts)
 
 
@@ -246,6 +378,9 @@ async def run_ragas_evaluation(
     project_id: str,
     feature_request_id: Optional[str] = None,
     brd_id: Optional[str] = None,
+    documentation: Optional[Dict[str, Any]] = None,
+    database_schema: Optional[Dict[str, Any]] = None,
+    analysis: Optional[Dict[str, Any]] = None,
 ) -> str:
     from utils.pwc_llm import call_pwc_genai_async
 
@@ -264,7 +399,14 @@ async def run_ragas_evaluation(
             ) if knowledge_sources else None,
         })
         eval_id = eval_record["id"]
-        log_info(f"RAGAS evaluation started: {eval_id}", "ragas")
+        log_info(
+            f"RAGAS evaluation started: {eval_id} — "
+            f"KB chunks: {len(knowledge_sources)}, "
+            f"has_docs: {bool(documentation)}, "
+            f"has_db_schema: {bool(database_schema)}, "
+            f"has_analysis: {bool(analysis)}",
+            "ragas",
+        )
 
         async def call_genai(prompt: str) -> str:
             return await call_pwc_genai_async(
@@ -273,11 +415,11 @@ async def run_ragas_evaluation(
             )
 
         question = _build_question(feature_request)
-        context = _build_context_text(knowledge_sources)
-        ranked_context = _build_ranked_context(knowledge_sources)
+        context = _build_context_text(knowledge_sources, documentation, analysis, database_schema)
+        ranked_context = _build_ranked_context(knowledge_sources, documentation, analysis, database_schema)
         answer = _build_answer_text(brd_content)
 
-        has_context = bool(knowledge_sources)
+        has_context = bool(knowledge_sources) or bool(documentation) or bool(database_schema) or bool(analysis)
 
         if has_context:
             faithfulness_task = _evaluate_metric(

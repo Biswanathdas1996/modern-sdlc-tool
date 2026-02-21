@@ -196,8 +196,11 @@ async def generate_brd_endpoint(http_request: Request, request: GenerateBRDReque
                             project_id=project_id or "global",
                             feature_request_id=brd.get("featureRequestId"),
                             brd_id=saved_brd.get("id"),
+                            documentation=documentation,
+                            database_schema=database_schema,
+                            analysis=analysis,
                         ))
-                        log_info("RAGAS evaluation triggered in background", "requirements")
+                        log_info("RAGAS evaluation triggered in background (KB + Docs + System Context)", "requirements")
                     except Exception as ragas_err:
                         log_error("Failed to trigger RAGAS evaluation", "requirements", ragas_err)
 
