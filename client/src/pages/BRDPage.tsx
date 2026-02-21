@@ -666,7 +666,7 @@ export default function BRDPage() {
                     Components, APIs, and data models from the documentation that this feature interacts with
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
                   <div className="grid md:grid-cols-3 gap-4">
                     {data.relevantComponents?.length > 0 && (
                       <div>
@@ -708,6 +708,31 @@ export default function BRDPage() {
                       </div>
                     )}
                   </div>
+                  {data.architectureNotes && (
+                    <div className="border-t pt-3" data-testid="section-architecture-notes">
+                      <h4 className="text-sm font-medium mb-1">Architecture Notes</h4>
+                      <p className="text-sm text-muted-foreground whitespace-pre-line" data-testid="text-architecture-notes">{data.architectureNotes}</p>
+                    </div>
+                  )}
+                  {data.implementationApproach && (
+                    <div className="border-t pt-3" data-testid="section-implementation-approach">
+                      <h4 className="text-sm font-medium mb-1">Implementation Approach</h4>
+                      <p className="text-sm text-muted-foreground whitespace-pre-line" data-testid="text-implementation-approach">{data.implementationApproach}</p>
+                    </div>
+                  )}
+                  {data.reusableCode?.length > 0 && (
+                    <div className="border-t pt-3" data-testid="section-reusable-code">
+                      <h4 className="text-sm font-medium mb-2">Reusable Code & Patterns</h4>
+                      <ul className="space-y-1">
+                        {data.reusableCode.map((item: string, i: number) => (
+                          <li key={i} className="text-sm text-muted-foreground flex items-center gap-1" data-testid={`text-reusable-code-${i}`}>
+                            <span className="w-1.5 h-1.5 bg-accent rounded-full" />
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );
