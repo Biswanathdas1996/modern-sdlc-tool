@@ -71,6 +71,7 @@ export default function BRDPage() {
   const searchString = useSearch();
   const searchParams = useMemo(() => new URLSearchParams(searchString), [searchString]);
   const brdIdParam = searchParams.get("brd_id");
+  const autoGenerate = searchParams.get("auto_generate");
   const queryClient = useQueryClient();
   const contentRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -99,6 +100,8 @@ export default function BRDPage() {
   useEffect(() => {
     if (brd) saveSessionArtifact("brd", brd);
   }, [brd, saveSessionArtifact]);
+
+  const autoGenerateTriggered = useRef(false);
 
   const regenerateMutation = useMutation({
     mutationFn: async () => {
@@ -178,6 +181,13 @@ export default function BRDPage() {
       setIsStreaming(false);
     },
   });
+
+  useEffect(() => {
+    if (autoGenerate === "true" && !autoGenerateTriggered.current && !regenerateMutation.isPending) {
+      autoGenerateTriggered.current = true;
+      regenerateMutation.mutate();
+    }
+  }, [autoGenerate]);
 
   const generateStoriesMutation = useMutation({
     mutationFn: async (parentKey?: string) => {

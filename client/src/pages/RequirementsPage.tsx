@@ -64,8 +64,6 @@ export default function RequirementsPage() {
   const chunksRef = useRef<Blob[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
-  const [isGeneratingBRD, setIsGeneratingBRD] = useState(false);
-  const [generationStatus, setGenerationStatus] = useState("");
 
   const { startSession, saveSessionArtifact, getSessionArtifact } = useSession();
   const { currentProjectId } = useProject();
@@ -82,67 +80,12 @@ export default function RequirementsPage() {
       const requirements = await response.json();
       saveSessionArtifact("featureRequest", requirements);
 
-      // Step 2: Generate BRD (with streaming)
-      setIsGeneratingBRD(true);
-      setGenerationStatus("Generating BRD...");
-      
-      const cachedDocumentation = getSessionArtifact("documentation");
-      const cachedFeatureRequest = getSessionArtifact("featureRequest");
-      const cachedAnalysis = getSessionArtifact("analysis");
-      const cachedDatabaseSchema = getSessionArtifact("databaseSchema");
-      const brdResponse = await fetch("/api/brd/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          documentation: cachedDocumentation,
-          featureRequest: cachedFeatureRequest,
-          analysis: cachedAnalysis,
-          databaseSchema: cachedDatabaseSchema,
-        }),
-      });
-      
-      if (!brdResponse.ok) throw new Error("Failed to generate BRD");
-
-      // Read the streaming response to completion
-      const reader = brdResponse.body?.getReader();
-      if (!reader) throw new Error("No response body");
-
-      const decoder = new TextDecoder();
-      let brdComplete = false;
-
-      while (!brdComplete) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.done) {
-                brdComplete = true;
-              }
-            } catch (e) {
-              // Ignore parse errors
-            }
-          }
-        }
-      }
-
       return requirements;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/requirements"] });
       queryClient.invalidateQueries({ queryKey: ["/api/brd/current", currentProjectId] });
-      setIsGeneratingBRD(false);
-      setGenerationStatus("");
-      navigate("/brd");
-    },
-    onError: () => {
-      setIsGeneratingBRD(false);
-      setGenerationStatus("");
+      navigate("/brd?auto_generate=true");
     },
   });
 
@@ -228,8 +171,8 @@ export default function RequirementsPage() {
     <div className="flex flex-col h-full">
       {submitMutation.isPending && (
         <LoadingOverlay
-          message="Processing Requirements..."
-          subMessage="Analyzing your input and preparing for BRD generation"
+          message="Submitting Requirements..."
+          subMessage="Saving your input and redirecting to BRD generation"
         />
       )}
 
@@ -484,7 +427,7 @@ export default function RequirementsPage() {
               {submitMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {generationStatus || "Processing..."}
+                  Submitting...
                 </>
               ) : (
                 <>
