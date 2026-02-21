@@ -76,6 +76,13 @@ The application uses a GitHub-inspired color palette, JetBrains Mono for code bl
 
 ## Recent Changes
 
+### True SSE Streaming for BRD Generation (Feb 2026)
+- `pwc_llm.py`: Added `call_pwc_genai_stream()` async generator that yields text chunks as they arrive from PwC GenAI API (sets `stream: True` in request body, parses SSE `data:` lines with delta content). Includes fallback for non-streaming API responses.
+- `generators.py`: Added `generate_brd_streaming()` async generator that yields `{"type": "chunk", "text": ...}` for each text delta and `{"type": "done", "brd": ...}` with parsed BRD at the end.
+- `ai_service.py`: Added `_task_streamer()` and `generate_brd_streaming()` wrapper methods.
+- `/api/brd/generate` endpoint: Refactored to use `generate_brd_streaming()` — each text chunk is sent as a separate SSE `data:` event in real-time, final parsed BRD sent as `brd` field on completion.
+- `BRDPage.tsx`: Frontend SSE reader updated with proper line buffering and incremental text accumulation. Shows raw streaming text in real-time during generation, switches to structured BRD view on completion.
+
 ### Generation History Page (Feb 2026)
 - Added `/generation-history` route and page that lists all generated artifacts grouped by feature request
 - Backend endpoint: `GET /api/generation-history?project_id=xxx` aggregates feature_requests → BRDs → user stories/test cases/test data

@@ -128,18 +128,21 @@ export default function BRDPage() {
 
       const decoder = new TextDecoder();
       let content = "";
+      let buffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
 
         for (const line of lines) {
-          if (line.startsWith("data: ")) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith("data: ")) {
             try {
-              const data = JSON.parse(line.slice(6));
+              const data = JSON.parse(trimmed.slice(6));
               if (data.knowledgeSources) {
                 setStreamingKnowledgeSources(data.knowledgeSources);
               }
@@ -147,11 +150,20 @@ export default function BRDPage() {
                 content += data.content;
                 setStreamingContent(content);
               }
+              if (data.brd) {
+                try {
+                  const parsedBrd = JSON.parse(data.brd);
+                  saveSessionArtifact("brd", { content: parsedBrd });
+                } catch (_) {}
+              }
+              if (data.error) {
+                throw new Error(data.error);
+              }
               if (data.done) {
                 setIsStreaming(false);
               }
             } catch (e) {
-              // Ignore parse errors
+              if (e instanceof Error && e.message === "Generation failed") throw e;
             }
           }
         }
@@ -160,7 +172,7 @@ export default function BRDPage() {
       return content;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/brd/current", currentProjectId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/brd/current", currentProjectId, brdIdParam] });
     },
     onError: () => {
       setIsStreaming(false);

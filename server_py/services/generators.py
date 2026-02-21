@@ -1,12 +1,13 @@
 """AI generation functions for documents, test cases, and related artifacts."""
 import json
-from typing import Optional, Callable, Dict, Any, List, Awaitable
+from typing import Optional, Callable, Dict, Any, List, Awaitable, AsyncIterator
 from core.logging import log_info, log_error, log_warning
 from utils.text import parse_json_response
 from prompts import prompt_loader
 
 
 CallGenAI = Callable[[str, float, int], Awaitable[str]]
+StreamGenAI = Callable[..., AsyncIterator[str]]
 BuildPrompt = Callable[[str, str], str]
 
 
@@ -207,6 +208,155 @@ Project: {documentation.get('title', '')}
         "createdAt": timestamp,
         "updatedAt": timestamp,
     }
+
+
+async def generate_brd_streaming(
+    stream_genai: StreamGenAI,
+    build_prompt: BuildPrompt,
+    feature_request: Dict[str, Any],
+    analysis: Optional[Dict[str, Any]],
+    documentation: Optional[Dict[str, Any]],
+    database_schema: Optional[Dict[str, Any]],
+    knowledge_context: Optional[str],
+    on_chunk: Optional[Callable[[str], None]] = None,
+):
+    """Generate BRD with true streaming — yields text chunks as they arrive.
+
+    This is an async generator.  It yields each text delta from the LLM so that
+    the API layer can push them to the client over SSE in real-time.
+
+    At the end it yields a final dict (the complete BRD object) so the caller
+    knows the generation is done and can persist it.
+    """
+    documentation_context = ""
+    knowledge_base_context = ""
+    database_schema_context = ""
+
+    log_info(
+        f"BRD Streaming Generation Context - KB: {bool(knowledge_context)}, "
+        f"Docs: {bool(documentation)}, DB: {bool(database_schema)}, "
+        f"Analysis: {bool(analysis)}",
+        "ai_service",
+    )
+
+    if knowledge_context:
+        context_size = len(knowledge_context)
+        log_info(
+            f"Using Knowledge Base context ({context_size} chars) for: "
+            f"{feature_request.get('title', 'N/A')}",
+            "ai_service",
+        )
+        knowledge_base_context = f"""
+=== KNOWLEDGE BASE (Retrieved Documents - PRIMARY CONTEXT) ===
+IMPORTANT: The following information was specifically retrieved from uploaded documents based on this feature request.
+This is domain-specific knowledge that should guide your BRD generation.
+Length: {context_size} characters
+
+{knowledge_context}
+
+=== END KNOWLEDGE BASE ===
+"""
+    else:
+        log_warning("No Knowledge Base context available for BRD generation", "ai_service")
+
+    if database_schema:
+        table_count = len(database_schema.get("tables", []))
+        log_info(f"Using Database Schema with {table_count} tables", "ai_service")
+        table_descriptions = []
+        for table in database_schema.get("tables", []):
+            columns = []
+            for col in table.get("columns", []):
+                desc = f"    - {col['name']}: {col['dataType']}"
+                if col.get("isPrimaryKey"):
+                    desc += " (PK)"
+                if col.get("isForeignKey"):
+                    desc += f" (FK -> {col.get('references', '?')})"
+                if not col.get("isNullable"):
+                    desc += " NOT NULL"
+                columns.append(desc)
+            table_descriptions.append(
+                f"  {table['name']} ({table.get('rowCount', 0):,} rows):\n" + "\n".join(columns)
+            )
+        database_schema_context = f"""
+=== CONNECTED DATABASE SCHEMA ===
+Database: {database_schema.get('databaseName', '')}
+Tables: {table_count}
+
+{chr(10).join(table_descriptions)}
+=== END DATABASE SCHEMA ===
+"""
+    else:
+        log_info("No Database Schema available", "ai_service")
+
+    if documentation:
+        doc_title = documentation.get("title", "N/A")
+        log_info(f"Using Technical Documentation: {doc_title}", "ai_service")
+        documentation_context = f"""
+=== TECHNICAL DOCUMENTATION (Generated from Repository Analysis) ===
+Project: {documentation.get('title', '')}
+{documentation.get('content', '')}
+=== END OF DOCUMENTATION ===
+"""
+    elif analysis:
+        log_info("Using Repository Analysis (fallback from documentation)", "ai_service")
+        documentation_context = f"""
+=== REPOSITORY CONTEXT (from analysis) ===
+- Architecture: {analysis.get('architecture', '')}
+- Tech Stack: {json.dumps(analysis.get('techStack', {}))}
+- Existing Features: {', '.join([f.get('name', '') for f in analysis.get('features', [])])}
+- Testing Framework: {analysis.get('testingFramework', 'Not specified')}
+=== END REPOSITORY CONTEXT ===
+"""
+    else:
+        log_warning("No Documentation or Analysis context available", "ai_service")
+
+    system_prompt = prompt_loader.get_prompt("ai_service.yml", "generate_brd_system").format(
+        database_schema_note=" AND the connected DATABASE SCHEMA" if database_schema else "",
+        database_schema_requirement=(
+            "5. Reference the database tables and their relationships when specifying data requirements"
+            if database_schema
+            else ""
+        ),
+    )
+
+    user_prompt = prompt_loader.get_prompt("ai_service.yml", "generate_brd_user").format(
+        feature_title=feature_request.get("title", ""),
+        feature_description=feature_request.get("description", ""),
+        request_type=feature_request.get("requestType", "feature"),
+        documentation_context=documentation_context,
+        database_schema_context=database_schema_context,
+        knowledge_base_context=knowledge_base_context,
+    )
+
+    prompt = build_prompt(system_prompt, user_prompt)
+
+    accumulated = ""
+    async for chunk in stream_genai(prompt=prompt, task_name="generate_brd"):
+        accumulated += chunk
+        if on_chunk:
+            on_chunk(chunk)
+        yield {"type": "chunk", "text": chunk}
+
+    brd_data = parse_json_response(accumulated)
+
+    from datetime import datetime
+
+    timestamp = datetime.utcnow().isoformat()
+
+    brd = {
+        "projectId": feature_request.get("projectId", "global"),
+        "featureRequestId": feature_request.get("id", ""),
+        "requestType": feature_request.get("requestType", "feature"),
+        "title": brd_data.get("title", feature_request.get("title", "")),
+        "version": brd_data.get("version", "1.0"),
+        "status": brd_data.get("status", "draft"),
+        "sourceDocumentation": brd_data.get("sourceDocumentation"),
+        "content": brd_data.get("content", {}),
+        "createdAt": timestamp,
+        "updatedAt": timestamp,
+    }
+
+    yield {"type": "done", "brd": brd}
 
 
 async def generate_test_cases(

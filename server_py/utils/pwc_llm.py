@@ -421,6 +421,142 @@ async def call_pwc_genai_async(
     return accumulated_text
 
 
+async def call_pwc_genai_stream(
+    prompt: str,
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None,
+    model: Optional[str] = None,
+    timeout: Optional[int] = None,
+    task_name: Optional[str] = None,
+    user_input: Optional[str] = None,
+):
+    """
+    Async generator that streams text chunks from PwC GenAI API.
+
+    Yields:
+        str: Individual text chunks as they arrive from the API.
+    """
+    _config.validate()
+
+    task_cfg = _resolve_task_config(task_name)
+    if task_cfg:
+        model = model or task_cfg.model
+        temperature = temperature if temperature is not None else task_cfg.temperature
+        max_tokens = max_tokens if max_tokens is not None else task_cfg.max_tokens
+        timeout = timeout if timeout is not None else task_cfg.timeout
+
+    temperature = temperature if temperature is not None else 0.2
+    max_tokens = max_tokens if max_tokens is not None else 6096
+    resolved_model = model or _config.default_model
+    model_type = detect_model_type(resolved_model)
+
+    log_debug(
+        f"[stream] task={task_name or 'adhoc'} model={resolved_model} "
+        f"type={model_type.value} temp={temperature} max_tokens={max_tokens}",
+        "pwc_llm",
+    )
+
+    try:
+        from core.guardrails import check_input_async as _guardrails_check
+        await _guardrails_check(prompt, task_name, user_input)
+    except Exception as _gr_exc:
+        from core.guardrails import GuardrailsViolationError as _GVE
+        if isinstance(_gr_exc, _GVE):
+            raise
+        log_debug(f"Guardrails check skipped due to error: {_gr_exc}", "pwc_llm")
+
+    generation = start_generation(
+        task_name=task_name or "adhoc_stream",
+        model=resolved_model,
+        prompt=prompt,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        metadata={"streaming": True, "model_type": model_type.value},
+    )
+
+    request_body = _build_request_body(prompt, temperature, max_tokens, model)
+    request_body["stream"] = True
+    headers = _build_headers()
+    endpoint = _config.get_endpoint(model_type)
+    timeout_value = timeout or _config.default_timeout
+
+    accumulated_text = ""
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout_value) as client:
+            async with client.stream(
+                "POST",
+                endpoint,
+                json=request_body,
+                headers=headers,
+            ) as response:
+                if response.status_code != 200:
+                    body = await response.aread()
+                    raise ValueError(
+                        f"PwC GenAI API Error: {response.status_code} - {body.decode()}"
+                    )
+
+                content_type = response.headers.get("content-type", "")
+                is_sse = "text/event-stream" in content_type
+                got_chunks = False
+
+                buffer = ""
+                async for raw_chunk in response.aiter_text():
+                    buffer += raw_chunk
+                    while "\n" in buffer:
+                        line, buffer = buffer.split("\n", 1)
+                        line = line.strip()
+                        if not line:
+                            continue
+
+                        if line.startswith("data: "):
+                            line = line[6:]
+
+                        if line == "[DONE]":
+                            break
+
+                        try:
+                            chunk_data = json.loads(line)
+                            delta_text = ""
+                            if "choices" in chunk_data and len(chunk_data["choices"]) > 0:
+                                choice = chunk_data["choices"][0]
+                                delta = choice.get("delta", {})
+                                delta_text = delta.get("content", "")
+                                if not delta_text:
+                                    delta_text = choice.get("text", "")
+                                if not delta_text:
+                                    msg = choice.get("message", {})
+                                    delta_text = msg.get("content", "")
+                            elif "text" in chunk_data:
+                                delta_text = chunk_data["text"]
+                            elif "content" in chunk_data:
+                                delta_text = chunk_data["content"]
+
+                            if delta_text:
+                                got_chunks = True
+                                accumulated_text += delta_text
+                                yield delta_text
+                        except json.JSONDecodeError:
+                            continue
+
+                if buffer.strip():
+                    try:
+                        chunk_data = json.loads(buffer.strip())
+                        text = _extract_text_from_response(chunk_data)
+                        if text and not got_chunks:
+                            accumulated_text += text
+                            yield text
+                    except (json.JSONDecodeError, ValueError):
+                        pass
+
+        generation.end(output=accumulated_text[:8000])
+        langfuse_flush()
+    except Exception as _exc:
+        generation.end(output=f"ERROR: {_exc}")
+        langfuse_flush()
+        raise
+
+
 def call_pwc_genai_sync(
     prompt: str,
     temperature: Optional[float] = None,

@@ -6,7 +6,7 @@ from core.config import get_settings
 from core.logging import log_info, log_error, log_debug
 from core.llm_config import get_llm_config
 from utils.text import parse_json_response
-from utils.pwc_llm import call_pwc_genai_async, build_pwc_prompt
+from utils.pwc_llm import call_pwc_genai_async, call_pwc_genai_stream, build_pwc_prompt
 from prompts import prompt_loader
 from services import github_fetcher, generators
 
@@ -110,6 +110,12 @@ class AIService:
         from utils.pwc_llm import call_pwc_transcribe_async
         return await call_pwc_transcribe_async(audio_buffer, task_name="audio_transcription")
 
+    def _task_streamer(self, task_name: str):
+        """Return a stream_genai wrapper pre-bound to a specific task_name."""
+        def _stream(prompt: str, **kwargs):
+            return call_pwc_genai_stream(prompt=prompt, task_name=task_name, **kwargs)
+        return _stream
+
     async def generate_brd(
         self,
         feature_request: Dict[str, Any],
@@ -125,6 +131,23 @@ class AIService:
             feature_request, analysis, documentation, database_schema,
             knowledge_context, on_chunk
         )
+
+    async def generate_brd_streaming(
+        self,
+        feature_request: Dict[str, Any],
+        analysis: Optional[Dict[str, Any]],
+        documentation: Optional[Dict[str, Any]],
+        database_schema: Optional[Dict[str, Any]],
+        knowledge_context: Optional[str],
+        on_chunk: Optional[Callable[[str], None]] = None,
+    ):
+        """Generate BRD with true streaming — async generator yielding chunks."""
+        async for item in generators.generate_brd_streaming(
+            self._task_streamer("brd_generation"), self.build_prompt,
+            feature_request, analysis, documentation, database_schema,
+            knowledge_context, on_chunk,
+        ):
+            yield item
 
     async def generate_test_cases(self, brd: Dict[str, Any], analysis: Optional[Dict[str, Any]], documentation: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Generate test cases from BRD."""

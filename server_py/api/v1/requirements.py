@@ -159,20 +159,25 @@ async def generate_brd_endpoint(http_request: Request, request: GenerateBRDReque
                 if knowledge_sources:
                     yield {"data": json.dumps({"knowledgeSources": knowledge_sources})}
 
-                brd = await ai_service.generate_brd(
+                brd = None
+                async for item in ai_service.generate_brd_streaming(
                     feature_request,
                     analysis,
                     documentation,
                     database_schema,
                     knowledge_context,
-                    lambda chunk: None
-                )
+                ):
+                    if item["type"] == "chunk":
+                        yield {"data": json.dumps({"content": item["text"]})}
+                    elif item["type"] == "done":
+                        brd = item["brd"]
 
-                brd["knowledgeSources"] = knowledge_sources if knowledge_sources else None
-                brd["createdBy"] = user_id
-                storage.create_brd(brd)
+                if brd:
+                    brd["knowledgeSources"] = knowledge_sources if knowledge_sources else None
+                    brd["createdBy"] = user_id
+                    storage.create_brd(brd)
+                    yield {"data": json.dumps({"brd": json.dumps(brd.get("content", {}))})}
 
-                yield {"data": json.dumps({"content": json.dumps(brd.get("content", {}))})}
                 yield {"data": json.dumps({"done": True})}
             except Exception as gen_error:
                 log_error("BRD generation error", "requirements", gen_error)
