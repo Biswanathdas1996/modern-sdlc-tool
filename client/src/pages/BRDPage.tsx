@@ -40,6 +40,84 @@ import { useSession } from "@/hooks/useSession";
 import { useProject } from "@/hooks/useProject";
 import type { BRD, KnowledgeSource } from "@shared/schema";
 
+function renderFormattedText(text: string) {
+  if (!text || typeof text !== 'string') return null;
+  const lines = text.split('\n');
+  const elements: JSX.Element[] = [];
+  let currentListItems: { num: string; content: JSX.Element }[] = [];
+
+  const flushList = () => {
+    if (currentListItems.length > 0) {
+      elements.push(
+        <ol key={`ol-${elements.length}`} className="space-y-3 my-3">
+          {currentListItems.map((item, i) => (
+            <li key={i} className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center mt-0.5">
+                {item.num}
+              </span>
+              <div className="flex-1 text-sm text-muted-foreground leading-relaxed">{item.content}</div>
+            </li>
+          ))}
+        </ol>
+      );
+      currentListItems = [];
+    }
+  };
+
+  const formatInline = (str: string): JSX.Element => {
+    const parts: (string | JSX.Element)[] = [];
+    let remaining = str;
+    let partKey = 0;
+    const boldRegex = /\*\*(.+?)\*\*/g;
+    let lastIndex = 0;
+    let match;
+    while ((match = boldRegex.exec(remaining)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(remaining.slice(lastIndex, match.index));
+      }
+      parts.push(<span key={partKey++} className="font-semibold text-foreground">{match[1]}</span>);
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < remaining.length) {
+      parts.push(remaining.slice(lastIndex));
+    }
+    return <>{parts}</>;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (!trimmed) {
+      flushList();
+      continue;
+    }
+    const numberedMatch = trimmed.match(/^(\d+)\.\s+(.+)/);
+    if (numberedMatch) {
+      currentListItems.push({ num: numberedMatch[1], content: formatInline(numberedMatch[2]) });
+      continue;
+    }
+    const bulletMatch = trimmed.match(/^[-•]\s+(.+)/);
+    if (bulletMatch) {
+      flushList();
+      elements.push(
+        <div key={`bullet-${elements.length}`} className="flex items-start gap-2 my-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 shrink-0 mt-2" />
+          <span className="text-sm text-muted-foreground leading-relaxed">{formatInline(bulletMatch[1])}</span>
+        </div>
+      );
+      continue;
+    }
+    flushList();
+    elements.push(
+      <p key={`p-${elements.length}`} className="text-sm text-muted-foreground leading-relaxed my-1.5">
+        {formatInline(trimmed)}
+      </p>
+    );
+  }
+  flushList();
+  return <div className="space-y-1">{elements}</div>;
+}
+
 interface RelatedJiraStory {
   story: {
     key: string;
@@ -794,14 +872,14 @@ export default function BRDPage() {
                   </div>
                   {data.architectureNotes && (
                     <div className="border-t pt-3" data-testid="section-architecture-notes">
-                      <h4 className="text-sm font-medium mb-1">Architecture & Design Patterns</h4>
-                      <p className="text-sm text-muted-foreground whitespace-pre-line" data-testid="text-architecture-notes">{data.architectureNotes}</p>
+                      <h4 className="text-sm font-medium mb-2">Architecture & Design Patterns</h4>
+                      <div data-testid="text-architecture-notes">{renderFormattedText(data.architectureNotes)}</div>
                     </div>
                   )}
                   {data.implementationApproach && (
                     <div className="border-t pt-3" data-testid="section-implementation-approach">
-                      <h4 className="text-sm font-medium mb-1">Implementation Approach</h4>
-                      <p className="text-sm text-muted-foreground whitespace-pre-line" data-testid="text-implementation-approach">{data.implementationApproach}</p>
+                      <h4 className="text-sm font-medium mb-2">Implementation Approach</h4>
+                      <div data-testid="text-implementation-approach">{renderFormattedText(data.implementationApproach)}</div>
                     </div>
                   )}
                   {data.reusableCode?.length > 0 && (
@@ -856,7 +934,10 @@ export default function BRDPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-foreground leading-relaxed">{typeof overviewText === 'object' ? JSON.stringify(overviewText) : overviewText}</p>
+                  {typeof overviewText === 'object'
+                    ? <p className="text-foreground leading-relaxed">{JSON.stringify(overviewText)}</p>
+                    : renderFormattedText(overviewText)
+                  }
                 </CardContent>
               </Card>
             );
@@ -960,7 +1041,7 @@ export default function BRDPage() {
                         </AccordionTrigger>
                         <AccordionContent>
                           <div className="space-y-4 pt-2">
-                            <p className="text-muted-foreground">{req.description}</p>
+                            <div className="text-muted-foreground">{renderFormattedText(req.description)}</div>
                             {req.acceptanceCriteria?.length > 0 && (
                               <div>
                                 <p className="text-sm font-medium text-foreground mb-2">Acceptance Criteria:</p>
@@ -1001,9 +1082,9 @@ export default function BRDPage() {
                         <Badge variant="outline" className="font-mono text-xs shrink-0">
                           {req.id}
                         </Badge>
-                        <div>
+                        <div className="flex-1">
                           <p className="text-sm font-medium text-foreground">{req.category}</p>
-                          <p className="text-sm text-muted-foreground">{req.description}</p>
+                          <div className="text-sm text-muted-foreground">{renderFormattedText(req.description)}</div>
                         </div>
                       </div>
                     ))}
@@ -1028,7 +1109,7 @@ export default function BRDPage() {
                     {techItems.map((item: string, index: number) => (
                       <li key={index} className="flex items-start gap-2">
                         <ChevronRight className="h-4 w-4 text-accent shrink-0 mt-0.5" />
-                        <span className="text-foreground">{item}</span>
+                        <div className="text-foreground text-sm">{renderFormattedText(item)}</div>
                       </li>
                     ))}
                   </ul>
@@ -1100,10 +1181,11 @@ export default function BRDPage() {
                   <div className="space-y-4">
                     {risks.map((risk: any, index: number) => (
                       <div key={index} className="p-4 rounded-md bg-warning/5 border border-warning/20">
-                        <p className="font-medium text-foreground mb-2">{risk.description}</p>
-                        <p className="text-sm text-muted-foreground">
-                          <span className="font-medium text-success">Mitigation:</span> {risk.mitigation}
-                        </p>
+                        <div className="font-medium text-foreground mb-2">{renderFormattedText(risk.description)}</div>
+                        <div className="text-sm">
+                          <span className="font-medium text-success">Mitigation: </span>
+                          <span className="text-muted-foreground">{risk.mitigation}</span>
+                        </div>
                       </div>
                     ))}
                   </div>
