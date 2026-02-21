@@ -160,15 +160,20 @@ async def generate_brd_endpoint(http_request: Request, request: GenerateBRDReque
                     yield {"data": json.dumps({"knowledgeSources": knowledge_sources})}
 
                 brd = None
-                async for item in ai_service.generate_brd_streaming(
+                async for item in ai_service.generate_brd_parallel(
                     feature_request,
                     analysis,
                     documentation,
                     database_schema,
                     knowledge_context,
                 ):
-                    if item["type"] == "chunk":
-                        yield {"data": json.dumps({"content": item["text"]})}
+                    if item["type"] == "section":
+                        yield {"data": json.dumps({
+                            "section": item["section"],
+                            "sectionData": item["data"],
+                            "progress": item["progress"],
+                            "total": item["total"],
+                        })}
                     elif item["type"] == "done":
                         brd = item["brd"]
 

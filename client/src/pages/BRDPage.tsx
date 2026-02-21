@@ -64,18 +64,17 @@ const workflowSteps = [
 ];
 
 export default function BRDPage() {
-  const [streamingContent, setStreamingContent] = useState<string>("");
-  const [displayedContent, setDisplayedContent] = useState<string>("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
   const [streamingKnowledgeSources, setStreamingKnowledgeSources] = useState<KnowledgeSource[]>([]);
+  const [streamingSections, setStreamingSections] = useState<Record<string, any>>({});
+  const [streamingProgress, setStreamingProgress] = useState<{current: number, total: number}>({current: 0, total: 9});
   const [, navigate] = useLocation();
   const searchString = useSearch();
   const searchParams = useMemo(() => new URLSearchParams(searchString), [searchString]);
   const brdIdParam = searchParams.get("brd_id");
   const autoGenerate = searchParams.get("auto_generate");
   const queryClient = useQueryClient();
-  const contentRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { saveSessionArtifact, getSessionArtifact } = useSession();
   const { currentProjectId } = useProject();
@@ -109,8 +108,8 @@ export default function BRDPage() {
     mutationFn: async () => {
       setIsStreaming(true);
       setIsWaitingForResponse(true);
-      setStreamingContent("");
-      setDisplayedContent("");
+      setStreamingSections({});
+      setStreamingProgress({current: 0, total: 9});
       setStreamingKnowledgeSources([]);
 
       const cachedDocumentation = getSessionArtifact("documentation");
@@ -134,7 +133,6 @@ export default function BRDPage() {
       if (!reader) throw new Error("No response body");
 
       const decoder = new TextDecoder();
-      let content = "";
       let buffer = "";
 
       const processLine = (trimmed: string) => {
@@ -144,9 +142,9 @@ export default function BRDPage() {
           if (data.knowledgeSources) {
             setStreamingKnowledgeSources(data.knowledgeSources);
           }
-          if (data.content) {
-            content += data.content;
-            setStreamingContent(content);
+          if (data.section) {
+            setStreamingSections(prev => ({ ...prev, [data.section]: data.sectionData }));
+            setStreamingProgress({current: data.progress, total: data.total});
             setIsWaitingForResponse(false);
           }
           if (data.brd) {
@@ -186,8 +184,6 @@ export default function BRDPage() {
 
       setIsStreaming(false);
       setIsWaitingForResponse(false);
-
-      return content;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/brd/current", currentProjectId, brdIdParam] });
@@ -310,22 +306,6 @@ export default function BRDPage() {
     }
   };
 
-  useEffect(() => {
-    if (streamingContent.length > displayedContent.length) {
-      const remaining = streamingContent.length - displayedContent.length;
-      const charsPerTick = Math.max(3, Math.ceil(remaining / 200));
-      const timer = setTimeout(() => {
-        setDisplayedContent(streamingContent.slice(0, displayedContent.length + charsPerTick));
-      }, 10);
-      return () => clearTimeout(timer);
-    }
-  }, [streamingContent, displayedContent]);
-
-  useEffect(() => {
-    if (isStreaming && contentRef.current) {
-      contentRef.current.scrollTop = contentRef.current.scrollHeight;
-    }
-  }, [displayedContent, isStreaming]);
 
   const mockBRD: BRD = brd || {
     id: "1",
@@ -496,7 +476,7 @@ export default function BRDPage() {
         description="Generated BRD based on your feature requirements and repository context."
       />
 
-      <div className="flex-1 overflow-auto p-6" ref={contentRef}>
+      <div className="flex-1 overflow-auto p-6">
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Header Card */}
           <Card>
@@ -671,70 +651,77 @@ export default function BRDPage() {
           })()}
 
           {/* Existing System Context */}
-          {!isStreaming && mockBRD.content.existingSystemContext && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Link2 className="h-5 w-5 text-primary" />
-                  Existing System Context
-                </CardTitle>
-                <CardDescription>
-                  Components, APIs, and data models from the documentation that this feature interacts with
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid md:grid-cols-3 gap-4">
-                  {mockBRD.content.existingSystemContext.relevantComponents?.length > 0 && (
-                    <div>
-                      <h4 className="text-sm font-medium mb-2">Related Components</h4>
-                      <ul className="space-y-1">
-                        {mockBRD.content.existingSystemContext.relevantComponents.map((comp, i) => (
-                          <li key={i} className="text-sm text-muted-foreground flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 bg-primary rounded-full" />
-                            {comp}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {mockBRD.content.existingSystemContext.relevantAPIs?.length > 0 && (
-                    <div>
-                      <h4 className="text-sm font-medium mb-2">Related APIs</h4>
-                      <ul className="space-y-1">
-                        {mockBRD.content.existingSystemContext.relevantAPIs.map((api, i) => (
-                          <li key={i} className="text-sm text-muted-foreground flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 bg-success rounded-full" />
-                            {api}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {mockBRD.content.existingSystemContext.dataModelsAffected?.length > 0 && (
-                    <div>
-                      <h4 className="text-sm font-medium mb-2">Data Models Affected</h4>
-                      <ul className="space-y-1">
-                        {mockBRD.content.existingSystemContext.dataModelsAffected.map((model, i) => (
-                          <li key={i} className="text-sm text-muted-foreground flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 bg-warning rounded-full" />
-                            {model}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {(() => {
+            const data = isStreaming ? streamingSections["existingSystemContext"] : mockBRD?.content?.existingSystemContext;
+            if (isStreaming && !data) return <Card><CardContent className="py-6"><div className="space-y-2"><div className="h-3 bg-muted/50 rounded animate-pulse w-3/4" /><div className="h-3 bg-muted/50 rounded animate-pulse w-full" /><div className="h-3 bg-muted/50 rounded animate-pulse w-1/2" /></div></CardContent></Card>;
+            if (!data) return null;
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Link2 className="h-5 w-5 text-primary" />
+                    Existing System Context
+                  </CardTitle>
+                  <CardDescription>
+                    Components, APIs, and data models from the documentation that this feature interacts with
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    {data.relevantComponents?.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium mb-2">Related Components</h4>
+                        <ul className="space-y-1">
+                          {data.relevantComponents.map((comp: string, i: number) => (
+                            <li key={i} className="text-sm text-muted-foreground flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 bg-primary rounded-full" />
+                              {comp}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {data.relevantAPIs?.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium mb-2">Related APIs</h4>
+                        <ul className="space-y-1">
+                          {data.relevantAPIs.map((api: string, i: number) => (
+                            <li key={i} className="text-sm text-muted-foreground flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 bg-success rounded-full" />
+                              {api}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {data.dataModelsAffected?.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium mb-2">Data Models Affected</h4>
+                        <ul className="space-y-1">
+                          {data.dataModelsAffected.map((model: string, i: number) => (
+                            <li key={i} className="text-sm text-muted-foreground flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 bg-warning rounded-full" />
+                              {model}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
-          {/* Streaming Content */}
+          {/* Streaming Progress Bar */}
           {isStreaming && (
             <Card className="border-primary/50 bg-primary/5">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                  {isWaitingForResponse ? "Analyzing requirements and generating BRD..." : "Rendering BRD content..."}
+                  {isWaitingForResponse
+                    ? "Analyzing requirements and generating BRD..."
+                    : `Generating BRD — ${streamingProgress.current}/${streamingProgress.total} sections complete`}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -752,200 +739,299 @@ export default function BRDPage() {
                       <div className="h-2 w-2 rounded-full bg-muted animate-pulse" style={{ animationDelay: "1s" }} />
                       <span className="text-sm text-muted-foreground">This may take 30-60 seconds depending on complexity...</span>
                     </div>
-                    <div className="mt-4 space-y-2">
-                      <div className="h-3 bg-muted/50 rounded animate-pulse w-3/4" />
-                      <div className="h-3 bg-muted/50 rounded animate-pulse w-full" style={{ animationDelay: "0.2s" }} />
-                      <div className="h-3 bg-muted/50 rounded animate-pulse w-5/6" style={{ animationDelay: "0.4s" }} />
-                      <div className="h-3 bg-muted/50 rounded animate-pulse w-2/3" style={{ animationDelay: "0.6s" }} />
-                    </div>
                   </div>
                 ) : (
-                  <pre className="whitespace-pre-wrap font-mono text-sm text-foreground leading-relaxed">
-                    {displayedContent}
-                    {displayedContent.length < streamingContent.length && (
-                      <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-0.5" />
-                    )}
-                  </pre>
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div
+                      className="bg-primary h-2 rounded-full transition-all duration-500"
+                      style={{ width: `${(streamingProgress.current / streamingProgress.total) * 100}%` }}
+                    />
+                  </div>
                 )}
               </CardContent>
             </Card>
           )}
 
-          {!isStreaming && (<>
           {/* Overview Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Target className="h-5 w-5 text-primary" />
-                Overview
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-foreground leading-relaxed">{mockBRD.content.overview}</p>
-            </CardContent>
-          </Card>
+          {(() => {
+            const data = isStreaming ? streamingSections["overview"] : mockBRD?.content?.overview;
+            const overviewText = isStreaming ? (data?.overview || data) : data;
+            if (isStreaming && !data) return <Card><CardContent className="py-6"><div className="space-y-2"><div className="h-3 bg-muted/50 rounded animate-pulse w-3/4" /><div className="h-3 bg-muted/50 rounded animate-pulse w-full" /></div></CardContent></Card>;
+            if (!overviewText) return null;
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Target className="h-5 w-5 text-primary" />
+                    Overview
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-foreground leading-relaxed">{typeof overviewText === 'object' ? JSON.stringify(overviewText) : overviewText}</p>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Objectives */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Objectives</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2">
-                {mockBRD.content.objectives.map((objective, index) => (
-                  <li key={index} className="flex items-start gap-2">
-                    <CheckCircle2 className="h-5 w-5 text-success shrink-0 mt-0.5" />
-                    <span className="text-foreground">{objective}</span>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
+          {(() => {
+            const data = isStreaming ? streamingSections["objectives"] : mockBRD?.content;
+            const objectives = isStreaming ? (data?.objectives || []) : (data?.objectives || []);
+            if (isStreaming && !streamingSections["objectives"]) return <Card><CardContent className="py-6"><div className="space-y-2"><div className="h-3 bg-muted/50 rounded animate-pulse w-3/4" /><div className="h-3 bg-muted/50 rounded animate-pulse w-full" /><div className="h-3 bg-muted/50 rounded animate-pulse w-5/6" /></div></CardContent></Card>;
+            if (objectives.length === 0) return null;
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Objectives</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2">
+                    {objectives.map((objective: string, index: number) => (
+                      <li key={index} className="flex items-start gap-2">
+                        <CheckCircle2 className="h-5 w-5 text-success shrink-0 mt-0.5" />
+                        <span className="text-foreground">{objective}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Scope */}
-          <div className="grid md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base text-success flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4" />
-                  In Scope
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2">
-                  {mockBRD.content.scope.inScope.map((item, index) => (
-                    <li key={index} className="flex items-start gap-2">
-                      <ChevronRight className="h-4 w-4 text-success shrink-0 mt-0.5" />
-                      <span className="text-sm text-foreground">{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base text-muted-foreground flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4" />
-                  Out of Scope
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2">
-                  {mockBRD.content.scope.outOfScope.map((item, index) => (
-                    <li key={index} className="flex items-start gap-2">
-                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                      <span className="text-sm text-muted-foreground">{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          </div>
+          {(() => {
+            const data = isStreaming ? streamingSections["scope"] : mockBRD?.content;
+            const scope = isStreaming ? (data?.scope || null) : (data?.scope || null);
+            if (isStreaming && !streamingSections["scope"]) return <div className="grid md:grid-cols-2 gap-4"><Card><CardContent className="py-6"><div className="space-y-2"><div className="h-3 bg-muted/50 rounded animate-pulse w-3/4" /><div className="h-3 bg-muted/50 rounded animate-pulse w-full" /></div></CardContent></Card><Card><CardContent className="py-6"><div className="space-y-2"><div className="h-3 bg-muted/50 rounded animate-pulse w-3/4" /><div className="h-3 bg-muted/50 rounded animate-pulse w-full" /></div></CardContent></Card></div>;
+            if (!scope) return null;
+            return (
+              <div className="grid md:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base text-success flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4" />
+                      In Scope
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-2">
+                      {(scope.inScope || []).map((item: string, index: number) => (
+                        <li key={index} className="flex items-start gap-2">
+                          <ChevronRight className="h-4 w-4 text-success shrink-0 mt-0.5" />
+                          <span className="text-sm text-foreground">{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base text-muted-foreground flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4" />
+                      Out of Scope
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-2">
+                      {(scope.outOfScope || []).map((item: string, index: number) => (
+                        <li key={index} className="flex items-start gap-2">
+                          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                          <span className="text-sm text-muted-foreground">{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              </div>
+            );
+          })()}
 
           {/* Functional Requirements */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Functional Requirements</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Accordion type="multiple" className="w-full">
-                {mockBRD.content.functionalRequirements.map((req) => (
-                  <AccordionItem key={req.id} value={req.id}>
-                    <AccordionTrigger className="hover:no-underline">
-                      <div className="flex items-center gap-3">
-                        <Badge variant="outline" className="font-mono text-xs">
-                          {req.id}
-                        </Badge>
-                        <span className="font-medium text-left">{req.title}</span>
-                        <Badge variant="outline" className={cn("ml-auto", getPriorityColor(req.priority))}>
-                          {req.priority}
-                        </Badge>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <div className="space-y-4 pt-2">
-                        <p className="text-muted-foreground">{req.description}</p>
-                        <div>
-                          <p className="text-sm font-medium text-foreground mb-2">Acceptance Criteria:</p>
-                          <ul className="space-y-1">
-                            {req.acceptanceCriteria.map((criteria, index) => (
-                              <li key={index} className="flex items-start gap-2 text-sm">
-                                <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
-                                <span className="text-muted-foreground">{criteria}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            </CardContent>
-          </Card>
+          {(() => {
+            const data = isStreaming ? streamingSections["functionalRequirements"] : mockBRD?.content;
+            const reqs = isStreaming ? (data?.functionalRequirements || []) : (data?.functionalRequirements || []);
+            if (isStreaming && !streamingSections["functionalRequirements"]) return <Card><CardContent className="py-6"><div className="space-y-3"><div className="h-10 bg-muted/50 rounded animate-pulse w-full" /><div className="h-10 bg-muted/50 rounded animate-pulse w-full" /><div className="h-10 bg-muted/50 rounded animate-pulse w-full" /></div></CardContent></Card>;
+            if (reqs.length === 0) return null;
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Functional Requirements</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Accordion type="multiple" className="w-full">
+                    {reqs.map((req: any) => (
+                      <AccordionItem key={req.id} value={req.id}>
+                        <AccordionTrigger className="hover:no-underline">
+                          <div className="flex items-center gap-3">
+                            <Badge variant="outline" className="font-mono text-xs">
+                              {req.id}
+                            </Badge>
+                            <span className="font-medium text-left">{req.title}</span>
+                            <Badge variant="outline" className={cn("ml-auto", getPriorityColor(req.priority))}>
+                              {req.priority}
+                            </Badge>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div className="space-y-4 pt-2">
+                            <p className="text-muted-foreground">{req.description}</p>
+                            {req.acceptanceCriteria?.length > 0 && (
+                              <div>
+                                <p className="text-sm font-medium text-foreground mb-2">Acceptance Criteria:</p>
+                                <ul className="space-y-1">
+                                  {req.acceptanceCriteria.map((criteria: string, index: number) => (
+                                    <li key={index} className="flex items-start gap-2 text-sm">
+                                      <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
+                                      <span className="text-muted-foreground">{criteria}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Non-Functional Requirements */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Non-Functional Requirements</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {mockBRD.content.nonFunctionalRequirements.map((req) => (
-                  <div key={req.id} className="flex items-start gap-3 p-3 rounded-md bg-muted/50">
-                    <Badge variant="outline" className="font-mono text-xs shrink-0">
-                      {req.id}
-                    </Badge>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{req.category}</p>
-                      <p className="text-sm text-muted-foreground">{req.description}</p>
-                    </div>
+          {(() => {
+            const data = isStreaming ? streamingSections["nonFunctionalRequirements"] : mockBRD?.content;
+            const reqs = isStreaming ? (data?.nonFunctionalRequirements || []) : (data?.nonFunctionalRequirements || []);
+            if (isStreaming && !streamingSections["nonFunctionalRequirements"]) return <Card><CardContent className="py-6"><div className="space-y-2"><div className="h-8 bg-muted/50 rounded animate-pulse w-full" /><div className="h-8 bg-muted/50 rounded animate-pulse w-full" /><div className="h-8 bg-muted/50 rounded animate-pulse w-full" /></div></CardContent></Card>;
+            if (reqs.length === 0) return null;
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Non-Functional Requirements</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {reqs.map((req: any) => (
+                      <div key={req.id} className="flex items-start gap-3 p-3 rounded-md bg-muted/50">
+                        <Badge variant="outline" className="font-mono text-xs shrink-0">
+                          {req.id}
+                        </Badge>
+                        <div>
+                          <p className="text-sm font-medium text-foreground">{req.category}</p>
+                          <p className="text-sm text-muted-foreground">{req.description}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Technical Considerations */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Technical Considerations</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2">
-                {mockBRD.content.technicalConsiderations.map((item, index) => (
-                  <li key={index} className="flex items-start gap-2">
-                    <ChevronRight className="h-4 w-4 text-accent shrink-0 mt-0.5" />
-                    <span className="text-foreground">{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
+          {(() => {
+            const data = isStreaming ? streamingSections["technical"] : mockBRD?.content;
+            const techItems = isStreaming ? (data?.technicalConsiderations || []) : (data?.technicalConsiderations || []);
+            if (isStreaming && !streamingSections["technical"]) return <Card><CardContent className="py-6"><div className="space-y-2"><div className="h-3 bg-muted/50 rounded animate-pulse w-full" /><div className="h-3 bg-muted/50 rounded animate-pulse w-5/6" /><div className="h-3 bg-muted/50 rounded animate-pulse w-3/4" /></div></CardContent></Card>;
+            if (techItems.length === 0) return null;
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Technical Considerations</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2">
+                    {techItems.map((item: string, index: number) => (
+                      <li key={index} className="flex items-start gap-2">
+                        <ChevronRight className="h-4 w-4 text-accent shrink-0 mt-0.5" />
+                        <span className="text-foreground">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
-          {/* Risks */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-warning" />
-                Risks & Mitigations
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {mockBRD.content.risks.map((risk, index) => (
-                  <div key={index} className="p-4 rounded-md bg-warning/5 border border-warning/20">
-                    <p className="font-medium text-foreground mb-2">{risk.description}</p>
-                    <p className="text-sm text-muted-foreground">
-                      <span className="font-medium text-success">Mitigation:</span> {risk.mitigation}
-                    </p>
-                  </div>
-                ))}
+          {/* Dependencies & Assumptions */}
+          {(() => {
+            const data = isStreaming ? streamingSections["technical"] : mockBRD?.content;
+            const deps = data?.dependencies || [];
+            const assumptions = data?.assumptions || [];
+            if (isStreaming && !streamingSections["technical"]) return null;
+            if (deps.length === 0 && assumptions.length === 0) return null;
+            return (
+              <div className="grid md:grid-cols-2 gap-4">
+                {deps.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Dependencies</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-2">
+                        {deps.map((item: string, index: number) => (
+                          <li key={index} className="flex items-start gap-2">
+                            <ChevronRight className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                            <span className="text-sm text-foreground">{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                )}
+                {assumptions.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Assumptions</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-2">
+                        {assumptions.map((item: string, index: number) => (
+                          <li key={index} className="flex items-start gap-2">
+                            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                            <span className="text-sm text-muted-foreground">{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
-            </CardContent>
-          </Card>
+            );
+          })()}
+
+          {/* Risks & Mitigations */}
+          {(() => {
+            const data = isStreaming ? streamingSections["risks"] : mockBRD?.content;
+            const risks = isStreaming ? (data?.risks || []) : (data?.risks || []);
+            if (isStreaming && !streamingSections["risks"]) return <Card><CardContent className="py-6"><div className="space-y-2"><div className="h-3 bg-muted/50 rounded animate-pulse w-full" /><div className="h-3 bg-muted/50 rounded animate-pulse w-5/6" /></div></CardContent></Card>;
+            if (risks.length === 0) return null;
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-warning" />
+                    Risks & Mitigations
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {risks.map((risk: any, index: number) => (
+                      <div key={index} className="p-4 rounded-md bg-warning/5 border border-warning/20">
+                        <p className="font-medium text-foreground mb-2">{risk.description}</p>
+                        <p className="text-sm text-muted-foreground">
+                          <span className="font-medium text-success">Mitigation:</span> {risk.mitigation}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Generate User Stories Action */}
+          {!isStreaming && (
           <div className="flex justify-between gap-3 pt-4">
             <Button variant="outline" onClick={() => navigate("/requirements")}>
               Back
@@ -969,7 +1055,7 @@ export default function BRDPage() {
               )}
             </Button>
           </div>
-          </>)}
+          )}
         </div>
       </div>
 

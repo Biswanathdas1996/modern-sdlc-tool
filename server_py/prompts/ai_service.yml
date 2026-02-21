@@ -202,6 +202,102 @@ generate_brd_user: |
   4. Ensure all functional requirements are grounded in the retrieved KNOWLEDGE BASE context
   5. Create requirements that integrate seamlessly with the existing system while meeting the feature request needs
 
+# ---------------------------------------------------------------------------
+# Per-Section BRD Prompts (parallel generation)
+# ---------------------------------------------------------------------------
+brd_section_base_context: |
+  You are a senior business analyst generating ONE specific section of a Business Requirements Document.
+
+  CONTEXT SOURCES (use all of them):
+  1. KNOWLEDGE BASE - Domain-specific documents retrieved for this feature request (HIGHEST priority)
+  2. TECHNICAL DOCUMENTATION - Generated from repository analysis
+  3. DATABASE SCHEMA - Current database structure{database_schema_note}
+
+  Prioritize: KNOWLEDGE BASE > TECHNICAL DOCUMENTATION > Assumptions.
+  Return ONLY valid JSON matching the exact schema below. No markdown, no explanation.
+
+brd_section_meta_prompt: |
+  Generate BRD metadata for this feature request. Return JSON:
+  {{"title": "A clear BRD title", "version": "1.0", "status": "draft", "sourceDocumentation": "Title of source docs used or null"}}
+
+  Feature: {feature_title}
+  Description: {feature_description}
+  Request Type: {request_type}
+
+brd_section_existing_system_prompt: |
+  Identify existing system components affected by this feature. Return JSON:
+  {{"relevantComponents": ["component1", "component2"], "relevantAPIs": ["api1", "api2"], "dataModelsAffected": ["model1", "model2"]}}
+
+  Feature: {feature_title}
+  Description: {feature_description}
+  {documentation_context}
+  {database_schema_context}
+
+brd_section_overview_prompt: |
+  Write an executive summary (2-4 sentences) for this BRD. Return JSON:
+  {{"overview": "Executive summary text here"}}
+
+  Feature: {feature_title}
+  Description: {feature_description}
+  Request Type: {request_type}
+  {knowledge_base_context}
+
+brd_section_objectives_prompt: |
+  List 4-6 clear business objectives for this feature. Return JSON:
+  {{"objectives": ["objective 1", "objective 2", "..."]}}
+
+  Feature: {feature_title}
+  Description: {feature_description}
+  {knowledge_base_context}
+
+brd_section_scope_prompt: |
+  Define what is in scope and out of scope for this feature. Return JSON:
+  {{"scope": {{"inScope": ["item 1", "item 2"], "outOfScope": ["item 1", "item 2"]}}}}
+
+  Feature: {feature_title}
+  Description: {feature_description}
+  {knowledge_base_context}
+
+brd_section_functional_req_prompt: |
+  Generate 3-5 detailed functional requirements. Return JSON:
+  {{"functionalRequirements": [
+    {{"id": "FR-001", "title": "Requirement title", "description": "Detailed description", "priority": "high|medium|low", "acceptanceCriteria": ["criteria 1", "criteria 2"], "relatedComponents": ["component1"]}}
+  ]}}
+
+  Feature: {feature_title}
+  Description: {feature_description}
+  Request Type: {request_type}
+  {knowledge_base_context}
+  {documentation_context}
+  {database_schema_context}
+
+brd_section_nonfunctional_req_prompt: |
+  Generate 3-5 non-functional requirements covering performance, scalability, security, accessibility. Return JSON:
+  {{"nonFunctionalRequirements": [
+    {{"id": "NFR-001", "category": "Performance|Scalability|Security|Accessibility|Reliability", "description": "Description"}}
+  ]}}
+
+  Feature: {feature_title}
+  Description: {feature_description}
+  {documentation_context}
+
+brd_section_technical_prompt: |
+  List technical considerations, dependencies, and assumptions for this feature. Return JSON:
+  {{"technicalConsiderations": ["consideration 1", "consideration 2"], "dependencies": ["dependency 1"], "assumptions": ["assumption 1"]}}
+
+  Feature: {feature_title}
+  Description: {feature_description}
+  {documentation_context}
+  {database_schema_context}
+
+brd_section_risks_prompt: |
+  Identify 3-5 risks with mitigation strategies for this feature. Return JSON:
+  {{"risks": [{{"description": "Risk description", "mitigation": "Mitigation strategy"}}]}}
+
+  Feature: {feature_title}
+  Description: {feature_description}
+  {knowledge_base_context}
+
 generate_test_cases_system: |
   You are a QA engineer creating test cases from a Business Requirements Document.
 

@@ -48,6 +48,52 @@ brd_generation:
   temperature: 0.3
   max_tokens: 8000
 
+# Per-section parallel BRD generation (fast model, lower tokens for speed)
+brd_section_existing_system:
+  model: vertex_ai.gemini-2.5-flash-image
+  temperature: 0.2
+  max_tokens: 2000
+
+brd_section_overview:
+  model: vertex_ai.gemini-2.5-flash-image
+  temperature: 0.3
+  max_tokens: 1500
+
+brd_section_objectives:
+  model: vertex_ai.gemini-2.5-flash-image
+  temperature: 0.3
+  max_tokens: 1500
+
+brd_section_scope:
+  model: vertex_ai.gemini-2.5-flash-image
+  temperature: 0.2
+  max_tokens: 1500
+
+brd_section_functional_req:
+  model: vertex_ai.gemini-2.5-flash-image
+  temperature: 0.3
+  max_tokens: 3000
+
+brd_section_nonfunctional_req:
+  model: vertex_ai.gemini-2.5-flash-image
+  temperature: 0.2
+  max_tokens: 2000
+
+brd_section_technical:
+  model: vertex_ai.gemini-2.5-flash-image
+  temperature: 0.2
+  max_tokens: 1500
+
+brd_section_risks:
+  model: vertex_ai.gemini-2.5-flash-image
+  temperature: 0.3
+  max_tokens: 2000
+
+brd_section_meta:
+  model: vertex_ai.gemini-2.5-flash-image
+  temperature: 0.2
+  max_tokens: 1000
+
 bpmn_diagram:
   model: vertex_ai.gemini-2.5-flash-image         # fast multimodal — structured diagram output
   temperature: 0.2

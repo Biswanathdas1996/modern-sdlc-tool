@@ -150,6 +150,28 @@ class AIService:
         ):
             yield item
 
+    def _task_caller_factory(self):
+        """Return a factory that creates task-specific call_genai wrappers."""
+        def factory(task_name: str):
+            return self._task_caller(task_name)
+        return factory
+
+    async def generate_brd_parallel(
+        self,
+        feature_request: Dict[str, Any],
+        analysis: Optional[Dict[str, Any]],
+        documentation: Optional[Dict[str, Any]],
+        database_schema: Optional[Dict[str, Any]],
+        knowledge_context: Optional[str],
+    ):
+        """Generate BRD with parallel section calls — async generator yielding section events."""
+        async for item in generators.generate_brd_parallel(
+            self._task_caller_factory(), self.build_prompt,
+            feature_request, analysis, documentation, database_schema,
+            knowledge_context,
+        ):
+            yield item
+
     async def generate_test_cases(self, brd: Dict[str, Any], analysis: Optional[Dict[str, Any]], documentation: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Generate test cases from BRD."""
         return await generators.generate_test_cases(

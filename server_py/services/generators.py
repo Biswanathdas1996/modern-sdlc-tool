@@ -359,6 +359,267 @@ Project: {documentation.get('title', '')}
     yield {"type": "done", "brd": brd}
 
 
+# ==================== PARALLEL BRD SECTION GENERATION ====================
+
+BRD_SECTIONS = [
+    {
+        "key": "existingSystemContext",
+        "task_name": "brd_section_existing_system",
+        "prompt_key": "brd_section_existing_system_prompt",
+        "context_keys": ["documentation_context", "database_schema_context"],
+    },
+    {
+        "key": "overview",
+        "task_name": "brd_section_overview",
+        "prompt_key": "brd_section_overview_prompt",
+        "context_keys": ["knowledge_base_context"],
+    },
+    {
+        "key": "objectives",
+        "task_name": "brd_section_objectives",
+        "prompt_key": "brd_section_objectives_prompt",
+        "context_keys": ["knowledge_base_context"],
+    },
+    {
+        "key": "scope",
+        "task_name": "brd_section_scope",
+        "prompt_key": "brd_section_scope_prompt",
+        "context_keys": ["knowledge_base_context"],
+    },
+    {
+        "key": "functionalRequirements",
+        "task_name": "brd_section_functional_req",
+        "prompt_key": "brd_section_functional_req_prompt",
+        "context_keys": ["knowledge_base_context", "documentation_context", "database_schema_context"],
+    },
+    {
+        "key": "nonFunctionalRequirements",
+        "task_name": "brd_section_nonfunctional_req",
+        "prompt_key": "brd_section_nonfunctional_req_prompt",
+        "context_keys": ["documentation_context"],
+    },
+    {
+        "key": "technical",
+        "task_name": "brd_section_technical",
+        "prompt_key": "brd_section_technical_prompt",
+        "context_keys": ["documentation_context", "database_schema_context"],
+    },
+    {
+        "key": "risks",
+        "task_name": "brd_section_risks",
+        "prompt_key": "brd_section_risks_prompt",
+        "context_keys": ["knowledge_base_context"],
+    },
+    {
+        "key": "meta",
+        "task_name": "brd_section_meta",
+        "prompt_key": "brd_section_meta_prompt",
+        "context_keys": [],
+    },
+]
+
+
+async def _generate_single_section(
+    call_genai: CallGenAI,
+    build_prompt: BuildPrompt,
+    section_cfg: Dict[str, Any],
+    format_vars: Dict[str, str],
+) -> Dict[str, Any]:
+    """Generate a single BRD section via its own LLM call."""
+    import asyncio
+
+    section_key = section_cfg["key"]
+    task_name = section_cfg["task_name"]
+
+    system_prompt = prompt_loader.get_prompt("ai_service.yml", "brd_section_base_context").format(
+        database_schema_note=format_vars.get("database_schema_note", ""),
+    )
+
+    user_prompt_template = prompt_loader.get_prompt("ai_service.yml", section_cfg["prompt_key"])
+
+    safe_vars = {k: format_vars.get(k, "") for k in [
+        "feature_title", "feature_description", "request_type",
+        "knowledge_base_context", "documentation_context", "database_schema_context",
+    ]}
+    user_prompt = user_prompt_template.format(**safe_vars)
+
+    prompt = build_prompt(system_prompt, user_prompt)
+
+    log_info(f"BRD section '{section_key}' — calling LLM (task: {task_name})", "generators")
+    start = asyncio.get_event_loop().time()
+
+    raw = await call_genai(prompt, task_name=task_name)
+
+    elapsed = asyncio.get_event_loop().time() - start
+    log_info(f"BRD section '{section_key}' — completed in {elapsed:.1f}s", "generators")
+
+    try:
+        data = parse_json_response(raw)
+    except Exception as e:
+        log_error(f"Failed to parse section '{section_key}' JSON", "generators", e)
+        data = {}
+
+    return {"section": section_key, "data": data}
+
+
+async def generate_brd_parallel(
+    call_genai_factory: Callable[[str], CallGenAI],
+    build_prompt: BuildPrompt,
+    feature_request: Dict[str, Any],
+    analysis: Optional[Dict[str, Any]],
+    documentation: Optional[Dict[str, Any]],
+    database_schema: Optional[Dict[str, Any]],
+    knowledge_context: Optional[str],
+):
+    """Generate BRD with 9 parallel independent LLM calls, yielding sections as they complete.
+
+    This is an async generator. It yields section events:
+        {"type": "section", "section": "<key>", "data": {...}}
+    and finally:
+        {"type": "done", "brd": {...}}
+    """
+    import asyncio
+
+    documentation_context = ""
+    knowledge_base_context = ""
+    database_schema_context = ""
+
+    log_info(
+        f"BRD Parallel Generation — KB: {bool(knowledge_context)}, "
+        f"Docs: {bool(documentation)}, DB: {bool(database_schema)}, "
+        f"Analysis: {bool(analysis)}",
+        "ai_service",
+    )
+
+    if knowledge_context:
+        log_info(f"Using KB context ({len(knowledge_context)} chars)", "ai_service")
+        knowledge_base_context = f"""
+=== KNOWLEDGE BASE (Retrieved Documents - PRIMARY CONTEXT) ===
+{knowledge_context}
+=== END KNOWLEDGE BASE ===
+"""
+
+    if database_schema:
+        table_count = len(database_schema.get("tables", []))
+        log_info(f"Using Database Schema with {table_count} tables", "ai_service")
+        table_descriptions = []
+        for table in database_schema.get("tables", []):
+            columns = []
+            for col in table.get("columns", []):
+                desc = f"    - {col['name']}: {col['dataType']}"
+                if col.get("isPrimaryKey"):
+                    desc += " (PK)"
+                if col.get("isForeignKey"):
+                    desc += f" (FK -> {col.get('references', '?')})"
+                columns.append(desc)
+            table_descriptions.append(
+                f"  {table['name']}:\n" + "\n".join(columns)
+            )
+        database_schema_context = f"""
+=== DATABASE SCHEMA ===
+{chr(10).join(table_descriptions)}
+=== END DATABASE SCHEMA ===
+"""
+
+    if documentation:
+        doc_title = documentation.get("title", "N/A")
+        log_info(f"Using Documentation: {doc_title}", "ai_service")
+        documentation_context = f"""
+=== TECHNICAL DOCUMENTATION ===
+Project: {documentation.get('title', '')}
+{documentation.get('content', '')}
+=== END DOCUMENTATION ===
+"""
+    elif analysis:
+        documentation_context = f"""
+=== REPOSITORY CONTEXT ===
+Architecture: {analysis.get('architecture', '')}
+Tech Stack: {json.dumps(analysis.get('techStack', {}))}
+Features: {', '.join([f.get('name', '') for f in analysis.get('features', [])])}
+=== END REPOSITORY CONTEXT ===
+"""
+
+    format_vars = {
+        "feature_title": feature_request.get("title", ""),
+        "feature_description": feature_request.get("description", ""),
+        "request_type": feature_request.get("requestType", "feature"),
+        "knowledge_base_context": knowledge_base_context,
+        "documentation_context": documentation_context,
+        "database_schema_context": database_schema_context,
+        "database_schema_note": " AND the connected DATABASE SCHEMA" if database_schema else "",
+    }
+
+    async def _run_section(cfg):
+        caller = call_genai_factory(cfg["task_name"])
+        return await _generate_single_section(caller, build_prompt, cfg, format_vars)
+
+    tasks = {
+        asyncio.create_task(_run_section(cfg)): cfg["key"]
+        for cfg in BRD_SECTIONS
+    }
+
+    content = {}
+    meta = {}
+    total = len(tasks)
+    completed_count = 0
+
+    for coro in asyncio.as_completed(tasks.keys()):
+        try:
+            result = await coro
+            section_key = result["section"]
+            section_data = result["data"]
+            completed_count += 1
+
+            if section_key == "meta":
+                meta = section_data
+            elif section_key == "technical":
+                content["technicalConsiderations"] = section_data.get("technicalConsiderations", [])
+                content["dependencies"] = section_data.get("dependencies", [])
+                content["assumptions"] = section_data.get("assumptions", [])
+            elif section_key == "scope":
+                content["scope"] = section_data.get("scope", {"inScope": [], "outOfScope": []})
+            elif section_key == "overview":
+                content["overview"] = section_data.get("overview", "")
+            elif section_key == "objectives":
+                content["objectives"] = section_data.get("objectives", [])
+            else:
+                content[section_key] = section_data.get(section_key, section_data)
+
+            log_info(f"BRD section '{section_key}' ready ({completed_count}/{total})", "generators")
+            yield {"type": "section", "section": section_key, "data": section_data, "progress": completed_count, "total": total}
+
+        except Exception as section_err:
+            section_key = "unknown"
+            for t, k in tasks.items():
+                if t.done():
+                    try:
+                        t.result()
+                    except:
+                        section_key = k
+                        break
+            log_error(f"BRD section '{section_key}' failed", "generators", section_err)
+            completed_count += 1
+            yield {"type": "section", "section": section_key, "data": {}, "progress": completed_count, "total": total}
+
+    from datetime import datetime
+    timestamp = datetime.utcnow().isoformat()
+
+    brd = {
+        "projectId": feature_request.get("projectId", "global"),
+        "featureRequestId": feature_request.get("id", ""),
+        "requestType": feature_request.get("requestType", "feature"),
+        "title": meta.get("title", feature_request.get("title", "")),
+        "version": meta.get("version", "1.0"),
+        "status": meta.get("status", "draft"),
+        "sourceDocumentation": meta.get("sourceDocumentation"),
+        "content": content,
+        "createdAt": timestamp,
+        "updatedAt": timestamp,
+    }
+
+    yield {"type": "done", "brd": brd}
+
+
 async def generate_test_cases(
     call_genai: CallGenAI,
     build_prompt: BuildPrompt,
