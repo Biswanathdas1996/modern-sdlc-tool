@@ -11,6 +11,36 @@ StreamGenAI = Callable[..., AsyncIterator[str]]
 BuildPrompt = Callable[[str, str], str]
 
 
+def _build_full_documentation_text(documentation: Dict[str, Any]) -> str:
+    """Build complete documentation text from both 'content' (summary) and 'sections' (detailed feature docs).
+    
+    The documentation object has:
+      - content: short summary of the project (often <500 chars)
+      - sections: list of dicts with {title, content} for each documented feature (often 10,000+ chars total)
+    
+    Both are needed for the LLM to have full context.
+    """
+    parts = []
+    
+    summary = documentation.get("content", "")
+    if summary:
+        parts.append(f"Summary: {summary}")
+    
+    sections = documentation.get("sections", [])
+    if sections and isinstance(sections, list):
+        parts.append("\nDetailed Feature Documentation:")
+        for section in sections:
+            if isinstance(section, dict):
+                title = section.get("title", "Untitled")
+                content = section.get("content", "")
+                if content:
+                    parts.append(f"\n--- {title} ---\n{content}")
+            elif isinstance(section, str):
+                parts.append(f"\n{section}")
+    
+    return "\n".join(parts)
+
+
 async def generate_documentation(
     call_genai: CallGenAI,
     build_prompt: BuildPrompt,
@@ -151,11 +181,12 @@ Tables: {table_count}
 
     if documentation:
         doc_title = documentation.get('title', 'N/A')
-        log_info(f"Using Technical Documentation: {doc_title}", "ai_service")
+        full_doc_text = _build_full_documentation_text(documentation)
+        log_info(f"Using Technical Documentation: {doc_title} ({len(full_doc_text)} chars incl. sections)", "ai_service")
         documentation_context = f"""
 === TECHNICAL DOCUMENTATION (Generated from Repository Analysis) ===
 Project: {documentation.get('title', '')}
-{documentation.get('content', '')}
+{full_doc_text}
 === END OF DOCUMENTATION ===
 """
     elif analysis:
@@ -290,11 +321,12 @@ Tables: {table_count}
 
     if documentation:
         doc_title = documentation.get("title", "N/A")
-        log_info(f"Using Technical Documentation: {doc_title}", "ai_service")
+        full_doc_text = _build_full_documentation_text(documentation)
+        log_info(f"Using Technical Documentation: {doc_title} ({len(full_doc_text)} chars incl. sections)", "ai_service")
         documentation_context = f"""
 === TECHNICAL DOCUMENTATION (Generated from Repository Analysis) ===
 Project: {documentation.get('title', '')}
-{documentation.get('content', '')}
+{full_doc_text}
 === END OF DOCUMENTATION ===
 """
     elif analysis:
@@ -549,11 +581,12 @@ async def generate_brd_parallel(
 
     if documentation:
         doc_title = documentation.get("title", "N/A")
-        log_info(f"Using Documentation: {doc_title}", "ai_service")
+        full_doc_text = _build_full_documentation_text(documentation)
+        log_info(f"Using Documentation: {doc_title} ({len(full_doc_text)} chars incl. sections)", "ai_service")
         documentation_context = f"""
 === TECHNICAL DOCUMENTATION ===
 Project: {documentation.get('title', '')}
-{documentation.get('content', '')}
+{full_doc_text}
 === END DOCUMENTATION ===
 """
     elif analysis:
