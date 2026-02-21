@@ -438,13 +438,46 @@ async def _generate_single_section(
 
     prompt = build_prompt(system_prompt, user_prompt)
 
-    log_info(f"BRD section '{section_key}' — calling LLM (task: {task_name})", "generators")
+    doc_len = len(safe_vars.get("documentation_context", ""))
+    kb_len = len(safe_vars.get("knowledge_base_context", ""))
+    db_len = len(safe_vars.get("database_schema_context", ""))
+    esc_len = len(safe_vars.get("existing_system_context", ""))
+    system_len = len(system_prompt)
+    user_len = len(user_prompt)
+
+    log_info(
+        f"BRD section '{section_key}' — calling LLM (task: {task_name}) | "
+        f"system_prompt: {system_len} chars, user_prompt: {user_len} chars | "
+        f"Context breakdown → documentation: {doc_len} chars, "
+        f"knowledge_base: {kb_len} chars, "
+        f"database_schema: {db_len} chars, "
+        f"existing_system_ctx: {esc_len} chars",
+        "generators",
+    )
+
+    log_info(
+        f"BRD section '{section_key}' — Feature: \"{safe_vars.get('feature_title', '')}\" | "
+        f"Type: {safe_vars.get('request_type', '')} | "
+        f"Description preview: \"{safe_vars.get('feature_description', '')[:200]}\"",
+        "generators",
+    )
+
+    if doc_len > 0:
+        log_info(f"BRD section '{section_key}' — Documentation preview (first 500 chars): {safe_vars['documentation_context'][:500]}", "generators")
+    if kb_len > 0:
+        log_info(f"BRD section '{section_key}' — Knowledge Base preview (first 500 chars): {safe_vars['knowledge_base_context'][:500]}", "generators")
+    if db_len > 0:
+        log_info(f"BRD section '{section_key}' — DB Schema preview (first 500 chars): {safe_vars['database_schema_context'][:500]}", "generators")
+    if esc_len > 0:
+        log_info(f"BRD section '{section_key}' — Existing System Context preview (first 500 chars): {safe_vars['existing_system_context'][:500]}", "generators")
+
     start = asyncio.get_event_loop().time()
 
     raw = await call_genai(prompt)
 
     elapsed = asyncio.get_event_loop().time() - start
-    log_info(f"BRD section '{section_key}' — completed in {elapsed:.1f}s", "generators")
+    raw_len = len(raw) if raw else 0
+    log_info(f"BRD section '{section_key}' — completed in {elapsed:.1f}s, response: {raw_len} chars", "generators")
 
     try:
         data = parse_json_response(raw)
