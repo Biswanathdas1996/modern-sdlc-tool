@@ -1,0 +1,62 @@
+Existing System Context
+Components, APIs, and data models from the documentation that this feature interacts with
+Related Components
+BrdGenerator
+Provides the user interface for generating BRDs.
+
+FileUpload
+Handles the file upload process for transcripts.
+
+fileProcessor.ts
+Processes uploaded files, extracting text content.
+
+local-llm.ts
+Interacts with the LLM to generate BRD content and enhancement suggestions.
+
+BrdDisplay
+Displays the generated BRD and allows for requirement editing and enhancement.
+
+Related APIs
+POST /api/upload-transcript
+Receives uploaded payroll-related transcripts for BRD generation.
+
+POST /api/enhance-requirement
+Generates AI-powered enhancement suggestions for individual requirements within the payroll processing BRD.
+
+PUT /api/requirements/:id
+Handles updating individual requirements within the payroll processing BRD.
+
+Architecture & Design Patterns
+The application follows a client-server architecture with a React frontend and an Express.js backend. Data flow for BRD generation involves client-side file upload, server-side processing by `fileProcessor.ts`, and interaction with `local-llm.ts` for AI generation. Requirement enhancement and editing follow a similar pattern, with client-side components (`BrdDisplay`) interacting with dedicated API endpoints (`/api/enhance-requirement`, `/api/requirements/:id`). The architecture leverages a service layer (`fileProcessor.ts`, `local-llm.ts`) for business logic and external integrations. For consistency, any new functionality related to payroll processing should adhere to this pattern, utilizing existing file upload mechanisms and LLM integration services. State management on the client-side uses React's `useState` and `useMutation`/`useQuery` from `@tanstack/react-query` for data fetching and mutations. The application also uses `zod` for schema validation, which should be followed for any new data structures. Architectural constraints include reliance on the `local-llm.ts` service for AI capabilities and the existing file storage mechanism (`storage.ts`).
+
+Implementation Approach
+1
+Extend FileUpload: Modify `FileUpload` component to recognize and potentially categorize payroll-specific document types if needed, though current implementation handles various formats. 2. Enhance `fileProcessor.ts`: If payroll documents require specific parsing beyond generic text extraction, `fileProcessor.ts` will need extensions. 3. LLM Prompt Engineering: Develop specific prompts for `local-llm.ts` to guide the AI in generating accurate BRDs for payroll processing workflows based on uploaded transcripts. This is a key decision point for the quality of the output. 4. BRD Display Integration: Ensure the `BrdDisplay` component can effectively render the payroll processing workflow BRD, including its specific requirements. 5. Requirement Enhancement Logic: The existing `/api/enhance-requirement` endpoint and `local-llm.ts` service can be directly leveraged for payroll requirement enhancements. 6. Requirement Editing: The existing `/api/requirements/:id` endpoint and `BrdDisplay` editing functionality can be used for refining payroll requirements. Key decisions involve how to best structure the input to the LLM for optimal payroll BRD generation and how to handle potential variations in payroll document formats. Risk areas include the accuracy of LLM-generated content for a complex domain like payroll and the need for robust error handling during file processing.
+Reusable Code & Utilities
+FileUpload
+Handles file uploads and provides UI for selecting files. — The payroll processing feature will use this component to allow users to upload timesheets or other relevant documents.
+
+fileProcessor.ts
+Processes uploaded files to extract text content. — Will be used to extract text from payroll-related documents before sending to the LLM.
+
+local-llm.ts
+Interacts with the Language Model for BRD generation and enhancement. — This service will be central to generating the payroll processing BRD and providing AI-driven suggestions for its requirements.
+
+BrdDisplay
+Displays generated BRDs and provides editing/enhancement capabilities. — The payroll processing BRD will be rendered and managed within this component.
+
+useToast
+Provides a consistent way to display toast notifications. — Should be used for user feedback on successful operations (e.g., BRD generation, requirement updates) or errors.
+
+useMutation
+Handles asynchronous data mutations (POST, PUT, DELETE). — Will be used for sending uploaded payroll data to the server and for updating payroll-related requirements.
+
+useQuery
+Handles asynchronous data fetching. — Could be used if there's a need to fetch existing payroll-related data or configurations.
+
+Domain Rules & Business Constraints
+Collect employee timesheets
+Calculate gross pay
+Deduct taxes and contributions
+Generate payslips
+Transfer salaries to bank accounts

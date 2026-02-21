@@ -216,7 +216,7 @@ brd_section_base_context: |
   5. Feature request details (title, description, request type)
 
   CRITICAL RULES:
-  - Base ALL content on the provided context sources. Do NOT invent components, APIs, tables, or features that are not mentioned in the context.
+  - ZERO HALLUCINATION POLICY: Every component, API, table, file, or pattern you reference MUST appear verbatim in at least one of the provided context sources. If you cannot find a name in the sources, do NOT include it — leave the field empty or omit the reference.
   - If a context source is empty or not provided, simply work with what is available. Do NOT write phrases like "No Existing System Context provided" — instead, derive your analysis from the available sources.
   - Use the Existing System Context to reference real codebase components and architecture patterns.
   - Use the Knowledge Base for domain-specific business requirements, rules, and standards.
@@ -272,10 +272,10 @@ brd_section_existing_system_prompt: |
 
   CRITICAL RULES:
   - YOU ARE the Existing System Context generator. Your output becomes the "Existing System Context" that all other BRD sections use. Do NOT say "No Existing System Context provided" — that is YOUR job to create.
-  - ONLY reference components, APIs, tables, patterns, and business rules that actually appear in the provided TECHNICAL DOCUMENTATION, DATABASE SCHEMA, or KNOWLEDGE BASE.
-  - If a specific context source (TECHNICAL DOCUMENTATION, DATABASE SCHEMA, or KNOWLEDGE BASE) is empty or not provided, simply skip that analysis area and work with the sources you DO have. Never state "No … provided" in your output.
-  - Do NOT hallucinate or invent system components, endpoints, or table names.
-  - Be SPECIFIC — use exact names, paths, and identifiers from the documentation.
+  - ZERO HALLUCINATION POLICY: Every component name, file path, API endpoint, table name, and utility you reference MUST appear verbatim in the TECHNICAL DOCUMENTATION, DATABASE SCHEMA, or KNOWLEDGE BASE provided below. If a name does not appear in these sources, do NOT include it.
+  - If a specific context source (TECHNICAL DOCUMENTATION, DATABASE SCHEMA, or KNOWLEDGE BASE) is empty or not provided, return empty arrays for the corresponding fields. Never invent plausible-sounding names to fill gaps.
+  - Never state "No … provided" in your output text fields.
+  - Be SPECIFIC — use exact names, paths, and identifiers copied from the documentation. Do NOT paraphrase or generalize component/file/API names.
 
   Return JSON:
   {{
