@@ -361,60 +361,52 @@ Project: {documentation.get('title', '')}
 
 # ==================== PARALLEL BRD SECTION GENERATION ====================
 
-BRD_SECTIONS = [
-    {
-        "key": "existingSystemContext",
-        "task_name": "brd_section_existing_system",
-        "prompt_key": "brd_section_existing_system_prompt",
-        "context_keys": ["documentation_context", "database_schema_context"],
-    },
+EXISTING_SYSTEM_SECTION = {
+    "key": "existingSystemContext",
+    "task_name": "brd_section_existing_system",
+    "prompt_key": "brd_section_existing_system_prompt",
+}
+
+PARALLEL_SECTIONS = [
     {
         "key": "overview",
         "task_name": "brd_section_overview",
         "prompt_key": "brd_section_overview_prompt",
-        "context_keys": ["knowledge_base_context"],
     },
     {
         "key": "objectives",
         "task_name": "brd_section_objectives",
         "prompt_key": "brd_section_objectives_prompt",
-        "context_keys": ["knowledge_base_context"],
     },
     {
         "key": "scope",
         "task_name": "brd_section_scope",
         "prompt_key": "brd_section_scope_prompt",
-        "context_keys": ["knowledge_base_context"],
     },
     {
         "key": "functionalRequirements",
         "task_name": "brd_section_functional_req",
         "prompt_key": "brd_section_functional_req_prompt",
-        "context_keys": ["knowledge_base_context", "documentation_context", "database_schema_context"],
     },
     {
         "key": "nonFunctionalRequirements",
         "task_name": "brd_section_nonfunctional_req",
         "prompt_key": "brd_section_nonfunctional_req_prompt",
-        "context_keys": ["documentation_context"],
     },
     {
         "key": "technical",
         "task_name": "brd_section_technical",
         "prompt_key": "brd_section_technical_prompt",
-        "context_keys": ["documentation_context", "database_schema_context"],
     },
     {
         "key": "risks",
         "task_name": "brd_section_risks",
         "prompt_key": "brd_section_risks_prompt",
-        "context_keys": ["knowledge_base_context"],
     },
     {
         "key": "meta",
         "task_name": "brd_section_meta",
         "prompt_key": "brd_section_meta_prompt",
-        "context_keys": [],
     },
 ]
 
@@ -440,6 +432,7 @@ async def _generate_single_section(
     safe_vars = {k: format_vars.get(k, "") for k in [
         "feature_title", "feature_description", "request_type",
         "knowledge_base_context", "documentation_context", "database_schema_context",
+        "existing_system_context",
     ]}
     user_prompt = user_prompt_template.format(**safe_vars)
 
@@ -547,7 +540,50 @@ Features: {', '.join([f.get('name', '') for f in analysis.get('features', [])])}
         "documentation_context": documentation_context,
         "database_schema_context": database_schema_context,
         "database_schema_note": " AND the connected DATABASE SCHEMA" if database_schema else "",
+        "existing_system_context": "",
     }
+
+    total = 1 + len(PARALLEL_SECTIONS)
+    completed_count = 0
+
+    log_info("Phase 1: Generating Existing System Context (sequential)...", "generators")
+    existing_system_data = {}
+    try:
+        caller = call_genai_factory(EXISTING_SYSTEM_SECTION["task_name"])
+        result = await _generate_single_section(caller, build_prompt, EXISTING_SYSTEM_SECTION, format_vars)
+        existing_system_data = result["data"]
+        completed_count += 1
+        log_info(f"BRD section 'existingSystemContext' ready ({completed_count}/{total})", "generators")
+        yield {"type": "section", "section": "existingSystemContext", "data": existing_system_data, "progress": completed_count, "total": total}
+    except Exception as esc_err:
+        log_error("BRD section 'existingSystemContext' failed", "generators", esc_err)
+        completed_count += 1
+        yield {"type": "section", "section": "existingSystemContext", "data": {}, "progress": completed_count, "total": total}
+
+    existing_system_context_text = ""
+    if existing_system_data:
+        parts = []
+        if existing_system_data.get("relevantComponents"):
+            parts.append(f"Relevant Components: {', '.join(existing_system_data['relevantComponents'])}")
+        if existing_system_data.get("relevantAPIs"):
+            parts.append(f"Relevant APIs: {', '.join(existing_system_data['relevantAPIs'])}")
+        if existing_system_data.get("dataModelsAffected"):
+            parts.append(f"Data Models Affected: {', '.join(existing_system_data['dataModelsAffected'])}")
+        if existing_system_data.get("architectureNotes"):
+            parts.append(f"Architecture Notes: {existing_system_data['architectureNotes']}")
+        if existing_system_data.get("implementationApproach"):
+            parts.append(f"Implementation Approach: {existing_system_data['implementationApproach']}")
+        if existing_system_data.get("reusableCode"):
+            parts.append(f"Reusable Code: {', '.join(existing_system_data['reusableCode'])}")
+        existing_system_context_text = f"""
+=== EXISTING SYSTEM CONTEXT (Codebase Analysis) ===
+{chr(10).join(parts)}
+=== END EXISTING SYSTEM CONTEXT ===
+"""
+
+    format_vars["existing_system_context"] = existing_system_context_text
+
+    log_info(f"Phase 2: Generating {len(PARALLEL_SECTIONS)} sections in parallel with enriched context...", "generators")
 
     async def _run_section(cfg):
         caller = call_genai_factory(cfg["task_name"])
@@ -555,13 +591,11 @@ Features: {', '.join([f.get('name', '') for f in analysis.get('features', [])])}
 
     tasks = {
         asyncio.create_task(_run_section(cfg)): cfg["key"]
-        for cfg in BRD_SECTIONS
+        for cfg in PARALLEL_SECTIONS
     }
 
     content = {}
     meta = {}
-    total = len(tasks)
-    completed_count = 0
 
     for coro in asyncio.as_completed(tasks.keys()):
         try:
@@ -600,6 +634,8 @@ Features: {', '.join([f.get('name', '') for f in analysis.get('features', [])])}
             log_error(f"BRD section '{section_key}' failed", "generators", section_err)
             completed_count += 1
             yield {"type": "section", "section": section_key, "data": {}, "progress": completed_count, "total": total}
+
+    content["existingSystemContext"] = existing_system_data
 
     from datetime import datetime
     timestamp = datetime.utcnow().isoformat()

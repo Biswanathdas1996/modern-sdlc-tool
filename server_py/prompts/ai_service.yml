@@ -209,11 +209,12 @@ brd_section_base_context: |
   You are a senior business analyst generating ONE specific section of a Business Requirements Document.
 
   CONTEXT SOURCES (use all of them):
-  1. KNOWLEDGE BASE - Domain-specific documents retrieved for this feature request (HIGHEST priority)
-  2. TECHNICAL DOCUMENTATION - Generated from repository analysis
-  3. DATABASE SCHEMA - Current database structure{database_schema_note}
+  1. EXISTING SYSTEM CONTEXT - Analysis of how this feature fits into the current codebase (HIGHEST priority for technical accuracy)
+  2. KNOWLEDGE BASE - Domain-specific documents retrieved for this feature request (HIGHEST priority for business context)
+  3. Feature request details
 
-  Prioritize: KNOWLEDGE BASE > TECHNICAL DOCUMENTATION > Assumptions.
+  Use the Existing System Context to ground your output in the real codebase architecture.
+  Use the Knowledge Base for domain-specific business requirements and rules.
   Return ONLY valid JSON matching the exact schema below. No markdown, no explanation.
 
 brd_section_meta_prompt: |
@@ -225,8 +226,18 @@ brd_section_meta_prompt: |
   Request Type: {request_type}
 
 brd_section_existing_system_prompt: |
-  Identify existing system components affected by this feature. Return JSON:
-  {{"relevantComponents": ["component1", "component2"], "relevantAPIs": ["api1", "api2"], "dataModelsAffected": ["model1", "model2"]}}
+  You are analyzing the existing codebase to determine exactly how to implement a new feature.
+
+  Study the TECHNICAL DOCUMENTATION and DATABASE SCHEMA below carefully. Then produce a detailed implementation context that explains:
+  1. Which existing components, modules, files, and APIs are relevant to this feature
+  2. How the current architecture handles similar functionality (patterns, services, data flows)
+  3. What data models and database tables will be affected or need creation
+  4. What integration points exist (API endpoints, middleware, event handlers)
+  5. What existing utilities, helpers, or shared code can be reused
+  6. Recommended approach for implementing this feature within the existing codebase
+
+  Return JSON:
+  {{"relevantComponents": ["Specific component/module names from the docs"], "relevantAPIs": ["Existing API endpoints or services involved"], "dataModelsAffected": ["Existing or new tables/models needed"], "architectureNotes": "How the current architecture relates to this feature — patterns, layers, data flow", "implementationApproach": "Recommended approach for building this feature on top of the existing codebase", "reusableCode": ["Existing utilities, services, or patterns that should be leveraged"]}}
 
   Feature: {feature_title}
   Description: {feature_description}
@@ -234,32 +245,35 @@ brd_section_existing_system_prompt: |
   {database_schema_context}
 
 brd_section_overview_prompt: |
-  Write an executive summary (2-4 sentences) for this BRD. Return JSON:
+  Write an executive summary (2-4 sentences) for this BRD. Ground it in the existing system context and any domain knowledge available. Return JSON:
   {{"overview": "Executive summary text here"}}
 
   Feature: {feature_title}
   Description: {feature_description}
   Request Type: {request_type}
+  {existing_system_context}
   {knowledge_base_context}
 
 brd_section_objectives_prompt: |
-  List 4-6 clear business objectives for this feature. Return JSON:
+  List 4-6 clear business objectives for this feature. Reference specific existing system capabilities and domain requirements. Return JSON:
   {{"objectives": ["objective 1", "objective 2", "..."]}}
 
   Feature: {feature_title}
   Description: {feature_description}
+  {existing_system_context}
   {knowledge_base_context}
 
 brd_section_scope_prompt: |
-  Define what is in scope and out of scope for this feature. Return JSON:
+  Define what is in scope and out of scope for this feature. Use the existing system context to identify real boundaries (existing modules, APIs, components). Return JSON:
   {{"scope": {{"inScope": ["item 1", "item 2"], "outOfScope": ["item 1", "item 2"]}}}}
 
   Feature: {feature_title}
   Description: {feature_description}
+  {existing_system_context}
   {knowledge_base_context}
 
 brd_section_functional_req_prompt: |
-  Generate 3-5 detailed functional requirements. Return JSON:
+  Generate 3-5 detailed functional requirements. Reference specific existing components and APIs from the system context. The relatedComponents field should list real components from the codebase. Return JSON:
   {{"functionalRequirements": [
     {{"id": "FR-001", "title": "Requirement title", "description": "Detailed description", "priority": "high|medium|low", "acceptanceCriteria": ["criteria 1", "criteria 2"], "relatedComponents": ["component1"]}}
   ]}}
@@ -267,35 +281,34 @@ brd_section_functional_req_prompt: |
   Feature: {feature_title}
   Description: {feature_description}
   Request Type: {request_type}
+  {existing_system_context}
   {knowledge_base_context}
-  {documentation_context}
-  {database_schema_context}
 
 brd_section_nonfunctional_req_prompt: |
-  Generate 3-5 non-functional requirements covering performance, scalability, security, accessibility. Return JSON:
+  Generate 3-5 non-functional requirements covering performance, scalability, security, accessibility. Base these on the existing system's architecture and constraints. Return JSON:
   {{"nonFunctionalRequirements": [
     {{"id": "NFR-001", "category": "Performance|Scalability|Security|Accessibility|Reliability", "description": "Description"}}
   ]}}
 
   Feature: {feature_title}
   Description: {feature_description}
-  {documentation_context}
+  {existing_system_context}
 
 brd_section_technical_prompt: |
-  List technical considerations, dependencies, and assumptions for this feature. Return JSON:
+  List technical considerations, dependencies, and assumptions for this feature. Reference specific technologies, patterns, and code from the existing system context. Return JSON:
   {{"technicalConsiderations": ["consideration 1", "consideration 2"], "dependencies": ["dependency 1"], "assumptions": ["assumption 1"]}}
 
   Feature: {feature_title}
   Description: {feature_description}
-  {documentation_context}
-  {database_schema_context}
+  {existing_system_context}
 
 brd_section_risks_prompt: |
-  Identify 3-5 risks with mitigation strategies for this feature. Return JSON:
+  Identify 3-5 risks with mitigation strategies for this feature. Consider risks related to the existing system architecture and domain-specific concerns. Return JSON:
   {{"risks": [{{"description": "Risk description", "mitigation": "Mitigation strategy"}}]}}
 
   Feature: {feature_title}
   Description: {feature_description}
+  {existing_system_context}
   {knowledge_base_context}
 
 generate_test_cases_system: |
