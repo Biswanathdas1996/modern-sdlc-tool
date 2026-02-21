@@ -481,22 +481,34 @@ export default function BRDPage() {
                     <FileCheck className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <CardTitle className="text-xl">{mockBRD.title}</CardTitle>
+                    <CardTitle className="text-xl">
+                      {isStreaming ? "Generating BRD..." : mockBRD.title}
+                    </CardTitle>
                     <CardDescription className="flex items-center gap-2 mt-1 flex-wrap">
-                      <Badge variant="outline">v{mockBRD.version}</Badge>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          mockBRD.status === "draft" && "bg-muted text-muted-foreground",
-                          mockBRD.status === "review" && "bg-warning/10 text-warning",
-                          mockBRD.status === "approved" && "bg-success/10 text-success"
-                        )}
-                      >
-                        {mockBRD.status}
-                      </Badge>
+                      {isStreaming ? (
+                        <Badge variant="outline" className="bg-primary/10 text-primary">
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          streaming
+                        </Badge>
+                      ) : (
+                        <>
+                          <Badge variant="outline">v{mockBRD.version}</Badge>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              mockBRD.status === "draft" && "bg-muted text-muted-foreground",
+                              mockBRD.status === "review" && "bg-warning/10 text-warning",
+                              mockBRD.status === "approved" && "bg-success/10 text-success"
+                            )}
+                          >
+                            {mockBRD.status}
+                          </Badge>
+                        </>
+                      )}
                     </CardDescription>
                   </div>
                 </div>
+                {!isStreaming && (
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
@@ -525,6 +537,7 @@ export default function BRDPage() {
                     Publish to Confluence
                   </Button>
                 </div>
+                )}
               </div>
             </CardHeader>
           </Card>
@@ -621,7 +634,7 @@ export default function BRDPage() {
           ) : null}
 
           {/* Existing System Context */}
-          {mockBRD.content.existingSystemContext && (
+          {!isStreaming && mockBRD.content.existingSystemContext && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -695,6 +708,7 @@ export default function BRDPage() {
             </Card>
           )}
 
+          {!isStreaming && (<>
           {/* Overview Section */}
           <Card>
             <CardHeader>
@@ -892,6 +906,7 @@ export default function BRDPage() {
               )}
             </Button>
           </div>
+          </>)}
         </div>
       </div>
 
