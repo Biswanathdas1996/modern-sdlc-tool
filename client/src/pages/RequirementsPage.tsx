@@ -70,8 +70,6 @@ export default function RequirementsPage() {
 
   const submitMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      // Step 1: Submit requirements
-      setGenerationStatus("Submitting requirements...");
       const response = await fetch("/api/requirements", {
         method: "POST",
         body: data,
