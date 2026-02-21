@@ -714,43 +714,54 @@ export default function BRDPage() {
           })()}
 
           {/* Streaming Progress Bar */}
-          {isStreaming && (
-            <Card className="border-primary/50 bg-primary/5">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                  {isWaitingForResponse
-                    ? "Analyzing requirements and generating BRD..."
-                    : `Generating BRD — ${streamingProgress.current}/${streamingProgress.total} sections complete`}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {isWaitingForResponse ? (
-                  <div className="space-y-4 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                      <span className="text-sm text-muted-foreground">Gathering context from documentation and knowledge base...</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="h-2 w-2 rounded-full bg-muted animate-pulse" style={{ animationDelay: "0.5s" }} />
-                      <span className="text-sm text-muted-foreground">AI is composing the business requirements document...</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="h-2 w-2 rounded-full bg-muted animate-pulse" style={{ animationDelay: "1s" }} />
-                      <span className="text-sm text-muted-foreground">This may take 30-60 seconds depending on complexity...</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="w-full bg-muted rounded-full h-2">
+          {isStreaming && (() => {
+            const sectionLabels: { key: string; label: string }[] = [
+              { key: "meta", label: "Document Metadata" },
+              { key: "existingSystemContext", label: "Existing System Context" },
+              { key: "overview", label: "Executive Overview" },
+              { key: "objectives", label: "Business Objectives" },
+              { key: "scope", label: "Scope Definition" },
+              { key: "functionalRequirements", label: "Functional Requirements" },
+              { key: "nonFunctionalRequirements", label: "Non-Functional Requirements" },
+              { key: "technical", label: "Technical Considerations" },
+              { key: "risks", label: "Risks & Mitigations" },
+            ];
+            return (
+              <Card className="border-primary/50 bg-primary/5">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    Generating BRD — {streamingProgress.current}/{streamingProgress.total} sections complete
+                  </CardTitle>
+                  <div className="w-full bg-muted rounded-full h-2 mt-2">
                     <div
                       className="bg-primary h-2 rounded-full transition-all duration-500"
                       style={{ width: `${(streamingProgress.current / streamingProgress.total) * 100}%` }}
                     />
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {sectionLabels.map(({ key, label }) => {
+                      const done = !!streamingSections[key];
+                      return (
+                        <div key={key} className="flex items-center gap-2 py-1">
+                          {done ? (
+                            <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                          ) : (
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+                          )}
+                          <span className={cn("text-sm", done ? "text-foreground" : "text-muted-foreground")}>
+                            {label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Overview Section */}
           {(() => {
