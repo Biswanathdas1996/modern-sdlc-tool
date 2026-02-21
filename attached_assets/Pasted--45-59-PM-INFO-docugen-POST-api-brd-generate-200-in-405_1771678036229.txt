@@ -1,0 +1,142 @@
+:45:59 PM [INFO] [docugen] POST /api/brd/generate 200 in 4053ms
+INFO:     172.31.80.98:53762 - "POST /api/brd/generate HTTP/1.1" 200 OK
+12:45:59 PM [INFO] [docugen] [ai_service] BRD Parallel Generation — KB: True, Docs: True, DB: False, Analysis: True
+12:45:59 PM [INFO] [docugen] [ai_service] Using KB context (1272 chars)
+12:45:59 PM [INFO] [docugen] [ai_service] Using Documentation: rest-express
+12:45:59 PM [INFO] [docugen] [generators] BRD section 'existingSystemContext' — calling LLM (task: brd_section_existing_system)
+12:45:59 PM [INFO] [docugen] [generators] BRD section 'overview' — calling LLM (task: brd_section_overview)
+12:45:59 PM [INFO] [docugen] [generators] BRD section 'objectives' — calling LLM (task: brd_section_objectives)
+12:45:59 PM [INFO] [docugen] [generators] BRD section 'scope' — calling LLM (task: brd_section_scope)
+12:45:59 PM [INFO] [docugen] [generators] BRD section 'functionalRequirements' — calling LLM (task: brd_section_functional_req)
+12:45:59 PM [INFO] [docugen] [generators] BRD section 'nonFunctionalRequirements' — calling LLM (task: brd_section_nonfunctional_req)
+12:45:59 PM [INFO] [docugen] [generators] BRD section 'technical' — calling LLM (task: brd_section_technical)
+12:45:59 PM [INFO] [docugen] [generators] BRD section 'risks' — calling LLM (task: brd_section_risks)
+12:45:59 PM [INFO] [docugen] [generators] BRD section 'meta' — calling LLM (task: brd_section_meta)
+12:45:59 PM [ERROR] [docugen] [generators] BRD section 'existingSystemContext' failed: AIService._task_caller.<locals>._call() got an unexpected keyword argument 'task_name'
+Traceback (most recent call last):
+  File "/home/runner/workspace/server_py/services/generators.py", line 596, in generate_brd_parallel
+    t.result()
+TypeError: AIService._task_caller.<locals>._call() got an unexpected keyword argument 'task_name'
+12:45:59 PM [ERROR] [docugen] [generators] BRD section 'existingSystemContext' failed: AIService._task_caller.<locals>._call() got an unexpected keyword argument 'task_name'
+Traceback (most recent call last):
+  File "/home/runner/workspace/server_py/services/generators.py", line 568, in generate_brd_parallel
+    result = await coro
+             ^^^^^^^^^^
+  File "/nix/store/6334pjf6w2q623rgvwi499qaiym1p6yv-python3-3.11.14/lib/python3.11/asyncio/tasks.py", line 615, in _wait_for_one
+    return f.result()  # May raise f.exception().
+           ^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/generators.py", line 554, in _run_section
+    return await _generate_single_section(caller, build_prompt, cfg, format_vars)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/generators.py", line 451, in _generate_single_section
+    raw = await call_genai(prompt)
+                ^^^^^^^^^^^^^^^^^^^
+TypeError: AIService._task_caller.<locals>._call() got an unexpected keyword argument 'task_name'
+12:45:59 PM [INFO] [docugen] POST /api/sessions/sess_c3893b989f64/artifacts 200 in 550ms
+INFO:     172.31.80.98:53752 - "POST /api/sessions/sess_c3893b989f64/artifacts HTTP/1.1" 200 OK
+12:45:59 PM [ERROR] [docugen] [generators] BRD section 'existingSystemContext' failed: AIService._task_caller.<locals>._call() got an unexpected keyword argument 'task_name'
+Traceback (most recent call last):
+  File "/home/runner/workspace/server_py/services/generators.py", line 568, in generate_brd_parallel
+    result = await coro
+             ^^^^^^^^^^
+  File "/nix/store/6334pjf6w2q623rgvwi499qaiym1p6yv-python3-3.11.14/lib/python3.11/asyncio/tasks.py", line 615, in _wait_for_one
+    return f.result()  # May raise f.exception().
+           ^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/generators.py", line 554, in _run_section
+    return await _generate_single_section(caller, build_prompt, cfg, format_vars)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/generators.py", line 451, in _generate_single_section
+    raw = await call_genai(prompt)
+                ^^^^^^^^^^^^^^^^^^^
+TypeError: AIService._task_caller.<locals>._call() got an unexpected keyword argument 'task_name'
+12:45:59 PM [ERROR] [docugen] [generators] BRD section 'existingSystemContext' failed: AIService._task_caller.<locals>._call() got an unexpected keyword argument 'task_name'
+Traceback (most recent call last):
+  File "/home/runner/workspace/server_py/services/generators.py", line 568, in generate_brd_parallel
+    result = await coro
+             ^^^^^^^^^^
+  File "/nix/store/6334pjf6w2q623rgvwi499qaiym1p6yv-python3-3.11.14/lib/python3.11/asyncio/tasks.py", line 615, in _wait_for_one
+    return f.result()  # May raise f.exception().
+           ^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/generators.py", line 554, in _run_section
+    return await _generate_single_section(caller, build_prompt, cfg, format_vars)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/generators.py", line 451, in _generate_single_section
+    raw = await call_genai(prompt)
+                ^^^^^^^^^^^^^^^^^^^
+TypeError: AIService._task_caller.<locals>._call() got an unexpected keyword argument 'task_name'
+12:45:59 PM [ERROR] [docugen] [generators] BRD section 'existingSystemContext' failed: AIService._task_caller.<locals>._call() got an unexpected keyword argument 'task_name'
+Traceback (most recent call last):
+  File "/home/runner/workspace/server_py/services/generators.py", line 568, in generate_brd_parallel
+    result = await coro
+             ^^^^^^^^^^
+  File "/nix/store/6334pjf6w2q623rgvwi499qaiym1p6yv-python3-3.11.14/lib/python3.11/asyncio/tasks.py", line 615, in _wait_for_one
+    return f.result()  # May raise f.exception().
+           ^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/generators.py", line 554, in _run_section
+    return await _generate_single_section(caller, build_prompt, cfg, format_vars)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/generators.py", line 451, in _generate_single_section
+    raw = await call_genai(prompt)
+                ^^^^^^^^^^^^^^^^^^^
+TypeError: AIService._task_caller.<locals>._call() got an unexpected keyword argument 'task_name'
+12:45:59 PM [ERROR] [docugen] [generators] BRD section 'existingSystemContext' failed: AIService._task_caller.<locals>._call() got an unexpected keyword argument 'task_name'
+Traceback (most recent call last):
+  File "/home/runner/workspace/server_py/services/generators.py", line 568, in generate_brd_parallel
+    result = await coro
+             ^^^^^^^^^^
+  File "/nix/store/6334pjf6w2q623rgvwi499qaiym1p6yv-python3-3.11.14/lib/python3.11/asyncio/tasks.py", line 615, in _wait_for_one
+    return f.result()  # May raise f.exception().
+           ^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/generators.py", line 554, in _run_section
+    return await _generate_single_section(caller, build_prompt, cfg, format_vars)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/generators.py", line 451, in _generate_single_section
+    raw = await call_genai(prompt)
+                ^^^^^^^^^^^^^^^^^^^
+TypeError: AIService._task_caller.<locals>._call() got an unexpected keyword argument 'task_name'
+12:45:59 PM [ERROR] [docugen] [generators] BRD section 'existingSystemContext' failed: AIService._task_caller.<locals>._call() got an unexpected keyword argument 'task_name'
+Traceback (most recent call last):
+  File "/home/runner/workspace/server_py/services/generators.py", line 568, in generate_brd_parallel
+    result = await coro
+             ^^^^^^^^^^
+  File "/nix/store/6334pjf6w2q623rgvwi499qaiym1p6yv-python3-3.11.14/lib/python3.11/asyncio/tasks.py", line 615, in _wait_for_one
+    return f.result()  # May raise f.exception().
+           ^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/generators.py", line 554, in _run_section
+    return await _generate_single_section(caller, build_prompt, cfg, format_vars)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/generators.py", line 451, in _generate_single_section
+    raw = await call_genai(prompt)
+                ^^^^^^^^^^^^^^^^^^^
+TypeError: AIService._task_caller.<locals>._call() got an unexpected keyword argument 'task_name'
+12:45:59 PM [ERROR] [docugen] [generators] BRD section 'existingSystemContext' failed: AIService._task_caller.<locals>._call() got an unexpected keyword argument 'task_name'
+Traceback (most recent call last):
+  File "/home/runner/workspace/server_py/services/generators.py", line 568, in generate_brd_parallel
+    result = await coro
+             ^^^^^^^^^^
+  File "/nix/store/6334pjf6w2q623rgvwi499qaiym1p6yv-python3-3.11.14/lib/python3.11/asyncio/tasks.py", line 615, in _wait_for_one
+    return f.result()  # May raise f.exception().
+           ^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/generators.py", line 554, in _run_section
+    return await _generate_single_section(caller, build_prompt, cfg, format_vars)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/generators.py", line 451, in _generate_single_section
+    raw = await call_genai(prompt)
+                ^^^^^^^^^^^^^^^^^^^
+TypeError: AIService._task_caller.<locals>._call() got an unexpected keyword argument 'task_name'
+12:45:59 PM [ERROR] [docugen] [generators] BRD section 'existingSystemContext' failed: AIService._task_caller.<locals>._call() got an unexpected keyword argument 'task_name'
+Traceback (most recent call last):
+  File "/home/runner/workspace/server_py/services/generators.py", line 568, in generate_brd_parallel
+    result = await coro
+             ^^^^^^^^^^
+  File "/nix/store/6334pjf6w2q623rgvwi499qaiym1p6yv-python3-3.11.14/lib/python3.11/asyncio/tasks.py", line 615, in _wait_for_one
+    return f.result()  # May raise f.exception().
+           ^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/generators.py", line 554, in _run_section
+    return await _generate_single_section(caller, build_prompt, cfg, format_vars)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/generators.py", line 451, in _generate_single_section
+    raw = await call_genai(prompt)
+                ^^^^^^^^^^^^^^^^^^^
+TypeError: AIService._task_caller.<locals>._call() got an unexpected keyword argument 'task_name'
+12:46:01 PM [INFO] [docugen] GET /api/brd/current 200 in 410ms
