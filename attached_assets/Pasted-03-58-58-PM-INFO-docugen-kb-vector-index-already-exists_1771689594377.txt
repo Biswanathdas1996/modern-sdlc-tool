@@ -1,0 +1,337 @@
+03:58:58 PM [INFO] [docugen] [kb] vector_index already exists on knowledge_chunks_378d2cdc-554a-4dfc-ad8e-ef427a137dda
+03:58:58 PM [INFO] [docugen] [kb] Indexes verified for project 378d2cdc-554a-4dfc-ad8e-ef427a137dda (chunks: knowledge_chunks_378d2cdc-554a-4dfc-ad8e-ef427a137dda, docs: knowledge_documents_378d2cdc-554a-4dfc-ad8e-ef427a137dda)
+03:58:58 PM [INFO] [docugen] [kb] Searching KB collection knowledge_chunks_378d2cdc-554a-4dfc-ad8e-ef427a137dda: "Loan Approval Workflow Loan Approval Workflow new feature functionality component"
+03:59:02 PM [INFO] [docugen] [embeddings] Loading embedding model BAAI/bge-small-en-v1.5...
+Downloading (incomplete total...): 0.00B [00:00, ?B/s]                                                                                                                           Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.                    | 0/5 [00:00<?, ?it/s]
+Fetching 5 files: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 5/5 [00:00<00:00,  5.24it/s]
+Download complete: : 67.2MB [00:00, 75.9MB/s]              03:59:04 PM [INFO] [docugen] [embeddings] Embedding model loaded successfully (384 dimensions) [00:00<00:01,  1.95it/s]
+03:59:05 PM [INFO] [docugen] [kb] Atlas vector search: returning 3 results (index: vector_index)
+03:59:05 PM [INFO] [docugen] [kb] Vector result 1: workflows_document.pdf chunk#1 (score: 0.8662)
+03:59:05 PM [INFO] [docugen] [kb] Vector result 2: workflows_document.pdf chunk#0 (score: 0.8597)
+03:59:05 PM [INFO] [docugen] [kb] Vector result 3: workflows_document.pdf chunk#2 (score: 0.8405)
+03:59:05 PM [INFO] [docugen] [kb] Vector search returned 3 results (all above threshold)
+03:59:05 PM [INFO] [docugen] [requirements] Retrieved 3 knowledge chunks with avg score: 0.855
+03:59:05 PM [INFO] [docugen] POST /api/brd/generate 200 in 10097ms
+INFO:     172.31.84.2:44074 - "POST /api/brd/generate HTTP/1.1" 200 OK
+03:59:05 PM [INFO] [docugen] [ai_service] BRD Parallel Generation — KB: True, Docs: True, DB: False, Analysis: True
+03:59:05 PM [INFO] [docugen] [ai_service] Using KB context (1272 chars)
+03:59:05 PM [INFO] [docugen] [ai_service] Using Documentation: rest-express
+03:59:05 PM [INFO] [docugen] [generators] Phase 1: Generating Existing System Context (sequential)...
+03:59:05 PM [INFO] [docugen] [generators] BRD section 'existingSystemContext' — calling LLM (task: brd_section_existing_system) | system_prompt: 1362 chars, user_prompt: 3293 chars | Context breakdown → documentation: 439 chars, knowledge_base: 1364 chars, database_schema: 0 chars, existing_system_ctx: 0 chars
+03:59:05 PM [INFO] [docugen] [generators] BRD section 'existingSystemContext' — Feature: "Loan Approval Workflow" | Type: feature | Description preview: "Loan Approval Workflow"
+03:59:05 PM [INFO] [docugen] [generators] BRD section 'existingSystemContext' — Documentation preview (first 500 chars): 
+=== TECHNICAL DOCUMENTATION ===
+Project: rest-express
+This application is a BRD (Business Requirements Document) generator tailored for Indian banking consultants. It allows users to upload call transcripts, which are then processed using AI to generate structured BRDs. The application provides features for managing teams, enhancing requirements, and monitoring the status of the LLM (Language Model) service.
+=== END DOCUMENTATION ===
+
+03:59:05 PM [INFO] [docugen] [generators] BRD section 'existingSystemContext' — Knowledge Base preview (first 500 chars): 
+=== KNOWLEDGE BASE (Retrieved Documents - PRIMARY CONTEXT) ===
+[Source: workflows_document.pdf | Relevance: 0.87]
+KYC (Know Your Customer) Workflow
+- Collect identity documents
+- Verify authenticity of documents
+- Cross-check with government databases
+- Assess risk profile
+- Approve or reject customer onboarding
+
+Loan Approval Workflow
+- Receive loan application
+- Verify applicant details
+- Perform creditworthiness assessment
+- Evaluate collateral (if any)
+- Approve or reject loan
+- Disburse fu
+03:59:05 PM [INFO] [docugen] [ai] Calling PwC GenAI [task=brd_section_existing_system] (prompt length: 4671 chars)
+03:59:05 PM [DEBUG] [docugen] [ai] AI parameters: model=vertex_ai.gemini-2.5-flash-image, temp=0.2, max_tokens=4000
+03:59:05 PM [DEBUG] [docugen] [pwc_llm] [async] task=brd_section_existing_system model=vertex_ai.gemini-2.5-flash-image type=multimodal temp=0.2 max_tokens=4000
+03:59:05 PM [WARNING] [docugen] [guardrails] nemoguardrails package not installed – guardrails checks are disabled. Run `pip install nemoguardrails` to enable protection.
+03:59:05 PM [INFO] [docugen] POST /api/sessions/sess_bac75b2c5a03/artifacts 200 in 654ms
+INFO:     172.31.84.2:44080 - "POST /api/sessions/sess_bac75b2c5a03/artifacts HTTP/1.1" 200 OK
+03:59:06 PM [INFO] [docugen] POST /api/sessions/sess_bac75b2c5a03/artifacts 200 in 1586ms
+INFO:     172.31.84.2:44082 - "POST /api/sessions/sess_bac75b2c5a03/artifacts HTTP/1.1" 200 OK
+03:59:06 PM [INFO] [docugen] POST /api/sessions/sess_bac75b2c5a03/artifacts 200 in 1587ms
+INFO:     172.31.84.2:44086 - "POST /api/sessions/sess_bac75b2c5a03/artifacts HTTP/1.1" 200 OK
+03:59:10 PM [INFO] [docugen] [ai] PwC GenAI response received successfully
+03:59:10 PM [INFO] [docugen] [generators] BRD section 'existingSystemContext' — completed in 5.7s, response: 1643 chars
+03:59:10 PM [INFO] [docugen] [generators] BRD section 'existingSystemContext' ready (1/9)
+03:59:10 PM [INFO] [docugen] [generators] Phase 2: Generating 8 sections in parallel — existing_system_ctx: 1620 chars, docs: 439 chars, kb: 1364 chars, db_schema: 0 chars
+03:59:10 PM [INFO] [docugen] [generators] BRD section 'overview' — calling LLM (task: brd_section_overview) | system_prompt: 1362 chars, user_prompt: 3800 chars | Context breakdown → documentation: 439 chars, knowledge_base: 1364 chars, database_schema: 0 chars, existing_system_ctx: 1620 chars
+03:59:10 PM [INFO] [docugen] [generators] BRD section 'overview' — Feature: "Loan Approval Workflow" | Type: feature | Description preview: "Loan Approval Workflow"
+03:59:10 PM [INFO] [docugen] [generators] BRD section 'overview' — Documentation preview (first 500 chars): 
+=== TECHNICAL DOCUMENTATION ===
+Project: rest-express
+This application is a BRD (Business Requirements Document) generator tailored for Indian banking consultants. It allows users to upload call transcripts, which are then processed using AI to generate structured BRDs. The application provides features for managing teams, enhancing requirements, and monitoring the status of the LLM (Language Model) service.
+=== END DOCUMENTATION ===
+
+03:59:10 PM [INFO] [docugen] [generators] BRD section 'overview' — Knowledge Base preview (first 500 chars): 
+=== KNOWLEDGE BASE (Retrieved Documents - PRIMARY CONTEXT) ===
+[Source: workflows_document.pdf | Relevance: 0.87]
+KYC (Know Your Customer) Workflow
+- Collect identity documents
+- Verify authenticity of documents
+- Cross-check with government databases
+- Assess risk profile
+- Approve or reject customer onboarding
+
+Loan Approval Workflow
+- Receive loan application
+- Verify applicant details
+- Perform creditworthiness assessment
+- Evaluate collateral (if any)
+- Approve or reject loan
+- Disburse fu
+03:59:10 PM [INFO] [docugen] [generators] BRD section 'overview' — Existing System Context preview (first 500 chars): 
+=== EXISTING SYSTEM CONTEXT (Codebase Analysis) ===
+Architecture Notes: The existing architecture of the rest-express application is focused on generating BRDs from call transcripts using AI, managing teams, enhancing requirements, and monitoring LLM service status. The provided documentation does not detail specific components, modules, or APIs related to workflow management or financial processes like loan approvals. However, the application's core function of processing and structuring infor
+03:59:10 PM [INFO] [docugen] [ai] Calling PwC GenAI [task=brd_section_overview] (prompt length: 5178 chars)
+03:59:10 PM [DEBUG] [docugen] [ai] AI parameters: model=vertex_ai.gemini-2.5-flash-image, temp=0.3, max_tokens=1500
+03:59:10 PM [DEBUG] [docugen] [pwc_llm] [async] task=brd_section_overview model=vertex_ai.gemini-2.5-flash-image type=multimodal temp=0.3 max_tokens=1500
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'objectives' — calling LLM (task: brd_section_objectives) | system_prompt: 1362 chars, user_prompt: 3805 chars | Context breakdown → documentation: 439 chars, knowledge_base: 1364 chars, database_schema: 0 chars, existing_system_ctx: 1620 chars
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'objectives' — Feature: "Loan Approval Workflow" | Type: feature | Description preview: "Loan Approval Workflow"
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'objectives' — Documentation preview (first 500 chars): 
+=== TECHNICAL DOCUMENTATION ===
+Project: rest-express
+This application is a BRD (Business Requirements Document) generator tailored for Indian banking consultants. It allows users to upload call transcripts, which are then processed using AI to generate structured BRDs. The application provides features for managing teams, enhancing requirements, and monitoring the status of the LLM (Language Model) service.
+=== END DOCUMENTATION ===
+
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'objectives' — Knowledge Base preview (first 500 chars): 
+=== KNOWLEDGE BASE (Retrieved Documents - PRIMARY CONTEXT) ===
+[Source: workflows_document.pdf | Relevance: 0.87]
+KYC (Know Your Customer) Workflow
+- Collect identity documents
+- Verify authenticity of documents
+- Cross-check with government databases
+- Assess risk profile
+- Approve or reject customer onboarding
+
+Loan Approval Workflow
+- Receive loan application
+- Verify applicant details
+- Perform creditworthiness assessment
+- Evaluate collateral (if any)
+- Approve or reject loan
+- Disburse fu
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'objectives' — Existing System Context preview (first 500 chars): 
+=== EXISTING SYSTEM CONTEXT (Codebase Analysis) ===
+Architecture Notes: The existing architecture of the rest-express application is focused on generating BRDs from call transcripts using AI, managing teams, enhancing requirements, and monitoring LLM service status. The provided documentation does not detail specific components, modules, or APIs related to workflow management or financial processes like loan approvals. However, the application's core function of processing and structuring infor
+03:59:11 PM [INFO] [docugen] [ai] Calling PwC GenAI [task=brd_section_objectives] (prompt length: 5183 chars)
+03:59:11 PM [DEBUG] [docugen] [ai] AI parameters: model=vertex_ai.gemini-2.5-flash-image, temp=0.3, max_tokens=1500
+03:59:11 PM [DEBUG] [docugen] [pwc_llm] [async] task=brd_section_objectives model=vertex_ai.gemini-2.5-flash-image type=multimodal temp=0.3 max_tokens=1500
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'scope' — calling LLM (task: brd_section_scope) | system_prompt: 1362 chars, user_prompt: 3826 chars | Context breakdown → documentation: 439 chars, knowledge_base: 1364 chars, database_schema: 0 chars, existing_system_ctx: 1620 chars
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'scope' — Feature: "Loan Approval Workflow" | Type: feature | Description preview: "Loan Approval Workflow"
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'scope' — Documentation preview (first 500 chars): 
+=== TECHNICAL DOCUMENTATION ===
+Project: rest-express
+This application is a BRD (Business Requirements Document) generator tailored for Indian banking consultants. It allows users to upload call transcripts, which are then processed using AI to generate structured BRDs. The application provides features for managing teams, enhancing requirements, and monitoring the status of the LLM (Language Model) service.
+=== END DOCUMENTATION ===
+
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'scope' — Knowledge Base preview (first 500 chars): 
+=== KNOWLEDGE BASE (Retrieved Documents - PRIMARY CONTEXT) ===
+[Source: workflows_document.pdf | Relevance: 0.87]
+KYC (Know Your Customer) Workflow
+- Collect identity documents
+- Verify authenticity of documents
+- Cross-check with government databases
+- Assess risk profile
+- Approve or reject customer onboarding
+
+Loan Approval Workflow
+- Receive loan application
+- Verify applicant details
+- Perform creditworthiness assessment
+- Evaluate collateral (if any)
+- Approve or reject loan
+- Disburse fu
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'scope' — Existing System Context preview (first 500 chars): 
+=== EXISTING SYSTEM CONTEXT (Codebase Analysis) ===
+Architecture Notes: The existing architecture of the rest-express application is focused on generating BRDs from call transcripts using AI, managing teams, enhancing requirements, and monitoring LLM service status. The provided documentation does not detail specific components, modules, or APIs related to workflow management or financial processes like loan approvals. However, the application's core function of processing and structuring infor
+03:59:11 PM [INFO] [docugen] [ai] Calling PwC GenAI [task=brd_section_scope] (prompt length: 5204 chars)
+03:59:11 PM [DEBUG] [docugen] [ai] AI parameters: model=vertex_ai.gemini-2.5-flash-image, temp=0.2, max_tokens=1500
+03:59:11 PM [DEBUG] [docugen] [pwc_llm] [async] task=brd_section_scope model=vertex_ai.gemini-2.5-flash-image type=multimodal temp=0.2 max_tokens=1500
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'functionalRequirements' — calling LLM (task: brd_section_functional_req) | system_prompt: 1362 chars, user_prompt: 3992 chars | Context breakdown → documentation: 439 chars, knowledge_base: 1364 chars, database_schema: 0 chars, existing_system_ctx: 1620 chars
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'functionalRequirements' — Feature: "Loan Approval Workflow" | Type: feature | Description preview: "Loan Approval Workflow"
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'functionalRequirements' — Documentation preview (first 500 chars): 
+=== TECHNICAL DOCUMENTATION ===
+Project: rest-express
+This application is a BRD (Business Requirements Document) generator tailored for Indian banking consultants. It allows users to upload call transcripts, which are then processed using AI to generate structured BRDs. The application provides features for managing teams, enhancing requirements, and monitoring the status of the LLM (Language Model) service.
+=== END DOCUMENTATION ===
+
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'functionalRequirements' — Knowledge Base preview (first 500 chars): 
+=== KNOWLEDGE BASE (Retrieved Documents - PRIMARY CONTEXT) ===
+[Source: workflows_document.pdf | Relevance: 0.87]
+KYC (Know Your Customer) Workflow
+- Collect identity documents
+- Verify authenticity of documents
+- Cross-check with government databases
+- Assess risk profile
+- Approve or reject customer onboarding
+
+Loan Approval Workflow
+- Receive loan application
+- Verify applicant details
+- Perform creditworthiness assessment
+- Evaluate collateral (if any)
+- Approve or reject loan
+- Disburse fu
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'functionalRequirements' — Existing System Context preview (first 500 chars): 
+=== EXISTING SYSTEM CONTEXT (Codebase Analysis) ===
+Architecture Notes: The existing architecture of the rest-express application is focused on generating BRDs from call transcripts using AI, managing teams, enhancing requirements, and monitoring LLM service status. The provided documentation does not detail specific components, modules, or APIs related to workflow management or financial processes like loan approvals. However, the application's core function of processing and structuring infor
+03:59:11 PM [INFO] [docugen] [ai] Calling PwC GenAI [task=brd_section_functional_req] (prompt length: 5370 chars)
+03:59:11 PM [DEBUG] [docugen] [ai] AI parameters: model=vertex_ai.gemini-2.5-flash-image, temp=0.3, max_tokens=3000
+03:59:11 PM [DEBUG] [docugen] [pwc_llm] [async] task=brd_section_functional_req model=vertex_ai.gemini-2.5-flash-image type=multimodal temp=0.3 max_tokens=3000
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'nonFunctionalRequirements' — calling LLM (task: brd_section_nonfunctional_req) | system_prompt: 1362 chars, user_prompt: 2518 chars | Context breakdown → documentation: 439 chars, knowledge_base: 1364 chars, database_schema: 0 chars, existing_system_ctx: 1620 chars
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'nonFunctionalRequirements' — Feature: "Loan Approval Workflow" | Type: feature | Description preview: "Loan Approval Workflow"
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'nonFunctionalRequirements' — Documentation preview (first 500 chars): 
+=== TECHNICAL DOCUMENTATION ===
+Project: rest-express
+This application is a BRD (Business Requirements Document) generator tailored for Indian banking consultants. It allows users to upload call transcripts, which are then processed using AI to generate structured BRDs. The application provides features for managing teams, enhancing requirements, and monitoring the status of the LLM (Language Model) service.
+=== END DOCUMENTATION ===
+
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'nonFunctionalRequirements' — Knowledge Base preview (first 500 chars): 
+=== KNOWLEDGE BASE (Retrieved Documents - PRIMARY CONTEXT) ===
+[Source: workflows_document.pdf | Relevance: 0.87]
+KYC (Know Your Customer) Workflow
+- Collect identity documents
+- Verify authenticity of documents
+- Cross-check with government databases
+- Assess risk profile
+- Approve or reject customer onboarding
+
+Loan Approval Workflow
+- Receive loan application
+- Verify applicant details
+- Perform creditworthiness assessment
+- Evaluate collateral (if any)
+- Approve or reject loan
+- Disburse fu
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'nonFunctionalRequirements' — Existing System Context preview (first 500 chars): 
+=== EXISTING SYSTEM CONTEXT (Codebase Analysis) ===
+Architecture Notes: The existing architecture of the rest-express application is focused on generating BRDs from call transcripts using AI, managing teams, enhancing requirements, and monitoring LLM service status. The provided documentation does not detail specific components, modules, or APIs related to workflow management or financial processes like loan approvals. However, the application's core function of processing and structuring infor
+03:59:11 PM [INFO] [docugen] [ai] Calling PwC GenAI [task=brd_section_nonfunctional_req] (prompt length: 3896 chars)
+03:59:11 PM [DEBUG] [docugen] [ai] AI parameters: model=vertex_ai.gemini-2.5-flash-image, temp=0.2, max_tokens=2000
+03:59:11 PM [DEBUG] [docugen] [pwc_llm] [async] task=brd_section_nonfunctional_req model=vertex_ai.gemini-2.5-flash-image type=multimodal temp=0.2 max_tokens=2000
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'technical' — calling LLM (task: brd_section_technical) | system_prompt: 1362 chars, user_prompt: 2553 chars | Context breakdown → documentation: 439 chars, knowledge_base: 1364 chars, database_schema: 0 chars, existing_system_ctx: 1620 chars
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'technical' — Feature: "Loan Approval Workflow" | Type: feature | Description preview: "Loan Approval Workflow"
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'technical' — Documentation preview (first 500 chars): 
+=== TECHNICAL DOCUMENTATION ===
+Project: rest-express
+This application is a BRD (Business Requirements Document) generator tailored for Indian banking consultants. It allows users to upload call transcripts, which are then processed using AI to generate structured BRDs. The application provides features for managing teams, enhancing requirements, and monitoring the status of the LLM (Language Model) service.
+=== END DOCUMENTATION ===
+
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'technical' — Knowledge Base preview (first 500 chars): 
+=== KNOWLEDGE BASE (Retrieved Documents - PRIMARY CONTEXT) ===
+[Source: workflows_document.pdf | Relevance: 0.87]
+KYC (Know Your Customer) Workflow
+- Collect identity documents
+- Verify authenticity of documents
+- Cross-check with government databases
+- Assess risk profile
+- Approve or reject customer onboarding
+
+Loan Approval Workflow
+- Receive loan application
+- Verify applicant details
+- Perform creditworthiness assessment
+- Evaluate collateral (if any)
+- Approve or reject loan
+- Disburse fu
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'technical' — Existing System Context preview (first 500 chars): 
+=== EXISTING SYSTEM CONTEXT (Codebase Analysis) ===
+Architecture Notes: The existing architecture of the rest-express application is focused on generating BRDs from call transcripts using AI, managing teams, enhancing requirements, and monitoring LLM service status. The provided documentation does not detail specific components, modules, or APIs related to workflow management or financial processes like loan approvals. However, the application's core function of processing and structuring infor
+03:59:11 PM [INFO] [docugen] [ai] Calling PwC GenAI [task=brd_section_technical] (prompt length: 3931 chars)
+03:59:11 PM [DEBUG] [docugen] [ai] AI parameters: model=vertex_ai.gemini-2.5-flash-image, temp=0.2, max_tokens=1500
+03:59:11 PM [DEBUG] [docugen] [pwc_llm] [async] task=brd_section_technical model=vertex_ai.gemini-2.5-flash-image type=multimodal temp=0.2 max_tokens=1500
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'risks' — calling LLM (task: brd_section_risks) | system_prompt: 1362 chars, user_prompt: 3867 chars | Context breakdown → documentation: 439 chars, knowledge_base: 1364 chars, database_schema: 0 chars, existing_system_ctx: 1620 chars
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'risks' — Feature: "Loan Approval Workflow" | Type: feature | Description preview: "Loan Approval Workflow"
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'risks' — Documentation preview (first 500 chars): 
+=== TECHNICAL DOCUMENTATION ===
+Project: rest-express
+This application is a BRD (Business Requirements Document) generator tailored for Indian banking consultants. It allows users to upload call transcripts, which are then processed using AI to generate structured BRDs. The application provides features for managing teams, enhancing requirements, and monitoring the status of the LLM (Language Model) service.
+=== END DOCUMENTATION ===
+
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'risks' — Knowledge Base preview (first 500 chars): 
+=== KNOWLEDGE BASE (Retrieved Documents - PRIMARY CONTEXT) ===
+[Source: workflows_document.pdf | Relevance: 0.87]
+KYC (Know Your Customer) Workflow
+- Collect identity documents
+- Verify authenticity of documents
+- Cross-check with government databases
+- Assess risk profile
+- Approve or reject customer onboarding
+
+Loan Approval Workflow
+- Receive loan application
+- Verify applicant details
+- Perform creditworthiness assessment
+- Evaluate collateral (if any)
+- Approve or reject loan
+- Disburse fu
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'risks' — Existing System Context preview (first 500 chars): 
+=== EXISTING SYSTEM CONTEXT (Codebase Analysis) ===
+Architecture Notes: The existing architecture of the rest-express application is focused on generating BRDs from call transcripts using AI, managing teams, enhancing requirements, and monitoring LLM service status. The provided documentation does not detail specific components, modules, or APIs related to workflow management or financial processes like loan approvals. However, the application's core function of processing and structuring infor
+03:59:11 PM [INFO] [docugen] [ai] Calling PwC GenAI [task=brd_section_risks] (prompt length: 5245 chars)
+03:59:11 PM [DEBUG] [docugen] [ai] AI parameters: model=vertex_ai.gemini-2.5-flash-image, temp=0.3, max_tokens=2000
+03:59:11 PM [DEBUG] [docugen] [pwc_llm] [async] task=brd_section_risks model=vertex_ai.gemini-2.5-flash-image type=multimodal temp=0.3 max_tokens=2000
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'meta' — calling LLM (task: brd_section_meta) | system_prompt: 1362 chars, user_prompt: 280 chars | Context breakdown → documentation: 439 chars, knowledge_base: 1364 chars, database_schema: 0 chars, existing_system_ctx: 1620 chars
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'meta' — Feature: "Loan Approval Workflow" | Type: feature | Description preview: "Loan Approval Workflow"
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'meta' — Documentation preview (first 500 chars): 
+=== TECHNICAL DOCUMENTATION ===
+Project: rest-express
+This application is a BRD (Business Requirements Document) generator tailored for Indian banking consultants. It allows users to upload call transcripts, which are then processed using AI to generate structured BRDs. The application provides features for managing teams, enhancing requirements, and monitoring the status of the LLM (Language Model) service.
+=== END DOCUMENTATION ===
+
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'meta' — Knowledge Base preview (first 500 chars): 
+=== KNOWLEDGE BASE (Retrieved Documents - PRIMARY CONTEXT) ===
+[Source: workflows_document.pdf | Relevance: 0.87]
+KYC (Know Your Customer) Workflow
+- Collect identity documents
+- Verify authenticity of documents
+- Cross-check with government databases
+- Assess risk profile
+- Approve or reject customer onboarding
+
+Loan Approval Workflow
+- Receive loan application
+- Verify applicant details
+- Perform creditworthiness assessment
+- Evaluate collateral (if any)
+- Approve or reject loan
+- Disburse fu
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'meta' — Existing System Context preview (first 500 chars): 
+=== EXISTING SYSTEM CONTEXT (Codebase Analysis) ===
+Architecture Notes: The existing architecture of the rest-express application is focused on generating BRDs from call transcripts using AI, managing teams, enhancing requirements, and monitoring LLM service status. The provided documentation does not detail specific components, modules, or APIs related to workflow management or financial processes like loan approvals. However, the application's core function of processing and structuring infor
+03:59:11 PM [INFO] [docugen] [ai] Calling PwC GenAI [task=brd_section_meta] (prompt length: 1658 chars)
+03:59:11 PM [DEBUG] [docugen] [ai] AI parameters: model=vertex_ai.gemini-2.5-flash-image, temp=0.2, max_tokens=1000
+03:59:11 PM [DEBUG] [docugen] [pwc_llm] [async] task=brd_section_meta model=vertex_ai.gemini-2.5-flash-image type=multimodal temp=0.2 max_tokens=1000
+03:59:11 PM [INFO] [docugen] [ai] PwC GenAI response received successfully
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'scope' — completed in 0.9s, response: 505 chars
+03:59:11 PM [INFO] [docugen] [generators] BRD section 'scope' ready (2/9)
+03:59:12 PM [INFO] [docugen] [ai] PwC GenAI response received successfully
+03:59:12 PM [INFO] [docugen] [generators] BRD section 'objectives' — completed in 1.8s, response: 590 chars
+03:59:12 PM [INFO] [docugen] [generators] BRD section 'objectives' ready (3/9)
+03:59:12 PM [INFO] [docugen] [ai] PwC GenAI response received successfully
+03:59:12 PM [INFO] [docugen] [generators] BRD section 'technical' — completed in 1.8s, response: 1148 chars
+03:59:12 PM [INFO] [docugen] [generators] BRD section 'technical' ready (4/9)
+03:59:13 PM [INFO] [docugen] [ai] PwC GenAI response received successfully
+03:59:13 PM [INFO] [docugen] [generators] BRD section 'meta' — completed in 2.8s, response: 113 chars
+03:59:13 PM [INFO] [docugen] [generators] BRD section 'meta' ready (5/9)
+03:59:13 PM [INFO] [docugen] [ai] PwC GenAI response received successfully
+03:59:13 PM [INFO] [docugen] [generators] BRD section 'nonFunctionalRequirements' — completed in 2.8s, response: 1492 chars
+03:59:13 PM [INFO] [docugen] [generators] BRD section 'nonFunctionalRequirements' ready (6/9)
+03:59:15 PM [INFO] [docugen] [ai] PwC GenAI response received successfully
+03:59:15 PM [INFO] [docugen] [generators] BRD section 'overview' — completed in 4.4s, response: 525 chars
+03:59:15 PM [INFO] [docugen] [generators] BRD section 'overview' ready (7/9)
+03:59:15 PM [INFO] [docugen] [ai] PwC GenAI response received successfully
+03:59:15 PM [INFO] [docugen] [generators] BRD section 'risks' — completed in 4.5s, response: 2598 chars
+03:59:15 PM [INFO] [docugen] [generators] BRD section 'risks' ready (8/9)
+03:59:15 PM [INFO] [docugen] [ai] PwC GenAI response received successfully
+03:59:15 PM [INFO] [docugen] [generators] BRD section 'functionalRequirements' — completed in 4.6s, response: 3266 chars
+03:59:15 PM [INFO] [docugen] [generators] BRD section 'functionalRequirements' ready (9/9)
+03:59:19 PM [INFO] [docugen] POST /api/sessions/sess_bac75b2c5a03/artifacts 200 in 558ms
+INFO:     172.31.84.2:44074 - "POST /api/sessions/sess_bac75b2c5a03/artifacts HTTP/1.1" 200 OK
+03:59:20 PM [INFO] [docugen] GET /api/brd/current 200 in 408ms
+INFO:     172.31.84.2:52804 - "GET /api/brd/current?project_id=378d2cdc-554a-4dfc-ad8e-ef427a137dda HTTP/1.1" 200 OK
+03:59:22 PM [INFO] [docugen] POST /api/sessions/sess_bac75b2c5a03/artifacts 200 in 543ms
+INFO:     172.31.84.2:52804 - "POST /api/sessions/sess_bac75b2c5a03/artifacts HTTP/1.1" 200 OK
+Download complete: : 67.2MB [00:19, 75.9MB/s]
