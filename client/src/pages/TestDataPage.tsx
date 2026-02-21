@@ -29,7 +29,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { useProject } from "@/hooks/useProject";
-import type { TestData } from "@shared/schema";
+import type { BRD, TestData } from "@shared/schema";
 
 const workflowSteps = [
   { id: "analyze", label: "Analyze", completed: true, active: false },
@@ -53,17 +53,32 @@ export default function TestDataPage() {
   const searchParams = useMemo(() => new URLSearchParams(searchString), [searchString]);
   const brdIdParam = searchParams.get("brd_id");
 
-  const { data: testData, isLoading } = useQuery<TestData[]>({
-    queryKey: ["/api/test-data", currentProjectId, brdIdParam],
+  const { data: brd, isLoading: brdLoading } = useQuery<BRD>({
+    queryKey: ["/api/brd/current", currentProjectId, brdIdParam],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (brdIdParam) params.set("brd_id", brdIdParam);
+      else if (currentProjectId) params.set("project_id", currentProjectId);
+      const res = await fetch(`/api/brd/current?${params.toString()}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+  });
+
+  const { data: testData, isLoading: testDataLoading } = useQuery<TestData[]>({
+    queryKey: ["/api/test-data", currentProjectId, brd?.id],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (brd?.id) params.set("brd_id", brd.id);
       else if (currentProjectId) params.set("project_id", currentProjectId);
       const res = await fetch(`/api/test-data?${params.toString()}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
+    enabled: !!brd?.id,
   });
+
+  const isLoading = brdLoading || testDataLoading;
 
   useEffect(() => {
     if (testData && testData.length > 0) saveSessionArtifact("testData", testData);
@@ -72,173 +87,17 @@ export default function TestDataPage() {
   const regenerateMutation = useMutation({
     mutationFn: async () => {
       const body: Record<string, any> = {};
-      if (brdIdParam) body.brdId = brdIdParam;
-      else {
-        const cachedBrd = getSessionArtifact<any>("brd");
-        if (cachedBrd?.id) body.brdId = cachedBrd.id;
-      }
+      if (brd?.id) body.brdId = brd.id;
+      else if (brdIdParam) body.brdId = brdIdParam;
       const response = await apiRequest("POST", "/api/test-data/generate", body);
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/test-data", currentProjectId, brdIdParam] });
+      queryClient.invalidateQueries({ queryKey: ["/api/test-data", currentProjectId, brd?.id] });
     },
   });
 
-  const mockTestData: TestData[] = testData || [
-    {
-      id: "TD-001",
-      testCaseId: "TC-001",
-      name: "Valid User Dashboard Data",
-      description: "Standard user with active subscription and complete profile",
-      dataType: "valid",
-      data: {
-        user: {
-          id: "usr_123456",
-          email: "john.doe@example.com",
-          name: "John Doe",
-          role: "admin",
-          subscription: "premium",
-          createdAt: "2024-01-15T10:30:00Z",
-        },
-        metrics: {
-          totalUsers: 1250,
-          activeSessions: 89,
-          conversionRate: 3.5,
-          monthlyRevenue: 45000,
-        },
-        preferences: {
-          theme: "dark",
-          notifications: true,
-          dashboardLayout: "default",
-        },
-      },
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "TD-002",
-      testCaseId: "TC-001",
-      name: "Edge Case - Zero Metrics",
-      description: "New user with no activity data",
-      dataType: "edge",
-      data: {
-        user: {
-          id: "usr_789012",
-          email: "new.user@example.com",
-          name: "New User",
-          role: "user",
-          subscription: "free",
-          createdAt: new Date().toISOString(),
-        },
-        metrics: {
-          totalUsers: 0,
-          activeSessions: 0,
-          conversionRate: 0,
-          monthlyRevenue: 0,
-        },
-        preferences: {
-          theme: "light",
-          notifications: true,
-          dashboardLayout: "default",
-        },
-      },
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "TD-003",
-      testCaseId: "TC-001",
-      name: "Boundary - Maximum Values",
-      description: "User with maximum allowed values for all metrics",
-      dataType: "boundary",
-      data: {
-        user: {
-          id: "usr_999999",
-          email: "max.user@example.com",
-          name: "Max User",
-          role: "superadmin",
-          subscription: "enterprise",
-          createdAt: "2020-01-01T00:00:00Z",
-        },
-        metrics: {
-          totalUsers: 10000000,
-          activeSessions: 1000000,
-          conversionRate: 100,
-          monthlyRevenue: 999999999,
-        },
-        preferences: {
-          theme: "system",
-          notifications: true,
-          dashboardLayout: "custom",
-        },
-      },
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "TD-004",
-      testCaseId: "TC-002",
-      name: "Invalid - Missing Required Fields",
-      description: "User data with missing required fields for validation testing",
-      dataType: "invalid",
-      data: {
-        user: {
-          id: null,
-          email: "",
-          name: null,
-          role: "unknown",
-          subscription: null,
-        },
-        metrics: null,
-        preferences: {},
-      },
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "TD-005",
-      testCaseId: "TC-003",
-      name: "Chart Data - Time Series",
-      description: "Sample time series data for chart testing",
-      dataType: "valid",
-      data: {
-        chartData: [
-          { date: "2024-01-01", value: 150, category: "sales" },
-          { date: "2024-01-02", value: 200, category: "sales" },
-          { date: "2024-01-03", value: 180, category: "sales" },
-          { date: "2024-01-04", value: 250, category: "sales" },
-          { date: "2024-01-05", value: 220, category: "sales" },
-          { date: "2024-01-06", value: 300, category: "sales" },
-          { date: "2024-01-07", value: 280, category: "sales" },
-        ],
-        metadata: {
-          startDate: "2024-01-01",
-          endDate: "2024-01-07",
-          aggregation: "daily",
-          currency: "USD",
-        },
-      },
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "TD-006",
-      testCaseId: "TC-004",
-      name: "Widget Configuration",
-      description: "Sample widget configuration for drag-drop testing",
-      dataType: "valid",
-      data: {
-        widgets: [
-          { id: "w1", type: "metrics", position: { x: 0, y: 0 }, size: { w: 2, h: 1 } },
-          { id: "w2", type: "chart", position: { x: 2, y: 0 }, size: { w: 2, h: 2 } },
-          { id: "w3", type: "table", position: { x: 0, y: 1 }, size: { w: 2, h: 2 } },
-          { id: "w4", type: "activity", position: { x: 0, y: 3 }, size: { w: 4, h: 1 } },
-        ],
-        gridSettings: {
-          columns: 4,
-          rowHeight: 150,
-          gap: 16,
-        },
-      },
-      createdAt: new Date().toISOString(),
-    },
-  ];
+  const activeTestData: TestData[] = testData || [];
 
   const toggleExpand = (id: string) => {
     setExpandedData((prev) => {
@@ -258,7 +117,7 @@ export default function TestDataPage() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const filteredData = mockTestData.filter((data) => {
+  const filteredData = activeTestData.filter((data) => {
     if (filterType !== "all" && data.dataType !== filterType) return false;
     if (searchQuery && !data.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
@@ -280,7 +139,7 @@ export default function TestDataPage() {
   };
 
   const handleExport = () => {
-    const content = JSON.stringify(mockTestData.map((d) => d.data), null, 2);
+    const content = JSON.stringify(activeTestData.map((d) => d.data), null, 2);
     const blob = new Blob([content], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -289,6 +148,22 @@ export default function TestDataPage() {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  if (!brd && !isLoading) {
+    return (
+      <div className="container max-w-4xl mx-auto py-8 px-4">
+        <EmptyState
+          icon="document"
+          title="No BRD Available"
+          description="Generate a Business Requirements Document first before creating test data."
+          action={{
+            label: "Go to BRD",
+            onClick: () => window.location.href = brdIdParam ? `/brd?brd_id=${brdIdParam}` : "/brd",
+          }}
+        />
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -323,18 +198,18 @@ export default function TestDataPage() {
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-4 flex-wrap">
               <div className="flex items-center gap-2 text-sm">
-                <Badge variant="outline">{mockTestData.length} Datasets</Badge>
+                <Badge variant="outline">{activeTestData.length} Datasets</Badge>
                 <Badge variant="outline" className={getTypeColor("valid")}>
-                  {mockTestData.filter((t) => t.dataType === "valid").length} Valid
+                  {activeTestData.filter((t) => t.dataType === "valid").length} Valid
                 </Badge>
                 <Badge variant="outline" className={getTypeColor("invalid")}>
-                  {mockTestData.filter((t) => t.dataType === "invalid").length} Invalid
+                  {activeTestData.filter((t) => t.dataType === "invalid").length} Invalid
                 </Badge>
                 <Badge variant="outline" className={getTypeColor("edge")}>
-                  {mockTestData.filter((t) => t.dataType === "edge").length} Edge
+                  {activeTestData.filter((t) => t.dataType === "edge").length} Edge
                 </Badge>
                 <Badge variant="outline" className={getTypeColor("boundary")}>
-                  {mockTestData.filter((t) => t.dataType === "boundary").length} Boundary
+                  {activeTestData.filter((t) => t.dataType === "boundary").length} Boundary
                 </Badge>
               </div>
             </div>
@@ -392,7 +267,7 @@ export default function TestDataPage() {
             {filteredData.length === 0 ? (
               <EmptyState
                 icon="data"
-                title="No test data found"
+                title="No test data generated for this BRD yet."
                 description="Try adjusting your filters or generate new test data."
               />
             ) : (

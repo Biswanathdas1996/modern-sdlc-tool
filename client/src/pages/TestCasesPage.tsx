@@ -29,7 +29,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { useProject } from "@/hooks/useProject";
-import type { TestCase } from "@shared/schema";
+import type { BRD, TestCase } from "@shared/schema";
 
 const workflowSteps = [
   { id: "analyze", label: "Analyze", completed: true, active: false },
@@ -64,17 +64,32 @@ export default function TestCasesPage() {
   const { saveSessionArtifact, getSessionArtifact } = useSession();
   const { currentProjectId } = useProject();
 
-  const { data: testCases, isLoading } = useQuery<TestCase[]>({
-    queryKey: ["/api/test-cases", currentProjectId, brdIdParam],
+  const { data: brd, isLoading: brdLoading } = useQuery<BRD>({
+    queryKey: ["/api/brd/current", currentProjectId, brdIdParam],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (brdIdParam) params.set("brd_id", brdIdParam);
+      else if (currentProjectId) params.set("project_id", currentProjectId);
+      const res = await fetch(`/api/brd/current?${params.toString()}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+  });
+
+  const { data: testCases, isLoading: testCasesLoading } = useQuery<TestCase[]>({
+    queryKey: ["/api/test-cases", currentProjectId, brd?.id],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (brd?.id) params.set("brd_id", brd.id);
       else if (currentProjectId) params.set("project_id", currentProjectId);
       const res = await fetch(`/api/test-cases?${params.toString()}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
+    enabled: !!brd?.id,
   });
+
+  const isLoading = brdLoading || testCasesLoading;
 
   useEffect(() => {
     if (testCases && testCases.length > 0) saveSessionArtifact("testCases", testCases);
@@ -83,32 +98,26 @@ export default function TestCasesPage() {
   const regenerateMutation = useMutation({
     mutationFn: async () => {
       const body: Record<string, any> = {};
-      if (brdIdParam) body.brdId = brdIdParam;
-      else {
-        const cachedBrd = getSessionArtifact<any>("brd");
-        if (cachedBrd?.id) body.brdId = cachedBrd.id;
-      }
+      if (brd?.id) body.brdId = brd.id;
+      else if (brdIdParam) body.brdId = brdIdParam;
       const response = await apiRequest("POST", "/api/test-cases/generate", body);
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/test-cases", currentProjectId, brdIdParam] });
+      queryClient.invalidateQueries({ queryKey: ["/api/test-cases", currentProjectId, brd?.id] });
     },
   });
 
   const generateTestDataMutation = useMutation({
     mutationFn: async () => {
       const body: Record<string, any> = {};
-      if (brdIdParam) body.brdId = brdIdParam;
-      else {
-        const cachedBrd = getSessionArtifact<any>("brd");
-        if (cachedBrd?.id) body.brdId = cachedBrd.id;
-      }
+      if (brd?.id) body.brdId = brd.id;
+      else if (brdIdParam) body.brdId = brdIdParam;
       const response = await apiRequest("POST", "/api/test-data/generate", body);
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/test-data", currentProjectId, brdIdParam] });
+      queryClient.invalidateQueries({ queryKey: ["/api/test-data", currentProjectId, brd?.id] });
       const brdQuery = brdIdParam ? `?brd_id=${brdIdParam}` : "";
       navigate(`/test-data${brdQuery}`);
     },
@@ -121,121 +130,7 @@ export default function TestCasesPage() {
     },
   });
 
-  const mockTestCases: TestCase[] = testCases || [
-    {
-      id: "TC-001",
-      brdId: "1",
-      requirementId: "FR-001",
-      title: "Verify Dashboard Overview Loads Successfully",
-      description: "Validate that the dashboard overview page loads with all key metrics displayed correctly.",
-      type: "e2e",
-      priority: "critical",
-      preconditions: ["User is authenticated", "User has active subscription", "Backend services are operational"],
-      steps: [
-        { step: 1, action: "Navigate to the dashboard URL", expectedResult: "Dashboard page starts loading" },
-        { step: 2, action: "Wait for the page to fully load", expectedResult: "Page loads within 2 seconds" },
-        { step: 3, action: "Verify the presence of metrics cards", expectedResult: "All 4 key metric cards are visible" },
-        { step: 4, action: "Check that metrics display actual values", expectedResult: "No 'N/A' or loading states after 3 seconds" },
-      ],
-      expectedOutcome: "Dashboard loads successfully with all metrics displayed and no errors",
-      codeSnippet: `describe('Dashboard Overview', () => {
-  it('should load dashboard with all metrics', async () => {
-    await page.goto('/dashboard');
-    
-    await expect(page).toHaveURL('/dashboard');
-    await expect(page.locator('.metrics-card')).toHaveCount(4);
-    
-    const loadTime = await measureLoadTime();
-    expect(loadTime).toBeLessThan(2000);
-  });
-});`,
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "TC-002",
-      brdId: "1",
-      requirementId: "FR-001",
-      title: "Verify Real-time Data Updates",
-      description: "Ensure metrics update in real-time without requiring page refresh.",
-      type: "integration",
-      priority: "high",
-      preconditions: ["User is on dashboard page", "WebSocket connection is established"],
-      steps: [
-        { step: 1, action: "Open dashboard in browser", expectedResult: "Dashboard displays initial metrics" },
-        { step: 2, action: "Trigger a backend event that updates metrics", expectedResult: "Event is processed by server" },
-        { step: 3, action: "Observe the dashboard without refreshing", expectedResult: "Metrics update automatically within 1 minute" },
-      ],
-      expectedOutcome: "Metrics reflect the latest data without manual refresh",
-      codeSnippet: `it('should update metrics in real-time', async () => {
-  const initialValue = await getMetricValue('totalUsers');
-  
-  // Trigger update via API
-  await api.post('/users', { name: 'Test User' });
-  
-  // Wait for real-time update
-  await page.waitForFunction(
-    (initial) => getMetricValue('totalUsers') > initial,
-    initialValue,
-    { timeout: 60000 }
-  );
-});`,
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "TC-003",
-      brdId: "1",
-      requirementId: "FR-002",
-      title: "Verify Chart Zoom Functionality",
-      description: "Test that users can zoom in and out on analytics charts.",
-      type: "e2e",
-      priority: "medium",
-      preconditions: ["Dashboard with charts is loaded", "Charts contain data points"],
-      steps: [
-        { step: 1, action: "Locate the main analytics chart", expectedResult: "Chart is visible and interactive" },
-        { step: 2, action: "Use mouse wheel to zoom in", expectedResult: "Chart zooms in, showing fewer data points with more detail" },
-        { step: 3, action: "Use mouse wheel to zoom out", expectedResult: "Chart zooms out, showing more data points" },
-        { step: 4, action: "Double-click to reset zoom", expectedResult: "Chart returns to default zoom level" },
-      ],
-      expectedOutcome: "Chart zoom functionality works smoothly with proper visual feedback",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "TC-004",
-      brdId: "1",
-      requirementId: "FR-003",
-      title: "Verify Widget Drag and Drop",
-      description: "Test that users can rearrange dashboard widgets using drag and drop.",
-      type: "e2e",
-      priority: "medium",
-      preconditions: ["Dashboard is loaded with multiple widgets", "User has edit permissions"],
-      steps: [
-        { step: 1, action: "Click and hold on a widget header", expectedResult: "Widget becomes draggable with visual feedback" },
-        { step: 2, action: "Drag widget to a new position", expectedResult: "Other widgets shift to make space" },
-        { step: 3, action: "Release the widget", expectedResult: "Widget snaps to new position" },
-        { step: 4, action: "Refresh the page", expectedResult: "Widget positions are preserved" },
-      ],
-      expectedOutcome: "Widgets can be rearranged and positions persist across sessions",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "TC-005",
-      brdId: "1",
-      requirementId: "NFR-003",
-      title: "Verify Keyboard Navigation Accessibility",
-      description: "Ensure dashboard is fully navigable using keyboard only.",
-      type: "acceptance",
-      priority: "high",
-      preconditions: ["Dashboard is loaded", "Screen reader is enabled (optional)"],
-      steps: [
-        { step: 1, action: "Press Tab to navigate through elements", expectedResult: "Focus moves through all interactive elements in logical order" },
-        { step: 2, action: "Press Enter on focused button", expectedResult: "Button action is triggered" },
-        { step: 3, action: "Press Escape on open modal", expectedResult: "Modal closes" },
-        { step: 4, action: "Use arrow keys in chart", expectedResult: "Can navigate between data points" },
-      ],
-      expectedOutcome: "All functionality is accessible via keyboard navigation",
-      createdAt: new Date().toISOString(),
-    },
-  ];
+  const activeTestCases: TestCase[] = testCases || [];
 
   const toggleExpand = (id: string) => {
     setExpandedTests((prev) => {
@@ -249,7 +144,7 @@ export default function TestCasesPage() {
     });
   };
 
-  const filteredTests = mockTestCases.filter((test) => {
+  const filteredTests = activeTestCases.filter((test) => {
     if (filterType !== "all" && test.type !== filterType) return false;
     if (filterPriority !== "all" && test.priority !== filterPriority) return false;
     if (filterCategory !== "all" && (test as any).category !== filterCategory) return false;
@@ -308,7 +203,7 @@ export default function TestCasesPage() {
   };
 
   const handleExport = () => {
-    const content = JSON.stringify(mockTestCases, null, 2);
+    const content = JSON.stringify(activeTestCases, null, 2);
     const blob = new Blob([content], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -317,6 +212,22 @@ export default function TestCasesPage() {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  if (!brd && !isLoading) {
+    return (
+      <div className="container max-w-4xl mx-auto py-8 px-4">
+        <EmptyState
+          icon="document"
+          title="No BRD Available"
+          description="Generate a Business Requirements Document first before creating test cases."
+          action={{
+            label: "Go to BRD",
+            onClick: () => window.location.href = brdIdParam ? `/brd?brd_id=${brdIdParam}` : "/brd",
+          }}
+        />
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -351,7 +262,7 @@ export default function TestCasesPage() {
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-4 flex-wrap">
               <div className="flex items-center gap-2 text-sm flex-wrap">
-                <Badge variant="outline">{mockTestCases.length} Total</Badge>
+                <Badge variant="outline">{activeTestCases.length} Total</Badge>
                 <Badge variant="outline" className={categoryInfo.happy_path.color}>
                   {testsByCategory.happy_path.length} Happy Path
                 </Badge>
@@ -444,7 +355,7 @@ export default function TestCasesPage() {
             {filteredTests.length === 0 ? (
               <EmptyState
                 icon="test"
-                title="No test cases found"
+                title="No test cases generated for this BRD yet."
                 description="Try adjusting your filters or generate new test cases."
               />
             ) : (

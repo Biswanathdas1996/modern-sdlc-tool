@@ -345,13 +345,26 @@ export default function CodeGenerationPage() {
     );
   }
 
+  if (!brd) {
+    return (
+      <div className="p-6">
+        <WorkflowHeader steps={workflowSteps} title="Generate Code" description="AI-powered code generation from user stories" />
+        <EmptyState
+          title="No BRD Available"
+          description="Generate a Business Requirements Document first before generating code."
+          action={{ label: "Go to BRD", onClick: () => navigate("/brd") }}
+        />
+      </div>
+    );
+  }
+
   if (!userStories || userStories.length === 0) {
     return (
       <div className="p-6">
         <WorkflowHeader steps={workflowSteps} title="Generate Code" description="AI-powered code generation from user stories" />
         <EmptyState
-          title="No User Stories Found"
-          description="Generate user stories first to enable code generation."
+          title="No User Stories Generated for This BRD"
+          description="Generate user stories from your BRD first to enable code generation."
           action={{ label: "Go to User Stories", onClick: () => navigate("/user-stories") }}
         />
       </div>
