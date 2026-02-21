@@ -166,6 +166,28 @@ export const brdSchema = z.object({
       description: z.string(),
       mitigation: z.string(),
     })),
+    integrationRequirements: z.array(z.object({
+      system: z.string(),
+      type: z.string(),
+      description: z.string(),
+      direction: z.string(),
+      dataExchanged: z.string().optional(),
+      protocol: z.string().optional(),
+    })).nullable().optional(),
+    processFlow: z.object({
+      actors: z.array(z.string()),
+      steps: z.array(z.object({
+        stepNumber: z.number(),
+        actor: z.string(),
+        action: z.string(),
+        system: z.string().optional(),
+        output: z.string().optional(),
+      })),
+      alternateFlows: z.array(z.object({
+        condition: z.string(),
+        steps: z.string(),
+      })).optional(),
+    }).nullable().optional(),
   }),
   createdAt: z.string(),
   updatedAt: z.string(),

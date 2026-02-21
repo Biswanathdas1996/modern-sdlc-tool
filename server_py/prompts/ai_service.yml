@@ -372,6 +372,38 @@ brd_section_risks_prompt: |
   {documentation_context}
   {database_schema_context}
 
+brd_section_integration_req_prompt: |
+  Identify integration requirements for this feature — external systems, APIs, services, databases, third-party tools, or internal modules it must connect with. Reference ONLY integrations that are evident from the Technical Documentation, Database Schema, or Existing System Context. Do NOT invent integrations. Return JSON:
+  {{"integrationRequirements": [
+    {{"system": "Name of system/service", "type": "API|Database|Service|Library|Webhook|MessageQueue", "description": "What this integration does", "direction": "Inbound|Outbound|Bidirectional", "dataExchanged": "What data flows through this integration", "protocol": "REST|GraphQL|gRPC|JDBC|AMQP|WebSocket|SDK|Other"}}
+  ]}}
+
+  Feature: {feature_title}
+  Description: {feature_description}
+  {existing_system_context}
+  {knowledge_base_context}
+  {documentation_context}
+  {database_schema_context}
+
+brd_section_process_flow_prompt: |
+  Define the end-to-end business process flow for this feature. Describe each step a user or the system takes from start to completion. Reference ONLY components, APIs, screens, and data flows that appear in the Technical Documentation, Database Schema, or Existing System Context. Do NOT invent steps or actors. Return JSON:
+  {{"processFlow": {{
+    "actors": ["Actor 1", "Actor 2"],
+    "steps": [
+      {{"stepNumber": 1, "actor": "Who performs this step", "action": "What happens", "system": "Which component/service handles it", "output": "Result or next state"}}
+    ],
+    "alternateFlows": [
+      {{"condition": "When X happens", "steps": "What happens instead"}}
+    ]
+  }}}}
+
+  Feature: {feature_title}
+  Description: {feature_description}
+  {existing_system_context}
+  {knowledge_base_context}
+  {documentation_context}
+  {database_schema_context}
+
 generate_test_cases_system: |
   You are a QA engineer creating test cases from a Business Requirements Document.
 

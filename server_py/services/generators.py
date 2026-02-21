@@ -436,6 +436,16 @@ PARALLEL_SECTIONS = [
         "prompt_key": "brd_section_risks_prompt",
     },
     {
+        "key": "integrationRequirements",
+        "task_name": "brd_section_integration_req",
+        "prompt_key": "brd_section_integration_req_prompt",
+    },
+    {
+        "key": "processFlow",
+        "task_name": "brd_section_process_flow",
+        "prompt_key": "brd_section_process_flow_prompt",
+    },
+    {
         "key": "meta",
         "task_name": "brd_section_meta",
         "prompt_key": "brd_section_meta_prompt",

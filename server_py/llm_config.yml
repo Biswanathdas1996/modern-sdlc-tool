@@ -89,6 +89,16 @@ brd_section_risks:
   temperature: 0.3
   max_tokens: 2000
 
+brd_section_integration_req:
+  model: vertex_ai.gemini-2.5-flash-image
+  temperature: 0.3
+  max_tokens: 3000
+
+brd_section_process_flow:
+  model: vertex_ai.gemini-2.5-flash-image
+  temperature: 0.3
+  max_tokens: 3000
+
 brd_section_meta:
   model: vertex_ai.gemini-2.5-flash-image
   temperature: 0.2

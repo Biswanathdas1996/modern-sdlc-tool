@@ -20,6 +20,8 @@ import {
   GitBranch,
   Plus,
   BookOpen,
+  Plug,
+  Workflow,
 } from "lucide-react";
 import { SiJira, SiConfluence } from "react-icons/si";
 import { Button } from "@/components/ui/button";
@@ -146,7 +148,7 @@ export default function BRDPage() {
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
   const [streamingKnowledgeSources, setStreamingKnowledgeSources] = useState<KnowledgeSource[]>([]);
   const [streamingSections, setStreamingSections] = useState<Record<string, any>>({});
-  const [streamingProgress, setStreamingProgress] = useState<{current: number, total: number}>({current: 0, total: 9});
+  const [streamingProgress, setStreamingProgress] = useState<{current: number, total: number}>({current: 0, total: 11});
   const [, navigate] = useLocation();
   const searchString = useSearch();
   const searchParams = useMemo(() => new URLSearchParams(searchString), [searchString]);
@@ -187,7 +189,7 @@ export default function BRDPage() {
       setIsStreaming(true);
       setIsWaitingForResponse(true);
       setStreamingSections({});
-      setStreamingProgress({current: 0, total: 9});
+      setStreamingProgress({current: 0, total: 11});
       setStreamingKnowledgeSources([]);
 
       const cachedDocumentation = getSessionArtifact("documentation");
@@ -865,6 +867,8 @@ export default function BRDPage() {
               { key: "nonFunctionalRequirements", label: "Non-Functional Requirements" },
               { key: "technical", label: "Technical Considerations" },
               { key: "risks", label: "Risks & Mitigations" },
+              { key: "integrationRequirements", label: "Integration Requirements" },
+              { key: "processFlow", label: "Process Flow" },
             ];
             const completedCount = sectionLabels.filter(s => !!streamingSections[s.key]).length;
             const totalCount = sectionLabels.length;
@@ -1189,6 +1193,126 @@ export default function BRDPage() {
                       </div>
                     ))}
                   </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* Integration Requirements */}
+          {(() => {
+            const data = isStreaming ? streamingSections["integrationRequirements"] : mockBRD?.content;
+            const integrations = isStreaming ? (data?.integrationRequirements || []) : (data?.integrationRequirements || []);
+            if (integrations.length === 0) return null;
+            return (
+              <Card className={isStreaming ? "brd-section-animate" : ""}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Plug className="h-5 w-5 text-primary" />
+                    Integration Requirements
+                  </CardTitle>
+                  <CardDescription>
+                    External systems, APIs, and services this feature must connect with
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {integrations.map((item: any, index: number) => (
+                      <div key={index} className="p-4 rounded-md bg-muted/50 border" data-testid={`card-integration-${index}`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="font-medium text-foreground">{item.system}</span>
+                          <Badge variant="outline" className="text-xs">{item.type}</Badge>
+                          <Badge variant="secondary" className="text-xs ml-auto">{item.direction}</Badge>
+                        </div>
+                        <div className="text-sm text-muted-foreground mb-2">{renderFormattedText(item.description)}</div>
+                        {item.dataExchanged && (
+                          <div className="text-xs text-muted-foreground">
+                            <span className="font-medium text-foreground">Data: </span>{item.dataExchanged}
+                          </div>
+                        )}
+                        {item.protocol && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            <span className="font-medium text-foreground">Protocol: </span>
+                            <span className="font-mono">{item.protocol}</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* Process Flow */}
+          {(() => {
+            const data = isStreaming ? streamingSections["processFlow"] : mockBRD?.content?.processFlow;
+            const flowData = isStreaming ? data?.processFlow : data;
+            if (!flowData) return null;
+            const steps = flowData.steps || [];
+            const actors = flowData.actors || [];
+            const alternateFlows = flowData.alternateFlows || [];
+            if (steps.length === 0) return null;
+            return (
+              <Card className={isStreaming ? "brd-section-animate" : ""}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Workflow className="h-5 w-5 text-primary" />
+                    Process Flow
+                  </CardTitle>
+                  <CardDescription>
+                    End-to-end business process from initiation to completion
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {actors.length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-foreground">Actors:</span>
+                      {actors.map((actor: string, i: number) => (
+                        <Badge key={i} variant="outline" className="text-xs" data-testid={`badge-actor-${i}`}>{actor}</Badge>
+                      ))}
+                    </div>
+                  )}
+                  <div className="relative">
+                    {steps.map((step: any, index: number) => (
+                      <div key={index} className="flex gap-4 pb-4" data-testid={`step-process-${index}`}>
+                        <div className="flex flex-col items-center">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold shrink-0">
+                            {step.stepNumber || index + 1}
+                          </div>
+                          {index < steps.length - 1 && (
+                            <div className="w-0.5 flex-1 bg-border mt-1" />
+                          )}
+                        </div>
+                        <div className="flex-1 pb-2">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-medium text-foreground">{step.action}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            {step.actor && <Badge variant="secondary" className="text-[10px]">{step.actor}</Badge>}
+                            {step.system && <span className="font-mono">{step.system}</span>}
+                          </div>
+                          {step.output && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              <span className="font-medium text-foreground">Output: </span>{step.output}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {alternateFlows.length > 0 && (
+                    <div className="border-t pt-3">
+                      <h4 className="text-sm font-medium mb-2">Alternate Flows</h4>
+                      <div className="space-y-2">
+                        {alternateFlows.map((flow: any, i: number) => (
+                          <div key={i} className="p-3 rounded-md bg-warning/5 border border-warning/20 text-sm" data-testid={`alt-flow-${i}`}>
+                            <span className="font-medium text-foreground">{flow.condition}: </span>
+                            <span className="text-muted-foreground">{flow.steps}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );
