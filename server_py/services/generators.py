@@ -583,7 +583,14 @@ Features: {', '.join([f.get('name', '') for f in analysis.get('features', [])])}
 
     format_vars["existing_system_context"] = existing_system_context_text
 
-    log_info(f"Phase 2: Generating {len(PARALLEL_SECTIONS)} sections in parallel with enriched context...", "generators")
+    log_info(
+        f"Phase 2: Generating {len(PARALLEL_SECTIONS)} sections in parallel — "
+        f"existing_system_ctx: {len(existing_system_context_text)} chars, "
+        f"docs: {len(documentation_context)} chars, "
+        f"kb: {len(knowledge_base_context)} chars, "
+        f"db_schema: {len(database_schema_context)} chars",
+        "generators",
+    )
 
     async def _run_section(cfg):
         caller = call_genai_factory(cfg["task_name"])
