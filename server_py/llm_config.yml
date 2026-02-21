@@ -64,7 +64,7 @@ copilot_prompt:
   max_tokens: 8192
 
 related_stories:
-  model: azure.grok-4-fast-reasoning              # ultra-fast — quick semantic matching
+  model: vertex_ai.gemini-2.5-flash-image         # fast — quick semantic matching
   temperature: 0.2
   max_tokens: 4096
 
@@ -90,17 +90,17 @@ jira_agent:
   max_tokens: 6096
 
 jira_intent_extraction:
-  model: azure.grok-4-fast-reasoning              # ultra-fast — quick classification task
+  model: vertex_ai.gemini-2.5-flash-image         # fast — quick classification task
   temperature: 0.1
   max_tokens: 500
 
 jira_ticket_extraction:
-  model: azure.grok-4-fast-reasoning              # ultra-fast — short structured extraction
+  model: vertex_ai.gemini-2.5-flash-image         # fast — short structured extraction
   temperature: 0.1
   max_tokens: 500
 
 jira_search:
-  model: azure.grok-4-fast-reasoning              # ultra-fast — search query formulation
+  model: vertex_ai.gemini-2.5-flash-image         # fast — search query formulation
   temperature: 0.1
   max_tokens: 500
 
@@ -110,7 +110,7 @@ jira_knowledge_base:
   max_tokens: 4096
 
 jira_context_enrichment:
-  model: azure.grok-4-fast-reasoning              # ultra-fast — quick context augmentation
+  model: vertex_ai.gemini-2.5-flash-image         # fast — quick context augmentation
   temperature: 0.1
   max_tokens: 500
 

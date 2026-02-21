@@ -1,0 +1,45 @@
+"POST /api/sessions/sess_3d19d1d8e7c2/artifacts HTTP/1.1" 200 OK
+09:30:39 AM [DEBUG] [docugen] [jira_service] Fetching JIRA issues from daspapun21.atlassian.net
+09:30:39 AM [DEBUG] [docugen] [jira_service] JQL query: project = KAN ORDER BY created DESC
+09:30:39 AM [DEBUG] [docugen] [jira_service] Making request to https://daspapun21.atlassian.net/rest/api/3/search/jql
+09:30:40 AM [DEBUG] [docugen] [jira_service] JIRA API response status: 200
+09:30:40 AM [DEBUG] [docugen] [jira_service] Received 22 issues from JIRA
+09:30:40 AM [INFO] [docugen] [jira] Fetched 22 JIRA issues
+09:30:40 AM [INFO] [docugen] [ai] Calling PwC GenAI [task=related_stories] (prompt length: 2943 chars)
+09:30:40 AM [DEBUG] [docugen] [ai] AI parameters: model=azure.grok-4-fast-reasoning, temp=0.2, max_tokens=4096
+09:30:40 AM [DEBUG] [docugen] [pwc_llm] [async] task=related_stories model=azure.grok-4-fast-reasoning type=text temp=0.2 max_tokens=4096
+09:30:41 AM [ERROR] [docugen] [ai] PwC GenAI API Error: PwC GenAI API Error: 400 - {"error":{"message":"400: {'error': '/completions: Invalid model name passed in model=azure.grok-4-fast-reasoning. Call `/v1/models` to view available models for your key.'}","type":"None","param":"None","code":"400"}}
+09:30:41 AM [ERROR] [docugen] [jira] Failed to find related stories: PwC GenAI API Error: 400 - {"error":{"message":"400: {'error': '/completions: Invalid model name passed in model=azure.grok-4-fast-reasoning. Call `/v1/models` to view available models for your key.'}","type":"None","param":"None","code":"400"}}
+Traceback (most recent call last):
+  File "/home/runner/workspace/server_py/api/v1/jira.py", line 91, in find_related_jira_stories_endpoint
+    related_raw = await ai_service.find_related_stories(feature_description, jira_stories)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/ai_service.py", line 171, in find_related_stories
+    return await generators.find_related_stories(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/generators.py", line 472, in find_related_stories
+    response_text = await call_genai(prompt)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/ai_service.py", line 62, in _call
+    return await self.call_genai(prompt, temperature, max_tokens, task_name=task_name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/ai_service.py", line 45, in call_genai
+    response = await call_pwc_genai_async(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/utils/pwc_llm.py", line 393, in call_pwc_genai_async
+    raise ValueError(
+ValueError: PwC GenAI API Error: 400 - {"error":{"message":"400: {'error': '/completions: Invalid model name passed in model=azure.grok-4-fast-reasoning. Call `/v1/models` to view available models for your key.'}","type":"None","param":"None","code":"400"}}
+09:30:41 AM [INFO] [docugen] POST /api/jira/find-related 500 in 1324ms
+INFO:     172.31.80.98:52968 - "POST /api/jira/find-related HTTP/1.1" 500 Internal Server Error
+09:30:42 AM [INFO] [docugen] [kb] Searching KB collection knowledge_chunks_378d2cdc-554a-4dfc-ad8e-ef427a137dda: "BRD: Secure User Authentication This document outlines the business requirements for implementing a "
+09:30:43 AM [INFO] [docugen] [kb] Atlas vector search: returning 3 results (index: vector_index)
+09:30:43 AM [INFO] [docugen] [kb] Vector result 1: workflows_document.pdf chunk#1 (score: 0.8073)
+09:30:43 AM [INFO] [docugen] [kb] Vector result 2: workflows_document.pdf chunk#2 (score: 0.7975)
+09:30:43 AM [INFO] [docugen] [kb] Vector result 3: workflows_document.pdf chunk#0 (score: 0.7872)
+09:30:43 AM [INFO] [docugen] [kb] Vector search returned 3 results (all above threshold)
+09:30:43 AM [INFO] [docugen] [ai] Calling PwC GenAI [task=user_story_generation] (prompt length: 6356 chars)
+09:30:43 AM [DEBUG] [docugen] [ai] AI parameters: model=azure.gpt-5.2, temp=0.3, max_tokens=8192
+09:30:43 AM [DEBUG] [docugen] [pwc_llm] [async] task=user_story_generation model=azure.gpt-5.2 type=text temp=0.3 max_tokens=8192
+09:31:12 AM [INFO] [docugen] [ai] PwC GenAI response received successfully
+09:31:13 AM [INFO] [docugen] [requirements] Generated 6 user stories
+09:31:13 AM [INFO] [docugen] POST /api/user-stories/generate 200 in 32506ms
