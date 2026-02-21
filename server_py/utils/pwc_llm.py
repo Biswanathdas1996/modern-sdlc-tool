@@ -177,18 +177,24 @@ def _build_request_body(
     else:
         prompt_value = prompt
 
-    return {
+    is_anthropic = "anthropic" in resolved_model.lower()
+
+    body: Dict[str, Any] = {
         "model": resolved_model,
         "prompt": prompt_value,
         "temperature": temperature,
         "max_tokens": max_tokens,
-        "top_p": 1,
-        "presence_penalty": 0,
         "stream": False,
         "stream_options": None,
-        "seed": 25,
         "stop": None,
     }
+
+    if not is_anthropic:
+        body["top_p"] = 1
+        body["presence_penalty"] = 0
+        body["seed"] = 25
+
+    return body
 
 
 def _build_embedding_request_body(

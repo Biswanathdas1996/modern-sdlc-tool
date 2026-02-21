@@ -1,0 +1,51 @@
+AM [INFO] [docugen] POST /api/copilot-prompt/generate 500 in 1419ms
+INFO:     172.31.80.98:58262 - "POST /api/copilot-prompt/generate HTTP/1.1" 500 Internal Server Error
+09:37:28 AM [INFO] [docugen] [ai] Calling PwC GenAI [task=copilot_prompt] (prompt length: 32398 chars)
+09:37:28 AM [DEBUG] [docugen] [ai] AI parameters: model=vertex_ai.anthropic.claude-sonnet-4-6, temp=0.2, max_tokens=8192
+09:37:28 AM [DEBUG] [docugen] [pwc_llm] [async] task=copilot_prompt model=vertex_ai.anthropic.claude-sonnet-4-6 type=text temp=0.2 max_tokens=8192
+09:37:29 AM [ERROR] [docugen] [ai] PwC GenAI API Error: PwC GenAI API Error: 400 - {"error":{"message":"litellm.BadRequestError: OpenAIException - {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"`temperature` and `top_p` cannot both be specified for this model. Please use only one.\"},\"request_id\":\"req_vrtx_011CYLzM1ZqBmDCuypmiN8hS\"}. Received Model Group=vertex_ai.anthropic.claude-sonnet-4-6\nAvailable Model Group Fallbacks=None","type":null,"param":null,"code":"400"}}
+09:37:29 AM [ERROR] [docugen] [requirements] Error generating Copilot prompt: PwC GenAI API Error: 400 - {"error":{"message":"litellm.BadRequestError: OpenAIException - {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"`temperature` and `top_p` cannot both be specified for this model. Please use only one.\"},\"request_id\":\"req_vrtx_011CYLzM1ZqBmDCuypmiN8hS\"}. Received Model Group=vertex_ai.anthropic.claude-sonnet-4-6\nAvailable Model Group Fallbacks=None","type":null,"param":null,"code":"400"}}
+Traceback (most recent call last):
+  File "/home/runner/workspace/server_py/api/v1/requirements.py", line 455, in generate_copilot_prompt_endpoint
+    prompt = await ai_service.generate_copilot_prompt(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/ai_service.py", line 164, in generate_copilot_prompt
+    return await generators.generate_copilot_prompt(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/generators.py", line 449, in generate_copilot_prompt
+    return await call_genai(prompt)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/ai_service.py", line 62, in _call
+    return await self.call_genai(prompt, temperature, max_tokens, task_name=task_name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/ai_service.py", line 45, in call_genai
+    response = await call_pwc_genai_async(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/utils/pwc_llm.py", line 393, in call_pwc_genai_async
+    raise ValueError(
+ValueError: PwC GenAI API Error: 400 - {"error":{"message":"litellm.BadRequestError: OpenAIException - {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"`temperature` and `top_p` cannot both be specified for this model. Please use only one.\"},\"request_id\":\"req_vrtx_011CYLzM1ZqBmDCuypmiN8hS\"}. Received Model Group=vertex_ai.anthropic.claude-sonnet-4-6\nAvailable Model Group Fallbacks=None","type":null,"param":null,"code":"400"}}
+09:37:29 AM [INFO] [docugen] POST /api/copilot-prompt/generate 500 in 1758ms
+INFO:     172.31.80.98:58262 - "POST /api/copilot-prompt/generate HTTP/1.1" 500 Internal Server Error
+09:37:31 AM [INFO] [docugen] [ai] Calling PwC GenAI [task=copilot_prompt] (prompt length: 32398 chars)
+09:37:31 AM [DEBUG] [docugen] [ai] AI parameters: model=vertex_ai.anthropic.claude-sonnet-4-6, temp=0.2, max_tokens=8192
+09:37:31 AM [DEBUG] [docugen] [pwc_llm] [async] task=copilot_prompt model=vertex_ai.anthropic.claude-sonnet-4-6 type=text temp=0.2 max_tokens=8192
+09:37:31 AM [ERROR] [docugen] [ai] PwC GenAI API Error: PwC GenAI API Error: 400 - {"error":{"message":"litellm.BadRequestError: OpenAIException - {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"`temperature` and `top_p` cannot both be specified for this model. Please use only one.\"},\"request_id\":\"req_vrtx_011CYLzMAmUFSFMSn8mmDYnk\"}. Received Model Group=vertex_ai.anthropic.claude-sonnet-4-6\nAvailable Model Group Fallbacks=None","type":null,"param":null,"code":"400"}}
+09:37:31 AM [ERROR] [docugen] [requirements] Error generating Copilot prompt: PwC GenAI API Error: 400 - {"error":{"message":"litellm.BadRequestError: OpenAIException - {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"`temperature` and `top_p` cannot both be specified for this model. Please use only one.\"},\"request_id\":\"req_vrtx_011CYLzMAmUFSFMSn8mmDYnk\"}. Received Model Group=vertex_ai.anthropic.claude-sonnet-4-6\nAvailable Model Group Fallbacks=None","type":null,"param":null,"code":"400"}}
+Traceback (most recent call last):
+  File "/home/runner/workspace/server_py/api/v1/requirements.py", line 455, in generate_copilot_prompt_endpoint
+    prompt = await ai_service.generate_copilot_prompt(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/ai_service.py", line 164, in generate_copilot_prompt
+    return await generators.generate_copilot_prompt(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/generators.py", line 449, in generate_copilot_prompt
+    return await call_genai(prompt)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/ai_service.py", line 62, in _call
+    return await self.call_genai(prompt, temperature, max_tokens, task_name=task_name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/services/ai_service.py", line 45, in call_genai
+    response = await call_pwc_genai_async(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/server_py/utils/pwc_llm.py", line 393, in call_pwc_genai_async
+    raise ValueError(
