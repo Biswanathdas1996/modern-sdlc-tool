@@ -728,72 +728,7 @@ export default function BRDPage() {
             );
           })()}
 
-          {/* Streaming Progress Tracker — shown at top during generation */}
-          {isStreaming && (() => {
-            const sectionLabels: { key: string; label: string }[] = [
-              { key: "meta", label: "Document Metadata" },
-              { key: "existingSystemContext", label: "Existing System Context" },
-              { key: "overview", label: "Executive Overview" },
-              { key: "objectives", label: "Business Objectives" },
-              { key: "scope", label: "Scope Definition" },
-              { key: "functionalRequirements", label: "Functional Requirements" },
-              { key: "nonFunctionalRequirements", label: "Non-Functional Requirements" },
-              { key: "technical", label: "Technical Considerations" },
-              { key: "risks", label: "Risks & Mitigations" },
-            ];
-            const completedCount = sectionLabels.filter(s => !!streamingSections[s.key]).length;
-            const totalCount = sectionLabels.length;
-            const pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-            const currentlyGenerating = sectionLabels.find(s => !streamingSections[s.key]);
-            const waitingForFirst = completedCount === 0;
-            return (
-              <Card className="border-primary/30 bg-gradient-to-r from-primary/5 to-primary/10" data-testid="card-streaming-progress">
-                <CardContent className="py-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                      <span className="text-sm font-medium">
-                        {waitingForFirst
-                          ? "Analyzing codebase & knowledge base..."
-                          : completedCount < totalCount
-                            ? `Generating: ${currentlyGenerating?.label ?? ""}...`
-                            : "Finalizing BRD..."}
-                      </span>
-                    </div>
-                    <span className="text-xs text-muted-foreground font-mono">{completedCount}/{totalCount}</span>
-                  </div>
-                  <div className="w-full bg-muted/50 rounded-full h-1.5 shimmer-bar">
-                    <div
-                      className="bg-primary h-1.5 rounded-full transition-all duration-700 ease-out"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {sectionLabels.map(({ key, label }) => {
-                      const done = !!streamingSections[key];
-                      return (
-                        <Badge
-                          key={key}
-                          variant={done ? "default" : "outline"}
-                          className={cn(
-                            "text-xs transition-all duration-300",
-                            done
-                              ? "bg-primary/15 text-primary border-primary/30"
-                              : "text-muted-foreground/60 border-muted/50"
-                          )}
-                        >
-                          {done && <CheckCircle2 className="h-3 w-3 mr-1" />}
-                          {label}
-                        </Badge>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })()}
-
-          {/* Existing System Context */}
+          {/* Existing System Context — rendered early, right after KB sources */}
           {(() => {
             const data = isStreaming ? streamingSections["existingSystemContext"] : mockBRD?.content?.existingSystemContext;
             if (!data) return null;
@@ -913,6 +848,71 @@ export default function BRDPage() {
                       </ul>
                     </div>
                   )}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* Streaming Progress Tracker — shown at top during generation */}
+          {isStreaming && (() => {
+            const sectionLabels: { key: string; label: string }[] = [
+              { key: "meta", label: "Document Metadata" },
+              { key: "existingSystemContext", label: "Existing System Context" },
+              { key: "overview", label: "Executive Overview" },
+              { key: "objectives", label: "Business Objectives" },
+              { key: "scope", label: "Scope Definition" },
+              { key: "functionalRequirements", label: "Functional Requirements" },
+              { key: "nonFunctionalRequirements", label: "Non-Functional Requirements" },
+              { key: "technical", label: "Technical Considerations" },
+              { key: "risks", label: "Risks & Mitigations" },
+            ];
+            const completedCount = sectionLabels.filter(s => !!streamingSections[s.key]).length;
+            const totalCount = sectionLabels.length;
+            const pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+            const currentlyGenerating = sectionLabels.find(s => !streamingSections[s.key]);
+            const waitingForFirst = completedCount === 0;
+            return (
+              <Card className="border-primary/30 bg-gradient-to-r from-primary/5 to-primary/10" data-testid="card-streaming-progress">
+                <CardContent className="py-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      <span className="text-sm font-medium">
+                        {waitingForFirst
+                          ? "Analyzing codebase & knowledge base..."
+                          : completedCount < totalCount
+                            ? `Generating: ${currentlyGenerating?.label ?? ""}...`
+                            : "Finalizing BRD..."}
+                      </span>
+                    </div>
+                    <span className="text-xs text-muted-foreground font-mono">{completedCount}/{totalCount}</span>
+                  </div>
+                  <div className="w-full bg-muted/50 rounded-full h-1.5 shimmer-bar">
+                    <div
+                      className="bg-primary h-1.5 rounded-full transition-all duration-700 ease-out"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {sectionLabels.map(({ key, label }) => {
+                      const done = !!streamingSections[key];
+                      return (
+                        <Badge
+                          key={key}
+                          variant={done ? "default" : "outline"}
+                          className={cn(
+                            "text-xs transition-all duration-300",
+                            done
+                              ? "bg-primary/15 text-primary border-primary/30"
+                              : "text-muted-foreground/60 border-muted/50"
+                          )}
+                        >
+                          {done && <CheckCircle2 className="h-3 w-3 mr-1" />}
+                          {label}
+                        </Badge>
+                      );
+                    })}
+                  </div>
                 </CardContent>
               </Card>
             );
