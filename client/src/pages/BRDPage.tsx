@@ -569,7 +569,10 @@ export default function BRDPage() {
           </Card>
 
           {/* Knowledge Base Sources Banner */}
-          {(mockBRD.knowledgeSources && mockBRD.knowledgeSources.length > 0) || (isStreaming && streamingKnowledgeSources.length > 0) ? (
+          {(() => {
+            const kbSources = streamingKnowledgeSources.length > 0 ? streamingKnowledgeSources : (mockBRD.knowledgeSources || []);
+            if (kbSources.length === 0) return null;
+            return (
             <Card className="border-primary/30 bg-primary/5">
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
@@ -579,7 +582,7 @@ export default function BRDPage() {
                   <div className="flex-1">
                     <CardTitle className="text-base">Knowledge Base Sources</CardTitle>
                     <CardDescription>
-                      {(isStreaming ? streamingKnowledgeSources : mockBRD.knowledgeSources)?.length || 0} chunks extracted and used to generate this BRD
+                      {kbSources.length} chunks extracted and used to generate this BRD
                     </CardDescription>
                   </div>
                   <Button
@@ -604,7 +607,7 @@ export default function BRDPage() {
                     </AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-3 mt-2">
-                        {(isStreaming ? streamingKnowledgeSources : mockBRD.knowledgeSources)?.map((source, index) => (
+                        {kbSources.map((source, index) => (
                           <div key={index} className="p-3 rounded-md bg-background border">
                             <div className="flex items-center gap-2 mb-2">
                               <Badge variant="outline" className="text-xs font-mono">
@@ -632,7 +635,14 @@ export default function BRDPage() {
                 </Accordion>
               </CardContent>
             </Card>
-          ) : mockBRD.sourceDocumentation ? (
+            );
+          })()}
+
+          {(() => {
+            const kbSources2 = streamingKnowledgeSources.length > 0 ? streamingKnowledgeSources : (mockBRD.knowledgeSources || []);
+            if (kbSources2.length > 0) return null;
+            if (!mockBRD.sourceDocumentation) return null;
+            return (
             <Card className="border-primary/30 bg-primary/5">
               <CardContent className="py-4">
                 <div className="flex items-center gap-3">
@@ -657,7 +667,8 @@ export default function BRDPage() {
                 </div>
               </CardContent>
             </Card>
-          ) : null}
+            );
+          })()}
 
           {/* Existing System Context */}
           {!isStreaming && mockBRD.content.existingSystemContext && (
