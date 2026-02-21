@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from repositories import storage
-from core.logging import log_info
+from core.logging import log_info, log_warning
 
 
 def restore_feature_request(fr_data: Optional[Dict[str, Any]]):
@@ -54,12 +54,24 @@ def restore_brd(brd_data: Optional[Dict[str, Any]]):
     return brd
 
 
-def restore_analysis(analysis_data: Optional[Dict[str, Any]]):
-    """Restore repo analysis from session data if not in storage."""
+def _resolve_project_id(project_id: Optional[str] = None) -> str:
+    """Resolve project ID: use provided, or fall back to first project."""
+    if project_id:
+        return project_id
     projects = storage.get_all_projects()
     if projects:
-        analysis = storage.get_analysis(projects[0]["id"])
+        log_warning(f"No project_id provided, falling back to first project: {projects[0]['id']} ({projects[0].get('name', 'unnamed')})", "session")
+        return projects[0]["id"]
+    return "global"
+
+
+def restore_analysis(analysis_data: Optional[Dict[str, Any]], project_id: Optional[str] = None):
+    """Restore repo analysis from session data if not in storage."""
+    pid = _resolve_project_id(project_id)
+    if pid != "global":
+        analysis = storage.get_analysis(pid)
         if analysis:
+            log_info(f"Loaded analysis for project {pid}", "session")
             return analysis
 
     if not analysis_data:
@@ -68,12 +80,13 @@ def restore_analysis(analysis_data: Optional[Dict[str, Any]]):
     return analysis_data
 
 
-def restore_documentation(doc_data: Optional[Dict[str, Any]]):
+def restore_documentation(doc_data: Optional[Dict[str, Any]], project_id: Optional[str] = None):
     """Restore documentation from session data if not in storage."""
-    projects = storage.get_all_projects()
-    if projects:
-        doc = storage.get_documentation(projects[0]["id"])
+    pid = _resolve_project_id(project_id)
+    if pid != "global":
+        doc = storage.get_documentation(pid)
         if doc:
+            log_info(f"Loaded documentation '{doc.get('title', 'N/A')}' for project {pid}", "session")
             return doc
 
     if not doc_data:
@@ -82,12 +95,13 @@ def restore_documentation(doc_data: Optional[Dict[str, Any]]):
     return doc_data
 
 
-def restore_database_schema(schema_data: Optional[Dict[str, Any]]):
+def restore_database_schema(schema_data: Optional[Dict[str, Any]], project_id: Optional[str] = None):
     """Restore database schema from session data if not in storage."""
-    projects = storage.get_all_projects()
-    if projects:
-        schema = storage.get_database_schema(projects[0]["id"])
+    pid = _resolve_project_id(project_id)
+    if pid != "global":
+        schema = storage.get_database_schema(pid)
         if schema:
+            log_info(f"Loaded database schema for project {pid}", "session")
             return schema
 
     if not schema_data:

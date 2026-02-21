@@ -112,9 +112,12 @@ async def generate_brd_endpoint(http_request: Request, request: GenerateBRDReque
         if not feature_request:
             raise bad_request("No feature request found")
 
-        analysis = restore_analysis(request.analysis)
-        documentation = restore_documentation(request.documentation)
-        database_schema = restore_database_schema(request.databaseSchema)
+        project_id = feature_request.get("projectId")
+        log_info(f"BRD generate — using project_id: {project_id}", "requirements")
+
+        analysis = restore_analysis(request.analysis, project_id=project_id)
+        documentation = restore_documentation(request.documentation, project_id=project_id)
+        database_schema = restore_database_schema(request.databaseSchema, project_id=project_id)
 
         knowledge_context = None
         knowledge_sources = []
@@ -289,13 +292,12 @@ async def generate_test_data_endpoint(request: GenerateTestDataRequest):
         if not brd:
             raise bad_request("No BRD found. Please generate a BRD first.")
 
-        documentation = restore_documentation(request.documentation)
+        brd_project_id = brd.get("projectId")
+        documentation = restore_documentation(request.documentation, project_id=brd_project_id)
         test_cases_list = restore_test_cases(request.testCases, brd["id"])
 
         if not test_cases_list:
             raise bad_request("No test cases found. Please generate test cases first.")
-
-        brd_project_id = brd.get("projectId")
 
         test_data = await ai_service.generate_test_data(
             test_cases_list,
@@ -359,7 +361,7 @@ async def generate_user_stories_endpoint(request: GenerateUserStoriesRequest):
 
         brd_project_id = brd.get("projectId")
         _, _, documentation, database_schema = get_project_context(brd_project_id)
-        documentation = restore_documentation(request.documentation) if not documentation else documentation
+        documentation = restore_documentation(request.documentation, project_id=brd_project_id) if not documentation else documentation
 
         parent_context = None
         if request.parentJiraKey:

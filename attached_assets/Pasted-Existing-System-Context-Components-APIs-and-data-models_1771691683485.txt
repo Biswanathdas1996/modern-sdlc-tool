@@ -1,0 +1,62 @@
+Existing System Context
+Components, APIs, and data models from the documentation that this feature interacts with
+Architecture & Design Patterns
+The existing system is a BRD generator application built with a client-server architecture. The client-side uses React with `@tanstack/react-query` for data fetching and state management, and `zod` with `react-hook-form` for form validation. The server-side uses an Express-based API. Key architectural patterns include: component-based UI development, API-driven communication between client and server, and a service layer (`fileProcessor.ts`, `local-llm.ts`) on the server for handling specific business logic and external integrations (like LLM). Data flow typically involves client components making API calls to the server, which then interacts with services or potentially a database (though no database details are provided for existing features). The system uses `useMutation` for data modifications (e.g., file uploads, team creation) and `useQuery` for data retrieval (e.g., LLM status, sample transcripts). Architectural constraints include adherence to the existing API structure and the use of shared schemas (`shared/schema.ts`) for data validation. The system is designed to process uploaded transcripts using AI to generate structured BRDs and offers features like team management and requirement enhancement.
+
+Implementation Approach
+Given the feature request is for a 'Payroll Processing Workflow', and the existing system is a BRD generator, the most logical approach is to treat this workflow as a *type of BRD content* that the system can generate or manage. The current system is not designed for direct payroll processing. Therefore, the implementation approach should focus on how the BRD generator can support the documentation and enhancement of a 'Payroll Processing Workflow' BRD.
+
+1
+Integrate Payroll Processing Workflow as a BRD Topic: The system should be able to recognize and process transcripts related to 'Payroll Processing Workflow' and generate a BRD that reflects its steps.
+2
+Leverage Existing BRD Generation: Utilize the `BrdGenerator` component and the `/api/upload-transcript` endpoint. The `fileProcessor.ts` and `local-llm.ts` services will need to be capable of understanding and structuring payroll-specific information from uploaded transcripts.
+3
+Enhancement for Payroll-Specific Requirements: The `/api/enhance-requirement` endpoint and `local-llm.ts` service should be capable of providing relevant enhancement suggestions for payroll-related requirements, drawing from the 'Payroll Processing Workflow' domain context.
+4
+No Direct Payroll System Integration: Crucially, this feature does NOT involve building a payroll system or integrating with one. It is about generating a BRD *for* a payroll system.
+Key Decisions:
+
+* Content Focus: The feature will focus on generating and enhancing BRDs *about* payroll processing, not performing payroll processing itself.
+
+* LLM Adaptation: The `local-llm.ts` service will need to be trained or prompted to understand the nuances of payroll processing workflows to generate accurate BRDs and enhancement suggestions.
+
+Risk Areas:
+
+* LLM Accuracy: Ensuring the LLM correctly interprets and structures payroll workflow details from diverse transcript inputs.
+
+* Domain Specificity: The current LLM might not have sufficient domain knowledge for detailed payroll rules without further fine-tuning or specific prompting strategies.
+
+Reusable Code & Utilities
+BrdGenerator (client/src/pages/brd-generator.tsx)
+Provides the user interface for generating BRDs. — This page will be the primary entry point for users to generate BRDs related to payroll processing workflows.
+
+FileUpload (client/src/components/file-upload.tsx)
+Handles the file upload process for transcripts. — Users will upload transcripts describing payroll processing workflows using this component, which then sends them to the server.
+
+/api/upload-transcript (server/routes.ts)
+Receives uploaded transcripts and initiates processing. — This API endpoint will be used to receive the payroll workflow transcripts from the client.
+
+fileProcessor.ts (server/services/fileProcessor.ts)
+Processes uploaded files, extracting text content. — This service will extract the text from uploaded payroll workflow transcripts.
+
+local-llm.ts (server/services/local-llm.ts)
+Interacts with the LLM to generate BRD content and enhancement suggestions. — This service will be crucial for analyzing payroll workflow transcripts and generating structured BRD content, as well as providing enhancement suggestions for payroll-related requirements.
+
+BrdDisplay (client/src/components/brd-display.tsx)
+Displays the generated BRD and allows for requirement enhancement and editing. — After a payroll workflow BRD is generated, this component will display it, allowing users to review, edit, and request enhancements for payroll-specific requirements.
+
+/api/enhance-requirement (server/routes.ts)
+Receives a requirement and generates enhancement suggestions. — This API endpoint will be used to request AI-powered suggestions for improving individual requirements within a payroll processing BRD.
+
+/api/requirements/:id (server/routes.ts)
+Handles updating requirements. — This API endpoint will be used to save edits made by users to payroll-related requirements within the BRD.
+
+useToast (client/src/hooks/use-toast.ts)
+Provides a toast notification system for user feedback. — Can be used to provide feedback on successful BRD generation, requirement updates, or errors during payroll workflow BRD processing.
+
+Domain Rules & Business Constraints
+Collect employee timesheets
+Calculate gross pay
+Deduct taxes and contributions
+Generate payslips
+Transfer salaries to bank accounts
