@@ -217,7 +217,7 @@ brd_section_base_context: |
 
   CRITICAL RULES:
   - Base ALL content on the provided context sources. Do NOT invent components, APIs, tables, or features that are not mentioned in the context.
-  - If a context source is empty or not provided, acknowledge that and work with what is available.
+  - If a context source is empty or not provided, simply work with what is available. Do NOT write phrases like "No Existing System Context provided" — instead, derive your analysis from the available sources.
   - Use the Existing System Context to reference real codebase components and architecture patterns.
   - Use the Knowledge Base for domain-specific business requirements, rules, and standards.
   - Use the Technical Documentation for detailed architecture, file structure, and code patterns.
@@ -271,8 +271,9 @@ brd_section_existing_system_prompt: |
      - These rules MUST flow into the functional requirements of the BRD.
 
   CRITICAL RULES:
+  - YOU ARE the Existing System Context generator. Your output becomes the "Existing System Context" that all other BRD sections use. Do NOT say "No Existing System Context provided" — that is YOUR job to create.
   - ONLY reference components, APIs, tables, patterns, and business rules that actually appear in the provided TECHNICAL DOCUMENTATION, DATABASE SCHEMA, or KNOWLEDGE BASE.
-  - If a context source is empty, state "No [source] provided" for the relevant fields and work with what is available.
+  - If a specific context source (TECHNICAL DOCUMENTATION, DATABASE SCHEMA, or KNOWLEDGE BASE) is empty or not provided, simply skip that analysis area and work with the sources you DO have. Never state "No … provided" in your output.
   - Do NOT hallucinate or invent system components, endpoints, or table names.
   - Be SPECIFIC — use exact names, paths, and identifiers from the documentation.
 
