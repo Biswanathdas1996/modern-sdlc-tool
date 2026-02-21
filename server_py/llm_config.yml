@@ -128,29 +128,29 @@ jira_response_format:
 # Unit Test Agent
 # ---------------------------------------------------------------------------
 unit_test_analysis:
-  model: vertex_ai.anthropic.claude-sonnet-4-6    # top-tier coder — understands code patterns
+  model: vertex_ai.gemini-2.5-flash-image         # fast — quick code pattern analysis
   temperature: 0.1
   max_tokens: 1000
 
 unit_test_coverage:
-  model: vertex_ai.anthropic.claude-sonnet-4-6    # top-tier coder — accurate coverage mapping
+  model: vertex_ai.gemini-2.5-flash-image         # fast — coverage gap mapping
   temperature: 0.1
   max_tokens: 2000
 
 unit_test_discovery:
-  model: vertex_ai.gemini-2.5-flash-image         # fast multimodal — scanning existing tests
+  model: vertex_ai.gemini-2.5-flash-image         # fast — scanning existing tests
   temperature: 0.1
   max_tokens: 2000
 
 unit_test_generation:
-  model: vertex_ai.anthropic.claude-sonnet-4-6    # top-tier coder — writes quality test code
+  model: vertex_ai.gemini-2.5-flash-image         # fast — generates tests per file quickly
   temperature: 0.1
-  max_tokens: 8192
+  max_tokens: 4096
 
 unit_test_fix:
-  model: vertex_ai.anthropic.claude-sonnet-4-6    # top-tier coder — precise bug fixing
+  model: vertex_ai.gemini-2.5-flash-image         # fast — quick test fixes
   temperature: 0.15
-  max_tokens: 8192
+  max_tokens: 4096
 
 # ---------------------------------------------------------------------------
 # Code Generation Agent
