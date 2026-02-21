@@ -448,7 +448,7 @@ async def _generate_single_section(
     log_info(f"BRD section '{section_key}' — calling LLM (task: {task_name})", "generators")
     start = asyncio.get_event_loop().time()
 
-    raw = await call_genai(prompt, task_name=task_name)
+    raw = await call_genai(prompt)
 
     elapsed = asyncio.get_event_loop().time() - start
     log_info(f"BRD section '{section_key}' — completed in {elapsed:.1f}s", "generators")
