@@ -113,6 +113,7 @@ class AIService:
     def _task_streamer(self, task_name: str):
         """Return a stream_genai wrapper pre-bound to a specific task_name."""
         def _stream(prompt: str, **kwargs):
+            kwargs.pop("task_name", None)
             return call_pwc_genai_stream(prompt=prompt, task_name=task_name, **kwargs)
         return _stream
 
