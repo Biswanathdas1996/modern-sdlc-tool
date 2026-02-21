@@ -650,13 +650,77 @@ export default function BRDPage() {
             );
           })()}
 
+          {/* Streaming Progress Tracker — shown at top during generation */}
+          {isStreaming && (() => {
+            const sectionLabels: { key: string; label: string }[] = [
+              { key: "meta", label: "Document Metadata" },
+              { key: "existingSystemContext", label: "Existing System Context" },
+              { key: "overview", label: "Executive Overview" },
+              { key: "objectives", label: "Business Objectives" },
+              { key: "scope", label: "Scope Definition" },
+              { key: "functionalRequirements", label: "Functional Requirements" },
+              { key: "nonFunctionalRequirements", label: "Non-Functional Requirements" },
+              { key: "technical", label: "Technical Considerations" },
+              { key: "risks", label: "Risks & Mitigations" },
+            ];
+            const completedCount = sectionLabels.filter(s => !!streamingSections[s.key]).length;
+            const totalCount = sectionLabels.length;
+            const pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+            const currentlyGenerating = sectionLabels.find(s => !streamingSections[s.key]);
+            const waitingForFirst = completedCount === 0;
+            return (
+              <Card className="border-primary/30 bg-gradient-to-r from-primary/5 to-primary/10" data-testid="card-streaming-progress">
+                <CardContent className="py-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      <span className="text-sm font-medium">
+                        {waitingForFirst
+                          ? "Analyzing codebase & knowledge base..."
+                          : completedCount < totalCount
+                            ? `Generating: ${currentlyGenerating?.label ?? ""}...`
+                            : "Finalizing BRD..."}
+                      </span>
+                    </div>
+                    <span className="text-xs text-muted-foreground font-mono">{completedCount}/{totalCount}</span>
+                  </div>
+                  <div className="w-full bg-muted/50 rounded-full h-1.5 shimmer-bar">
+                    <div
+                      className="bg-primary h-1.5 rounded-full transition-all duration-700 ease-out"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {sectionLabels.map(({ key, label }) => {
+                      const done = !!streamingSections[key];
+                      return (
+                        <Badge
+                          key={key}
+                          variant={done ? "default" : "outline"}
+                          className={cn(
+                            "text-xs transition-all duration-300",
+                            done
+                              ? "bg-primary/15 text-primary border-primary/30"
+                              : "text-muted-foreground/60 border-muted/50"
+                          )}
+                        >
+                          {done && <CheckCircle2 className="h-3 w-3 mr-1" />}
+                          {label}
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
+
           {/* Existing System Context */}
           {(() => {
             const data = isStreaming ? streamingSections["existingSystemContext"] : mockBRD?.content?.existingSystemContext;
-            if (isStreaming && !data) return <Card><CardContent className="py-6"><div className="space-y-2"><div className="h-3 bg-muted/50 rounded animate-pulse w-3/4" /><div className="h-3 bg-muted/50 rounded animate-pulse w-full" /><div className="h-3 bg-muted/50 rounded animate-pulse w-1/2" /></div></CardContent></Card>;
             if (!data) return null;
             return (
-              <Card>
+              <Card className={isStreaming ? "brd-section-animate" : ""}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Link2 className="h-5 w-5 text-primary" />
@@ -738,64 +802,15 @@ export default function BRDPage() {
             );
           })()}
 
-          {/* Streaming Progress Bar */}
-          {isStreaming && (() => {
-            const sectionLabels: { key: string; label: string }[] = [
-              { key: "meta", label: "Document Metadata" },
-              { key: "existingSystemContext", label: "Existing System Context" },
-              { key: "overview", label: "Executive Overview" },
-              { key: "objectives", label: "Business Objectives" },
-              { key: "scope", label: "Scope Definition" },
-              { key: "functionalRequirements", label: "Functional Requirements" },
-              { key: "nonFunctionalRequirements", label: "Non-Functional Requirements" },
-              { key: "technical", label: "Technical Considerations" },
-              { key: "risks", label: "Risks & Mitigations" },
-            ];
-            return (
-              <Card className="border-primary/50 bg-primary/5">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                    Generating BRD — {streamingProgress.current}/{streamingProgress.total} sections complete
-                  </CardTitle>
-                  <div className="w-full bg-muted rounded-full h-2 mt-2">
-                    <div
-                      className="bg-primary h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${(streamingProgress.current / streamingProgress.total) * 100}%` }}
-                    />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                    {sectionLabels.map(({ key, label }) => {
-                      const done = !!streamingSections[key];
-                      return (
-                        <div key={key} className="flex items-center gap-2 py-1">
-                          {done ? (
-                            <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
-                          ) : (
-                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
-                          )}
-                          <span className={cn("text-sm", done ? "text-foreground" : "text-muted-foreground")}>
-                            {label}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })()}
+          {/* Old progress bar removed — replaced by new progress tracker above */}
 
           {/* Overview Section */}
           {(() => {
             const data = isStreaming ? streamingSections["overview"] : mockBRD?.content?.overview;
             const overviewText = isStreaming ? (data?.overview || data) : data;
-            if (isStreaming && !data) return <Card><CardContent className="py-6"><div className="space-y-2"><div className="h-3 bg-muted/50 rounded animate-pulse w-3/4" /><div className="h-3 bg-muted/50 rounded animate-pulse w-full" /></div></CardContent></Card>;
             if (!overviewText) return null;
             return (
-              <Card>
+              <Card className={isStreaming ? "brd-section-animate" : ""}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Target className="h-5 w-5 text-primary" />
@@ -813,10 +828,9 @@ export default function BRDPage() {
           {(() => {
             const data = isStreaming ? streamingSections["objectives"] : mockBRD?.content;
             const objectives = isStreaming ? (data?.objectives || []) : (data?.objectives || []);
-            if (isStreaming && !streamingSections["objectives"]) return <Card><CardContent className="py-6"><div className="space-y-2"><div className="h-3 bg-muted/50 rounded animate-pulse w-3/4" /><div className="h-3 bg-muted/50 rounded animate-pulse w-full" /><div className="h-3 bg-muted/50 rounded animate-pulse w-5/6" /></div></CardContent></Card>;
             if (objectives.length === 0) return null;
             return (
-              <Card>
+              <Card className={isStreaming ? "brd-section-animate" : ""}>
                 <CardHeader>
                   <CardTitle>Objectives</CardTitle>
                 </CardHeader>
@@ -838,10 +852,9 @@ export default function BRDPage() {
           {(() => {
             const data = isStreaming ? streamingSections["scope"] : mockBRD?.content;
             const scope = isStreaming ? (data?.scope || null) : (data?.scope || null);
-            if (isStreaming && !streamingSections["scope"]) return <div className="grid md:grid-cols-2 gap-4"><Card><CardContent className="py-6"><div className="space-y-2"><div className="h-3 bg-muted/50 rounded animate-pulse w-3/4" /><div className="h-3 bg-muted/50 rounded animate-pulse w-full" /></div></CardContent></Card><Card><CardContent className="py-6"><div className="space-y-2"><div className="h-3 bg-muted/50 rounded animate-pulse w-3/4" /><div className="h-3 bg-muted/50 rounded animate-pulse w-full" /></div></CardContent></Card></div>;
             if (!scope) return null;
             return (
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className={cn("grid md:grid-cols-2 gap-4", isStreaming && "brd-section-animate")}>
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base text-success flex items-center gap-2">
@@ -886,10 +899,9 @@ export default function BRDPage() {
           {(() => {
             const data = isStreaming ? streamingSections["functionalRequirements"] : mockBRD?.content;
             const reqs = isStreaming ? (data?.functionalRequirements || []) : (data?.functionalRequirements || []);
-            if (isStreaming && !streamingSections["functionalRequirements"]) return <Card><CardContent className="py-6"><div className="space-y-3"><div className="h-10 bg-muted/50 rounded animate-pulse w-full" /><div className="h-10 bg-muted/50 rounded animate-pulse w-full" /><div className="h-10 bg-muted/50 rounded animate-pulse w-full" /></div></CardContent></Card>;
             if (reqs.length === 0) return null;
             return (
-              <Card>
+              <Card className={isStreaming ? "brd-section-animate" : ""}>
                 <CardHeader>
                   <CardTitle>Functional Requirements</CardTitle>
                 </CardHeader>
@@ -938,10 +950,9 @@ export default function BRDPage() {
           {(() => {
             const data = isStreaming ? streamingSections["nonFunctionalRequirements"] : mockBRD?.content;
             const reqs = isStreaming ? (data?.nonFunctionalRequirements || []) : (data?.nonFunctionalRequirements || []);
-            if (isStreaming && !streamingSections["nonFunctionalRequirements"]) return <Card><CardContent className="py-6"><div className="space-y-2"><div className="h-8 bg-muted/50 rounded animate-pulse w-full" /><div className="h-8 bg-muted/50 rounded animate-pulse w-full" /><div className="h-8 bg-muted/50 rounded animate-pulse w-full" /></div></CardContent></Card>;
             if (reqs.length === 0) return null;
             return (
-              <Card>
+              <Card className={isStreaming ? "brd-section-animate" : ""}>
                 <CardHeader>
                   <CardTitle>Non-Functional Requirements</CardTitle>
                 </CardHeader>
@@ -968,10 +979,9 @@ export default function BRDPage() {
           {(() => {
             const data = isStreaming ? streamingSections["technical"] : mockBRD?.content;
             const techItems = isStreaming ? (data?.technicalConsiderations || []) : (data?.technicalConsiderations || []);
-            if (isStreaming && !streamingSections["technical"]) return <Card><CardContent className="py-6"><div className="space-y-2"><div className="h-3 bg-muted/50 rounded animate-pulse w-full" /><div className="h-3 bg-muted/50 rounded animate-pulse w-5/6" /><div className="h-3 bg-muted/50 rounded animate-pulse w-3/4" /></div></CardContent></Card>;
             if (techItems.length === 0) return null;
             return (
-              <Card>
+              <Card className={isStreaming ? "brd-section-animate" : ""}>
                 <CardHeader>
                   <CardTitle>Technical Considerations</CardTitle>
                 </CardHeader>
@@ -994,10 +1004,9 @@ export default function BRDPage() {
             const data = isStreaming ? streamingSections["technical"] : mockBRD?.content;
             const deps = data?.dependencies || [];
             const assumptions = data?.assumptions || [];
-            if (isStreaming && !streamingSections["technical"]) return null;
             if (deps.length === 0 && assumptions.length === 0) return null;
             return (
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className={cn("grid md:grid-cols-2 gap-4", isStreaming && "brd-section-animate")}>
                 {deps.length > 0 && (
                   <Card>
                     <CardHeader>
@@ -1040,10 +1049,9 @@ export default function BRDPage() {
           {(() => {
             const data = isStreaming ? streamingSections["risks"] : mockBRD?.content;
             const risks = isStreaming ? (data?.risks || []) : (data?.risks || []);
-            if (isStreaming && !streamingSections["risks"]) return <Card><CardContent className="py-6"><div className="space-y-2"><div className="h-3 bg-muted/50 rounded animate-pulse w-full" /><div className="h-3 bg-muted/50 rounded animate-pulse w-5/6" /></div></CardContent></Card>;
             if (risks.length === 0) return null;
             return (
-              <Card>
+              <Card className={isStreaming ? "brd-section-animate" : ""}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <AlertTriangle className="h-5 w-5 text-warning" />

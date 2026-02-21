@@ -661,3 +661,41 @@
     @apply my-2 text-sm text-foreground/80;
   }
 }
+
+@keyframes brd-section-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.brd-section-animate {
+  animation: brd-section-enter 0.4s ease-out forwards;
+}
+
+@keyframes shimmer-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(200%);
+  }
+}
+
+.shimmer-bar {
+  position: relative;
+  overflow: hidden;
+  border-radius: 9999px;
+}
+
+.shimmer-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, hsl(var(--primary) / 0.15), transparent);
+  animation: shimmer-slide 1.5s ease-in-out infinite;
+}
