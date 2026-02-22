@@ -132,8 +132,9 @@ async def update_prompt(http_request: Request, prompt_id: str, body: dict = Body
         content = body.get("content")
         description = body.get("description")
         is_active = body.get("isActive")
+        prompt_type = body.get("promptType")
 
-        if content is None and description is None and is_active is None:
+        if content is None and description is None and is_active is None and prompt_type is None:
             return {"success": False, "error": "No fields to update"}
 
         conn = get_postgres_connection()
@@ -156,7 +157,7 @@ async def update_prompt(http_request: Request, prompt_id: str, body: dict = Body
                 """, (
                     new_id, existing["prompt_key"], existing["category"],
                     content, description or existing.get("description"),
-                    existing["prompt_type"], new_version,
+                    prompt_type or existing["prompt_type"], new_version,
                 ))
                 conn.commit()
 
@@ -174,6 +175,9 @@ async def update_prompt(http_request: Request, prompt_id: str, body: dict = Body
             if description is not None:
                 updates.append("description = %s")
                 params.append(description)
+            if prompt_type is not None:
+                updates.append("prompt_type = %s")
+                params.append(prompt_type)
             if is_active is not None:
                 updates.append("is_active = %s")
                 params.append(is_active)
