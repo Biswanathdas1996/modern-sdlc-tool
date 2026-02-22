@@ -11,7 +11,7 @@ from services import ai_service
 from api.v1.auth import get_current_user
 from services.jira_service import jira_service
 from services.knowledge_base_service import get_kb_service
-from services.ragas_evaluation_service import run_ragas_evaluation
+from evaluation.ragas_service import run_ragas_evaluation
 from services.session_restore_service import (
     restore_feature_request, restore_brd, restore_analysis,
     restore_documentation, restore_database_schema,

@@ -32,7 +32,6 @@ from api.v1 import (
     database_schema,
     requirements,
     confluence,
-    ragas,
     sessions as sessions_router,
     user_projects as user_projects_router,
 )
@@ -73,7 +72,8 @@ app.include_router(requirements.router, prefix="/api")      # BRD, test cases, u
 app.include_router(confluence.router, prefix="/api")        # Confluence publishing
 app.include_router(sessions_router.router, prefix="/api")   # Workflow sessions & artifacts
 app.include_router(user_projects_router.router, prefix="/api")  # User-project membership
-app.include_router(ragas.router, prefix="/api")                    # RAGAS evaluation metrics
+from evaluation import ragas_router
+app.include_router(ragas_router, prefix="/api")                    # RAGAS evaluation metrics
 
 from api.v1 import prompts as prompts_router
 app.include_router(prompts_router.router, prefix="/api")           # Prompt management
