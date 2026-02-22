@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   FileText, 
@@ -13,18 +13,38 @@ import {
   Cpu,
   FileSearch,
   Image,
-  Eye
+  Eye,
+  MessageSquare,
+  Send,
+  Bot,
+  User,
+  ChevronDown,
+  ChevronUp,
+  FileIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useProject } from "@/hooks/useProject";
 import { EmptyState } from "@/components/EmptyState";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import type { KnowledgeDocument } from "@shared/schema";
+
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  sources?: { filename: string; score: number; preview: string }[];
+}
+
+interface ChatSource {
+  filename: string;
+  score: number;
+  preview: string;
+}
 
 interface UploadProgress {
   step: string;
@@ -119,6 +139,107 @@ export default function KnowledgeBasePage() {
       return false;
     },
   });
+
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const [chatOpen, setChatOpen] = useState(true);
+  const [expandedSources, setExpandedSources] = useState<number | null>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const readyDocs = documents?.filter(d => d.status === "ready") ?? [];
+  const chatEnabled = readyDocs.length > 0;
+
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [chatMessages, isChatLoading]);
+
+  useEffect(() => {
+    return () => { abortControllerRef.current?.abort(); };
+  }, []);
+
+  const parseSSELine = (line: string, state: { assistantContent: string; sources: ChatSource[] }) => {
+    const trimmed = line.replace(/\r$/, "");
+    if (!trimmed.startsWith("data: ")) return;
+    try {
+      const data = JSON.parse(trimmed.slice(6));
+      if (data.type === "sources") {
+        state.sources = data.sources || [];
+      } else if (data.type === "chunk" || data.type === "error") {
+        state.assistantContent += data.content;
+        const content = state.assistantContent;
+        const sources = state.sources;
+        setChatMessages(prev => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last?.role === "assistant") {
+            updated[updated.length - 1] = { ...last, content, sources };
+          } else {
+            updated.push({ role: "assistant", content, sources });
+          }
+          return updated;
+        });
+      }
+    } catch {}
+  };
+
+  const sendChatMessage = useCallback(async () => {
+    const question = chatInput.trim();
+    if (!question || !currentProjectId || isChatLoading || !chatEnabled) return;
+
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    setChatInput("");
+    setChatMessages(prev => [...prev, { role: "user", content: question }]);
+    setIsChatLoading(true);
+
+    try {
+      const response = await fetch("/api/knowledge-base/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, project_id: currentProjectId }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        let msg = "Chat request failed";
+        try { const d = await response.json(); msg = d.detail || msg; } catch {}
+        throw new Error(msg);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response stream");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      const state = { assistantContent: "", sources: [] as ChatSource[] };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) parseSSELine(line, state);
+      }
+
+      if (buffer.trim()) parseSSELine(buffer, state);
+
+      if (!state.assistantContent) {
+        setChatMessages(prev => [...prev, { role: "assistant", content: "No response received.", sources: state.sources }]);
+      }
+    } catch (error: any) {
+      if (error.name === "AbortError") return;
+      setChatMessages(prev => [...prev, { role: "assistant", content: `Error: ${error.message}` }]);
+    } finally {
+      setIsChatLoading(false);
+    }
+  }, [chatInput, currentProjectId, isChatLoading, chatEnabled]);
 
   const uploadWithProgress = useCallback(async (file: File) => {
     setIsUploading(true);
@@ -495,6 +616,150 @@ export default function KnowledgeBasePage() {
                 </ScrollArea>
               )}
             </CardContent>
+          </Card>
+
+          <Card data-testid="card-rag-chat">
+            <CardHeader className="pb-3">
+              <button
+                type="button"
+                className="flex items-center justify-between w-full text-left"
+                onClick={() => setChatOpen(prev => !prev)}
+                data-testid="button-toggle-chat"
+              >
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-lg">Test RAG Chat</CardTitle>
+                </div>
+                <div className="flex items-center gap-2">
+                  {chatMessages.length > 0 && (
+                    <Badge variant="outline" className="text-xs" data-testid="badge-chat-count">
+                      {chatMessages.filter(m => m.role === "user").length} question{chatMessages.filter(m => m.role === "user").length !== 1 ? "s" : ""}
+                    </Badge>
+                  )}
+                  {chatOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </div>
+              </button>
+              <CardDescription>
+                Ask questions about your uploaded documents to test the RAG pipeline
+              </CardDescription>
+            </CardHeader>
+            {chatOpen && (
+              <CardContent className="pt-0">
+                <div
+                  ref={chatScrollRef}
+                  className="h-[350px] overflow-y-auto border rounded-lg bg-background mb-3 p-3 space-y-4"
+                  data-testid="chat-messages"
+                >
+                  {chatMessages.length === 0 && !isChatLoading && (
+                    <div className="flex flex-col items-center justify-center h-full text-muted-foreground" data-testid="chat-empty-state">
+                      <Bot className="h-10 w-10 mb-3 opacity-40" />
+                      <p className="text-sm font-medium">Ask a question about your documents</p>
+                      <p className="text-xs mt-1 opacity-70">The system will search the knowledge base and generate an answer</p>
+                    </div>
+                  )}
+
+                  {chatMessages.map((msg, idx) => (
+                    <div key={idx} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`} data-testid={`chat-message-${idx}`}>
+                      {msg.role === "assistant" && (
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                          <Bot className="h-4 w-4 text-primary" />
+                        </div>
+                      )}
+                      <div className={`max-w-[80%] space-y-2 ${msg.role === "user" ? "order-first" : ""}`}>
+                        <div
+                          className={`rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
+                            msg.role === "user"
+                              ? "bg-primary text-primary-foreground ml-auto"
+                              : "bg-muted"
+                          }`}
+                          data-testid={`chat-content-${idx}`}
+                        >
+                          {msg.content}
+                        </div>
+
+                        {msg.role === "assistant" && msg.sources && msg.sources.length > 0 && (
+                          <div className="ml-0">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="flex items-center gap-1 text-xs text-muted-foreground h-auto px-1 py-0.5"
+                              onClick={() => setExpandedSources(expandedSources === idx ? null : idx)}
+                              data-testid={`button-sources-${idx}`}
+                            >
+                              <FileIcon className="h-3 w-3" />
+                              {msg.sources.length} source{msg.sources.length !== 1 ? "s" : ""} used
+                              {expandedSources === idx ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                            </Button>
+                            {expandedSources === idx && (
+                              <div className="mt-1 space-y-1" data-testid={`sources-list-${idx}`}>
+                                {msg.sources.map((src, si) => (
+                                  <div key={si} className="text-xs border rounded p-2 bg-muted/50" data-testid={`source-item-${idx}-${si}`}>
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                      <span className="font-medium truncate">{src.filename}</span>
+                                      <Badge variant="outline" className="text-[10px] px-1 py-0 shrink-0">
+                                        {(src.score * 100).toFixed(0)}%
+                                      </Badge>
+                                    </div>
+                                    <p className="text-muted-foreground line-clamp-2">{src.preview}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {msg.role === "user" && (
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
+                          <User className="h-4 w-4" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {isChatLoading && chatMessages[chatMessages.length - 1]?.role !== "assistant" && (
+                    <div className="flex gap-3" data-testid="chat-loading">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                        <Bot className="h-4 w-4 text-primary" />
+                      </div>
+                      <div className="bg-muted rounded-lg px-3 py-2 text-sm">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <Textarea
+                    placeholder="Ask a question about your documents..."
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        sendChatMessage();
+                      }
+                    }}
+                    className="min-h-[44px] max-h-[120px] resize-none"
+                    disabled={isChatLoading || !chatEnabled}
+                    data-testid="input-chat"
+                  />
+                  <Button
+                    onClick={sendChatMessage}
+                    disabled={isChatLoading || !chatInput.trim() || !chatEnabled}
+                    size="icon"
+                    data-testid="button-send-chat"
+                  >
+                    {isChatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  </Button>
+                </div>
+                {!chatEnabled && (
+                  <p className="text-xs text-muted-foreground mt-2" data-testid="text-chat-no-docs">
+                    {documents?.length ? "Documents are still processing — chat will be available once indexing is complete" : "Upload documents first to start chatting with the knowledge base"}
+                  </p>
+                )}
+              </CardContent>
+            )}
           </Card>
 
           <Card className="bg-muted/30">

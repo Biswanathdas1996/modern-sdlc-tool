@@ -1,6 +1,7 @@
 """Knowledge base API router."""
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from io import BytesIO
 import json
@@ -14,6 +15,7 @@ from utils.exceptions import bad_request, internal_error
 from utils.response import success_response
 from utils.doc_parsing import parse_document, ParsedContent
 from utils.image_captioning import caption_document_images
+from utils.pwc_llm import call_pwc_genai_stream
 
 router = APIRouter(prefix="/knowledge-base", tags=["knowledge-base"])
 
@@ -404,3 +406,74 @@ async def search_knowledge(request: KnowledgeSearchRequest):
     except Exception as e:
         log_error("Error searching knowledge base", "api", e)
         raise internal_error("Failed to search knowledge base")
+
+
+class KBChatRequest(BaseModel):
+    question: str = Field(..., min_length=1, max_length=2000)
+    project_id: str = Field(...)
+
+
+@router.post("/chat")
+async def chat_with_knowledge_base(request: KBChatRequest):
+    """RAG chat: search KB for relevant chunks, then stream an LLM answer."""
+    if not request.project_id:
+        raise bad_request("project_id is required")
+    if not request.question.strip():
+        raise bad_request("question is required")
+
+    kb_service = get_kb_service()
+    chunks = kb_service.search_knowledge_base(
+        request.project_id, request.question, limit=5
+    )
+
+    if not chunks:
+        async def no_context_stream():
+            yield f"data: {json.dumps({'type': 'sources', 'sources': []})}\n\n"
+            yield f"data: {json.dumps({'type': 'chunk', 'content': 'No relevant documents found in the knowledge base. Please upload documents first.'})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        return StreamingResponse(no_context_stream(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"})
+
+    context_parts = []
+    sources = []
+    for i, c in enumerate(chunks, 1):
+        context_parts.append(f"[Source {i} — {c.get('filename', 'unknown')} (score: {c.get('score', 0):.2f})]\n{c.get('content', '')}")
+        sources.append({
+            "filename": c.get("filename", "unknown"),
+            "score": round(c.get("score", 0), 3),
+            "preview": (c.get("content", ""))[:200],
+        })
+
+    context_block = "\n\n---\n\n".join(context_parts)
+
+    prompt = (
+        "You are a helpful assistant that answers questions based strictly on the provided knowledge base context.\n"
+        "If the context does not contain enough information to answer, say so clearly.\n"
+        "Cite the source numbers [Source N] when referencing specific information.\n\n"
+        f"## Knowledge Base Context\n\n{context_block}\n\n"
+        f"## User Question\n\n{request.question}\n\n"
+        "## Answer\n"
+    )
+
+    log_info(f"KB chat: question=\"{request.question[:80]}\" — {len(chunks)} chunks retrieved", "api")
+
+    async def event_stream():
+        yield f"data: {json.dumps({'type': 'sources', 'sources': sources})}\n\n"
+
+        try:
+            async for text_chunk in call_pwc_genai_stream(
+                prompt, task_name="kb_chat", user_input=request.question
+            ):
+                if text_chunk:
+                    yield f"data: {json.dumps({'type': 'chunk', 'content': text_chunk})}\n\n"
+        except Exception as e:
+            log_error("KB chat LLM stream error", "api", e)
+            yield f"data: {json.dumps({'type': 'error', 'content': 'Failed to generate response. Please try again.'})}\n\n"
+
+        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )

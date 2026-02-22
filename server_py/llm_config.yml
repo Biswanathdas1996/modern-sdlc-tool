@@ -256,6 +256,14 @@ ragas_evaluation:
   max_tokens: 2048
 
 # ---------------------------------------------------------------------------
+# Knowledge Base - RAG Chat
+# ---------------------------------------------------------------------------
+kb_chat:
+  model: vertex_ai.gemini-2.5-flash-image         # fast — answers questions using KB context
+  temperature: 0.3
+  max_tokens: 4096
+
+# ---------------------------------------------------------------------------
 # Knowledge Base - Image Captioning
 # ---------------------------------------------------------------------------
 kb_image_captioning:
