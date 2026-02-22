@@ -95,10 +95,11 @@ class PwcGenAIRagasLLM(InstructorBaseRagasLLM):
 
 
 class PwcGenAIRagasEmbedding(BaseRagasEmbedding):
-    """RAGAS-compatible embedding wrapper for PwC GenAI API.
+    """RAGAS-compatible embedding wrapper using local fastembed model.
 
-    Routes embedding calls through the existing call_pwc_embedding_async/sync
-    utilities. Required by AnswerRelevancy metric.
+    Uses the same BAAI/bge-small-en-v1.5 model as the knowledge base
+    for consistent embedding dimensions (384-dim). Required by
+    AnswerRelevancy metric for semantic similarity comparison.
     """
 
     def __init__(self, task_name: str = "ragas_embedding"):
@@ -106,21 +107,20 @@ class PwcGenAIRagasEmbedding(BaseRagasEmbedding):
         self.task_name = task_name
 
     def embed_text(self, text: str, **kwargs: Any) -> List[float]:
-        from utils.pwc_llm import call_pwc_embedding_sync
+        from utils.embeddings import generate_embedding
 
-        log_debug(f"[PwcRagasEmbed] sync embed text_len={len(text)}", "ragas")
-        results = call_pwc_embedding_sync(
-            texts=[text],
-            task_name=self.task_name,
-        )
-        return results[0]
+        log_debug(f"[RagasEmbed] sync embed text_len={len(text)}", "ragas")
+        result = generate_embedding(text)
+        if result is None:
+            raise ValueError(f"Embedding generation failed for text of length {len(text)}")
+        return result
 
     async def aembed_text(self, text: str, **kwargs: Any) -> List[float]:
-        from utils.pwc_llm import call_pwc_embedding_async
+        import asyncio
+        from utils.embeddings import generate_embedding
 
-        log_debug(f"[PwcRagasEmbed] async embed text_len={len(text)}", "ragas")
-        results = await call_pwc_embedding_async(
-            texts=[text],
-            task_name=self.task_name,
-        )
-        return results[0]
+        log_debug(f"[RagasEmbed] async embed text_len={len(text)}", "ragas")
+        result = await asyncio.get_event_loop().run_in_executor(None, generate_embedding, text)
+        if result is None:
+            raise ValueError(f"Embedding generation failed for text of length {len(text)}")
+        return result
