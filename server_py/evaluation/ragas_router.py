@@ -181,6 +181,34 @@ async def get_evaluation_detail(
         raise internal_error("Failed to fetch evaluation detail")
 
 
+@router.delete("/ragas/evaluations/{evaluation_id}")
+async def delete_evaluation(
+    http_request: Request,
+    evaluation_id: str,
+):
+    try:
+        user = get_current_user(http_request)
+        if not user:
+            raise internal_error("Authentication required")
+
+        conn = get_postgres_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM rag_evaluations WHERE id = %s", (evaluation_id,))
+            deleted = cur.rowcount
+            conn.commit()
+            if deleted == 0:
+                raise internal_error("Evaluation not found")
+            log_info(f"Deleted RAGAS evaluation {evaluation_id}", "ragas")
+            return success_response({"deleted": True, "id": evaluation_id})
+        finally:
+            conn.close()
+
+    except Exception as e:
+        log_error(f"Error deleting RAGAS evaluation {evaluation_id}", "ragas", e)
+        raise internal_error("Failed to delete evaluation")
+
+
 def _row_to_dict(row) -> dict:
     if not row:
         return {}

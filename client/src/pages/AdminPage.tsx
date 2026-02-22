@@ -189,6 +189,22 @@ function RagMetricsTab({ projects }: { projects: any[] }) {
     refetchInterval: 15000,
   });
 
+  const { toast } = useToast();
+
+  const deleteEvalMutation = useMutation({
+    mutationFn: async (evalId: string) => {
+      await apiRequest("DELETE", `/api/ragas/evaluations/${evalId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [evalsUrl] });
+      queryClient.invalidateQueries({ queryKey: [statsUrl] });
+      toast({ title: "Evaluation deleted" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete evaluation", variant: "destructive" });
+    },
+  });
+
   const stats = statsQuery.data?.data;
   const evaluations = evalsQuery.data?.data || [];
 
@@ -412,6 +428,18 @@ function RagMetricsTab({ projects }: { projects: any[] }) {
                           {Math.round(ev.overallScore * 100)}%
                         </div>
                       )}
+                      <button
+                        className="p-1 rounded hover:bg-destructive/10 transition-colors"
+                        data-testid={`button-delete-eval-${ev.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm("Delete this evaluation record?")) {
+                            deleteEvalMutation.mutate(ev.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </button>
                       {expandedRow === ev.id ? (
                         <ChevronUp className="h-4 w-4 text-muted-foreground" />
                       ) : (
