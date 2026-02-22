@@ -158,6 +158,9 @@ export default function PromptManagementTab() {
   const categoryLabel = (cat: string) =>
     cat.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
+  const formatTitle = (key: string) =>
+    key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
   const getTypeConfig = (type: string) =>
     TYPE_CONFIG[type] || TYPE_CONFIG.template;
 
@@ -300,12 +303,15 @@ export default function PromptManagementTab() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-semibold truncate" data-testid={`prompt-key-${prompt.id}`}>
-                            {prompt.promptKey}
+                            {formatTitle(prompt.promptKey)}
                           </p>
                           <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 font-mono">
                             v{prompt.version}
                           </Badge>
                         </div>
+                        <p className="text-xs text-muted-foreground/60 font-mono mt-0.5">
+                          {prompt.promptKey}
+                        </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
                           {prompt.description || (
                             <span className="italic text-muted-foreground/50">No description</span>
