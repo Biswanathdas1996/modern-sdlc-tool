@@ -89,6 +89,7 @@ function Router() {
       <Route path="/admin/projects">{() => <AdminRoute initialTab="projects" />}</Route>
       <Route path="/admin/users">{() => <AdminRoute initialTab="users" />}</Route>
       <Route path="/admin/rag-metrics">{() => <AdminRoute initialTab="rag-metrics" />}</Route>
+      <Route path="/admin/prompts">{() => <AdminRoute initialTab="prompts" />}</Route>
       <Route path="/admin/settings">{() => <AdminRoute initialTab="settings" />}</Route>
       <Route path="/admin">{() => <Redirect to="/admin/projects" />}</Route>
       <Route component={NotFound} />
