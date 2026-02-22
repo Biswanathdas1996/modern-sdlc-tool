@@ -110,13 +110,14 @@ class PWCLLMConfig:
                 "PWC_GENAI_API_KEY or GEMINI_API_KEY in your .env file."
             )
 
-    def get_endpoint(self, model_type: ModelType) -> str:
+    def get_endpoint(self, model_type: ModelType, has_images: bool = False) -> str:
         """Return the endpoint URL, adjusting for model type if needed.
 
         The PwC GenAI shared-service exposes different paths per capability:
-          /completions   – text & multimodal completions (default)
-          /embeddings    – embedding vectors
-          /transcriptions – audio-to-text (whisper)
+          /completions       – text completions (prompt-based)
+          /chat/completions  – chat completions with messages (used for multimodal)
+          /embeddings        – embedding vectors
+          /transcriptions    – audio-to-text (whisper)
 
         If the env-var already contains a specific path we respect it;
         otherwise we swap the tail segment.
@@ -133,6 +134,9 @@ class PWCLLMConfig:
                 return base.rsplit("/completions", 1)[0] + "/transcriptions"
             if not base.endswith("/transcriptions"):
                 return base + "/transcriptions"
+        elif has_images and model_type == ModelType.MULTIMODAL:
+            if base.endswith("/completions"):
+                return base.rsplit("/completions", 1)[0] + "/chat/completions"
 
         return base
 
@@ -151,6 +155,19 @@ def _resolve_task_config(task_name: Optional[str] = None):
         return None
 
 
+def _detect_mime_type(img_bytes: bytes) -> str:
+    """Detect image MIME type from magic bytes."""
+    if img_bytes[:3] == b'\xff\xd8\xff':
+        return "image/jpeg"
+    if img_bytes[:8] == b'\x89PNG\r\n\x1a\n':
+        return "image/png"
+    if img_bytes[:4] == b'GIF8':
+        return "image/gif"
+    if img_bytes[:4] == b'RIFF' and img_bytes[8:12] == b'WEBP':
+        return "image/webp"
+    return "image/png"
+
+
 def _build_request_body(
     prompt: str,
     temperature: float = 0.2,
@@ -160,35 +177,41 @@ def _build_request_body(
 ) -> Dict[str, Any]:
     """Build the request body for PwC GenAI API.
 
-    For multimodal models, if `images` is provided the prompt is sent as a
-    structured content array with text and inline image parts.
+    For multimodal models, if `images` is provided, uses the OpenAI-compatible
+    `messages` format with content parts (text + inline image_url) so litellm
+    can properly route the multimodal request.
     """
     resolved_model = model or _config.default_model
     model_type = detect_model_type(resolved_model)
 
+    is_anthropic = "anthropic" in resolved_model.lower()
+
     if images and model_type == ModelType.MULTIMODAL:
         content_parts: List[Dict[str, Any]] = [{"type": "text", "text": prompt}]
         for img_bytes in images:
+            mime = _detect_mime_type(img_bytes)
             b64 = base64.b64encode(img_bytes).decode("utf-8")
             content_parts.append({
                 "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{b64}"},
+                "image_url": {"url": f"data:{mime};base64,{b64}"},
             })
-        prompt_value: Any = content_parts
+        body: Dict[str, Any] = {
+            "model": resolved_model,
+            "messages": [{"role": "user", "content": content_parts}],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": False,
+        }
     else:
-        prompt_value = prompt
-
-    is_anthropic = "anthropic" in resolved_model.lower()
-
-    body: Dict[str, Any] = {
-        "model": resolved_model,
-        "prompt": prompt_value,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-        "stream": False,
-        "stream_options": None,
-        "stop": None,
-    }
+        body = {
+            "model": resolved_model,
+            "prompt": prompt,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": False,
+            "stream_options": None,
+            "stop": None,
+        }
 
     if not is_anthropic:
         body["top_p"] = 1
@@ -370,7 +393,7 @@ async def call_pwc_genai_async(
 
     request_body = _build_request_body(prompt, temperature, max_tokens, model, images=images)
     headers = _build_headers()
-    endpoint = _config.get_endpoint(model_type)
+    endpoint = _config.get_endpoint(model_type, has_images=bool(images))
     timeout_value = timeout or _config.default_timeout
 
     accumulated_text = ""
@@ -662,7 +685,7 @@ def call_pwc_genai_sync(
 
     request_body = _build_request_body(prompt, temperature, max_tokens, model, images=images)
     headers = _build_headers()
-    endpoint = _config.get_endpoint(model_type)
+    endpoint = _config.get_endpoint(model_type, has_images=bool(images))
     timeout_value = timeout or _config.default_timeout
 
     accumulated_text = ""
