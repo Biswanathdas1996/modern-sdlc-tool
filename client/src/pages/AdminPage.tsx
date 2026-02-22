@@ -50,9 +50,11 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
+import PromptManagementTab from "@/components/admin/PromptManagementTab";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Project } from "@shared/schema";
@@ -706,6 +708,10 @@ export default function AdminPage({ initialTab = "projects" }: { initialTab?: st
               <BarChart3 className="h-4 w-4 mr-2" />
               RAG Metrics
             </TabsTrigger>
+            <TabsTrigger value="prompts" data-testid="tab-prompts">
+              <FileText className="h-4 w-4 mr-2" />
+              Prompts
+            </TabsTrigger>
             <TabsTrigger value="settings" data-testid="tab-settings">
               <Settings className="h-4 w-4 mr-2" />
               Settings
@@ -1236,6 +1242,10 @@ export default function AdminPage({ initialTab = "projects" }: { initialTab?: st
 
           <TabsContent value="rag-metrics" className="space-y-4 mt-4">
             <RagMetricsTab projects={projects} />
+          </TabsContent>
+
+          <TabsContent value="prompts" className="space-y-4 mt-4">
+            <PromptManagementTab />
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-4 mt-4">

@@ -75,6 +75,9 @@ app.include_router(sessions_router.router, prefix="/api")   # Workflow sessions 
 app.include_router(user_projects_router.router, prefix="/api")  # User-project membership
 app.include_router(ragas.router, prefix="/api")                    # RAGAS evaluation metrics
 
+from api.v1 import prompts as prompts_router
+app.include_router(prompts_router.router, prefix="/api")           # Prompt management
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -96,6 +99,13 @@ async def startup_event():
         log_info("PostgreSQL initialized successfully", "app")
     except Exception as e:
         log_error("PostgreSQL initialization failed", "app", e)
+
+    # Seed prompts from YAML files into database
+    try:
+        from services.prompt_seeder import seed_prompts_from_yaml
+        seed_prompts_from_yaml()
+    except Exception as e:
+        log_error("Prompt seeding failed", "app", e)
     
     # Connect to MongoDB if configured
     if settings.mongodb_uri:

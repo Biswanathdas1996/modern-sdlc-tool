@@ -96,3 +96,11 @@ The application uses a GitHub-inspired color palette, JetBrains Mono for code bl
 - **API Endpoints**: `GET /api/ragas/evaluations` (list with pagination/project filter), `GET /api/ragas/stats` (aggregate scores, quality tiers, trends), `GET /api/ragas/evaluations/{id}` (detail)
 - **Admin Dashboard**: New "RAG Metrics" tab at `/admin/rag-metrics` with summary cards (overall score, faithfulness, answer relevancy, context quality), score bar visualizations, quality distribution tiers, and expandable evaluation detail table with per-metric reasoning
 - **LLM Config**: `ragas_evaluation` task entry in `server_py/llm_config.yml`
+
+### Prompt Management Migration to PostgreSQL (Feb 2026)
+- **Database**: `prompts` PostgreSQL table with columns: id, prompt_key, category, content, description, prompt_type, is_active, version, created_at, updated_at. Unique constraint on (prompt_key, category, version) for versioning support.
+- **Seeder**: `server_py/services/prompt_seeder.py` reads all 8 YAML files from `server_py/prompts/` and inserts into the `prompts` table at startup (idempotent — skips existing prompts). Called from `app.py` startup event after `init_postgres_database()`.
+- **PromptLoader**: Updated `server_py/prompts/__init__.py` to query PostgreSQL first (active prompt, latest version), with YAML file fallback. In-memory cache with 300s TTL. `invalidate_cache()` method for clearing after updates.
+- **API Endpoints**: `GET /api/prompts` (list with category/search/active filters, pagination), `GET /api/prompts/{id}` (detail with version history), `PUT /api/prompts/{id}` (admin-only, creates new version on content change), `GET /api/prompts-categories` (category summary with counts)
+- **Admin UI**: New "Prompts" tab in Admin page (`client/src/components/admin/PromptManagementTab.tsx`). Category sidebar filter, search, expandable prompt cards showing content with copy/edit actions. Edit dialog creates new versions (old version deactivated).
+- **Versioning**: Content updates create a new version (version + 1), deactivating the previous. PromptLoader always retrieves the latest active version. Version history viewable per prompt.

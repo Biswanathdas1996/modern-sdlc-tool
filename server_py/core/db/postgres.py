@@ -335,6 +335,25 @@ def init_postgres_database():
         cur.execute("CREATE INDEX IF NOT EXISTS idx_feature_requests_created_by ON feature_requests(created_by);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_brds_created_by ON brds(created_by);")
 
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS prompts (
+                id TEXT PRIMARY KEY,
+                prompt_key TEXT NOT NULL,
+                category TEXT NOT NULL,
+                content TEXT NOT NULL,
+                description TEXT,
+                prompt_type TEXT NOT NULL DEFAULT 'system',
+                is_active BOOLEAN NOT NULL DEFAULT true,
+                version INTEGER NOT NULL DEFAULT 1,
+                created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                UNIQUE(prompt_key, category, version)
+            );
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_prompts_key_cat ON prompts(prompt_key, category);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_prompts_category ON prompts(category);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_prompts_active ON prompts(is_active);")
+
         fk_constraints = [
             ("brds", "fk_brds_feature_request", "feature_request_id", "feature_requests", "id", "CASCADE"),
             ("test_cases", "fk_test_cases_brd", "brd_id", "brds", "id", "CASCADE"),
