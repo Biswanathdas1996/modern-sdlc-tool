@@ -463,7 +463,7 @@ export function AppSidebar({ completedSteps = [] }: AppSidebarProps) {
               </SidebarGroupContent>
             </SidebarGroup>
 
-            {visibleAgents.length > 0 && (
+            {isAdmin && visibleAgents.length > 0 && (
               <SidebarGroup>
                 <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-2">
                   AI Agents

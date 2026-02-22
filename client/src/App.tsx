@@ -82,10 +82,10 @@ function Router() {
       <Route path="/test-data">{() => <ProtectedRoute component={TestDataPage} featureKey="test_data" />}</Route>
       <Route path="/knowledge-base">{() => <ProtectedRoute component={KnowledgeBasePage} featureKey="knowledge_base" />}</Route>
       <Route path="/generation-history">{() => <ProtectedRoute component={GenerationHistoryPage} />}</Route>
-      <Route path="/agent-chat">{() => <ProtectedRoute component={AgentChatPage} featureKey="agent_jira" />}</Route>
-      <Route path="/agent-security">{() => <ProtectedRoute component={SecurityAgentPage} featureKey="agent_security" />}</Route>
-      <Route path="/agent-unit-test">{() => <ProtectedRoute component={UnitTestAgentPage} featureKey="agent_unit_test" />}</Route>
-      <Route path="/agent-web-test">{() => <ProtectedRoute component={WebTestAgentPage} featureKey="agent_web_test" />}</Route>
+      <Route path="/agent-chat">{() => isAdmin ? <ProtectedRoute component={AgentChatPage} featureKey="agent_jira" /> : <Redirect to="/" />}</Route>
+      <Route path="/agent-security">{() => isAdmin ? <ProtectedRoute component={SecurityAgentPage} featureKey="agent_security" /> : <Redirect to="/" />}</Route>
+      <Route path="/agent-unit-test">{() => isAdmin ? <ProtectedRoute component={UnitTestAgentPage} featureKey="agent_unit_test" /> : <Redirect to="/" />}</Route>
+      <Route path="/agent-web-test">{() => isAdmin ? <ProtectedRoute component={WebTestAgentPage} featureKey="agent_web_test" /> : <Redirect to="/" />}</Route>
       <Route path="/admin/projects">{() => <AdminRoute initialTab="projects" />}</Route>
       <Route path="/admin/users">{() => <AdminRoute initialTab="users" />}</Route>
       <Route path="/admin/rag-metrics">{() => <AdminRoute initialTab="rag-metrics" />}</Route>
