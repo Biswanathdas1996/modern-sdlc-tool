@@ -254,3 +254,11 @@ ragas_evaluation:
   model: vertex_ai.gemini-2.5-flash-image         # fast — runs 4 metric evaluations per BRD
   temperature: 0.1
   max_tokens: 2048
+
+# ---------------------------------------------------------------------------
+# Knowledge Base - Image Captioning
+# ---------------------------------------------------------------------------
+kb_image_captioning:
+  model: vertex_ai.gemini-2.5-flash-image         # multimodal — describes images extracted from documents
+  temperature: 0.2
+  max_tokens: 1024
