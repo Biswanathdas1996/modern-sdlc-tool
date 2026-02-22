@@ -137,12 +137,24 @@ def _build_answer_text(brd_content: Dict[str, Any]) -> str:
     return combined[:4000]
 
 
+async def _safe_metric_ascore(metric, metric_name: str, **kwargs) -> Dict[str, Any]:
+    try:
+        result = await metric.ascore(**kwargs)
+        score_val = float(result) if result is not None else None
+        if score_val is not None:
+            score_val = max(0.0, min(1.0, round(score_val, 3)))
+        log_info(f"RAGAS {metric_name}: {score_val}", "ragas")
+        return {"score": score_val, "reasoning": f"Evaluated by ragas {metric_name} metric"}
+    except Exception as e:
+        log_error(f"RAGAS {metric_name} evaluation failed: {e}", "ragas")
+        return {"score": None, "reasoning": f"Evaluation error: {str(e)}"}
+
+
 async def _evaluate_with_ragas(
     user_input: str,
     response: str,
     retrieved_contexts: List[str],
 ) -> Dict[str, Any]:
-    from ragas import SingleTurnSample
     from ragas.metrics.collections import (
         Faithfulness,
         ContextPrecisionWithoutReference,
@@ -155,36 +167,29 @@ async def _evaluate_with_ragas(
     llm = PwcGenAIRagasLLM(task_name="ragas_evaluation")
     embeddings = PwcGenAIRagasEmbedding(task_name="ragas_embedding")
 
-    sample = SingleTurnSample(
-        user_input=user_input,
-        response=response,
-        retrieved_contexts=retrieved_contexts,
-    )
-
     faithfulness_metric = Faithfulness(llm=llm)
     answer_relevancy_metric = AnswerRelevancy(llm=llm, embeddings=embeddings)
     context_precision_metric = ContextPrecisionWithoutReference(llm=llm)
     context_relevance_metric = ContextRelevance(llm=llm)
     groundedness_metric = ResponseGroundedness(llm=llm)
 
-    async def _safe_score(metric, metric_name: str, sample: SingleTurnSample):
-        try:
-            score = await metric.single_turn_ascore(sample)
-            score_val = float(score) if score is not None else None
-            if score_val is not None:
-                score_val = max(0.0, min(1.0, round(score_val, 3)))
-            log_info(f"RAGAS {metric_name}: {score_val}", "ragas")
-            return {"score": score_val, "reasoning": f"Evaluated by ragas {metric_name} metric"}
-        except Exception as e:
-            log_error(f"RAGAS {metric_name} evaluation failed: {e}", "ragas")
-            return {"score": None, "reasoning": f"Evaluation error: {str(e)}"}
-
-    faithfulness_result, answer_relevancy_result, context_precision_result, context_relevance_result, groundedness_result = await asyncio.gather(
-        _safe_score(faithfulness_metric, "faithfulness", sample),
-        _safe_score(answer_relevancy_metric, "answer_relevancy", sample),
-        _safe_score(context_precision_metric, "context_precision", sample),
-        _safe_score(context_relevance_metric, "context_relevance", sample),
-        _safe_score(groundedness_metric, "response_groundedness", sample),
+    (
+        faithfulness_result,
+        answer_relevancy_result,
+        context_precision_result,
+        context_relevance_result,
+        groundedness_result,
+    ) = await asyncio.gather(
+        _safe_metric_ascore(faithfulness_metric, "faithfulness",
+                            user_input=user_input, response=response, retrieved_contexts=retrieved_contexts),
+        _safe_metric_ascore(answer_relevancy_metric, "answer_relevancy",
+                            user_input=user_input, response=response),
+        _safe_metric_ascore(context_precision_metric, "context_precision",
+                            user_input=user_input, response=response, retrieved_contexts=retrieved_contexts),
+        _safe_metric_ascore(context_relevance_metric, "context_relevance",
+                            user_input=user_input, retrieved_contexts=retrieved_contexts),
+        _safe_metric_ascore(groundedness_metric, "response_groundedness",
+                            response=response, retrieved_contexts=retrieved_contexts),
         return_exceptions=False,
     )
 
@@ -203,6 +208,17 @@ async def _evaluate_with_ragas(
                          f"{groundedness_result['reasoning']}",
         },
     }
+
+
+async def _evaluate_answer_relevancy_only(user_input: str, response: str) -> Dict[str, Any]:
+    from ragas.metrics.collections import AnswerRelevancy
+    from evaluation.pwc_ragas_llm import PwcGenAIRagasLLM, PwcGenAIRagasEmbedding
+
+    llm = PwcGenAIRagasLLM(task_name="ragas_evaluation")
+    embeddings = PwcGenAIRagasEmbedding(task_name="ragas_embedding")
+    ar_metric = AnswerRelevancy(llm=llm, embeddings=embeddings)
+    return await _safe_metric_ascore(ar_metric, "answer_relevancy",
+                                     user_input=user_input, response=response)
 
 
 async def run_ragas_evaluation(
@@ -262,34 +278,7 @@ async def run_ragas_evaluation(
                 "context_precision": null_result,
                 "hallucination": null_result,
             }
-            try:
-                from ragas import SingleTurnSample
-                from ragas.metrics.collections import AnswerRelevancy
-                from evaluation.pwc_ragas_llm import PwcGenAIRagasLLM, PwcGenAIRagasEmbedding
-
-                llm = PwcGenAIRagasLLM(task_name="ragas_evaluation")
-                embeddings = PwcGenAIRagasEmbedding(task_name="ragas_embedding")
-                ar_metric = AnswerRelevancy(llm=llm, embeddings=embeddings)
-                sample = SingleTurnSample(
-                    user_input=question,
-                    response=answer,
-                    retrieved_contexts=[],
-                )
-                score = await ar_metric.single_turn_ascore(sample)
-                score_val = float(score) if score is not None else None
-                if score_val is not None:
-                    score_val = max(0.0, min(1.0, round(score_val, 3)))
-                results["answer_relevancy"] = {
-                    "score": score_val,
-                    "reasoning": "Evaluated by ragas answer_relevancy metric (no context available)",
-                }
-                log_info(f"RAGAS answer_relevancy (no context): {score_val}", "ragas")
-            except Exception as e:
-                log_error(f"RAGAS answer_relevancy (no context) failed: {e}", "ragas")
-                results["answer_relevancy"] = {
-                    "score": None,
-                    "reasoning": f"Evaluation error: {str(e)}",
-                }
+            results["answer_relevancy"] = await _evaluate_answer_relevancy_only(question, answer)
 
         metrics = {k: v["score"] for k, v in results.items()}
         valid_scores = [v for v in metrics.values() if v is not None]
