@@ -137,16 +137,170 @@ def _build_answer_text(brd_content: Dict[str, Any]) -> str:
     return combined[:4000]
 
 
-async def _safe_metric_ascore(metric, metric_name: str, **kwargs) -> Dict[str, Any]:
+def _clamp_score(val) -> Optional[float]:
+    if val is None:
+        return None
     try:
-        result = await metric.ascore(**kwargs)
-        score_val = float(result) if result is not None else None
-        if score_val is not None:
-            score_val = max(0.0, min(1.0, round(score_val, 3)))
-        log_info(f"RAGAS {metric_name}: {score_val}", "ragas")
-        return {"score": score_val, "reasoning": f"Evaluated by ragas {metric_name} metric"}
+        f = float(val)
+        if f != f:  # NaN check
+            return None
+        return max(0.0, min(1.0, round(f, 3)))
+    except (TypeError, ValueError):
+        return None
+
+
+async def _eval_faithfulness(llm, user_input: str, response: str, retrieved_contexts: List[str]) -> Dict[str, Any]:
+    try:
+        from ragas.metrics.collections import Faithfulness
+        metric = Faithfulness(llm=llm)
+
+        statements = await metric._create_statements(user_input, response)
+        if not statements:
+            return {"score": None, "reasoning": "No atomic statements could be extracted from the response."}
+
+        context_str = "\n".join(retrieved_contexts)
+        verdicts = await metric._create_verdicts(statements, context_str)
+        score = _clamp_score(metric._compute_score(verdicts))
+
+        statement_details = []
+        for stmt in verdicts.statements:
+            statement_details.append({
+                "statement": stmt.statement[:300],
+                "verdict": "faithful" if stmt.verdict == 1 else "not faithful",
+                "reason": stmt.reason,
+            })
+
+        faithful_count = sum(1 for s in verdicts.statements if s.verdict == 1)
+        total = len(verdicts.statements)
+        summary = f"{faithful_count}/{total} statements are faithful to the retrieved context."
+
+        if statement_details:
+            unfaithful = [s for s in statement_details if s["verdict"] == "not faithful"]
+            if unfaithful:
+                summary += f" {len(unfaithful)} statement(s) not grounded in context: "
+                summary += "; ".join(f'"{s["statement"][:100]}..." — {s["reason"]}' for s in unfaithful[:5])
+
+        log_info(f"RAGAS faithfulness: {score} ({faithful_count}/{total} faithful)", "ragas")
+        return {"score": score, "reasoning": summary, "details": statement_details}
     except Exception as e:
-        log_error(f"RAGAS {metric_name} evaluation failed: {e}", "ragas")
+        log_error(f"RAGAS faithfulness evaluation failed: {e}", "ragas")
+        return {"score": None, "reasoning": f"Evaluation error: {str(e)}"}
+
+
+async def _eval_answer_relevancy(llm, embeddings, user_input: str, response: str) -> Dict[str, Any]:
+    try:
+        from ragas.metrics.collections import AnswerRelevancy
+        from ragas.metrics.collections.answer_relevancy.util import AnswerRelevanceInput, AnswerRelevanceOutput
+        import numpy as np
+
+        metric = AnswerRelevancy(llm=llm, embeddings=embeddings)
+        generated_questions = []
+        noncommittal_flags = []
+
+        for _ in range(metric.strictness):
+            input_data = AnswerRelevanceInput(response=response)
+            prompt_string = metric.prompt.to_string(input_data)
+            result = await metric.llm.agenerate(prompt_string, AnswerRelevanceOutput)
+            if result.question:
+                generated_questions.append(result.question)
+                noncommittal_flags.append(result.noncommittal)
+
+        if not generated_questions:
+            return {"score": 0.0, "reasoning": "No questions could be generated from the response — likely evasive or empty."}
+
+        all_noncommittal = np.all(noncommittal_flags)
+
+        question_vec = np.asarray(await metric.embeddings.aembed_text(user_input)).reshape(1, -1)
+        gen_question_vec = np.asarray(await metric.embeddings.aembed_texts(generated_questions)).reshape(len(generated_questions), -1)
+        norm = np.linalg.norm(gen_question_vec, axis=1) * np.linalg.norm(question_vec, axis=1)
+        norm = np.where(norm == 0, 1e-10, norm)
+        cosine_sim = np.dot(gen_question_vec, question_vec.T).reshape(-1) / norm
+        cosine_sim = np.nan_to_num(cosine_sim, nan=0.0)
+        raw_score = cosine_sim.mean() * int(not all_noncommittal)
+        score = _clamp_score(raw_score)
+
+        question_details = []
+        for i, q in enumerate(generated_questions):
+            question_details.append({
+                "generated_question": q,
+                "similarity": round(float(cosine_sim[i]), 3),
+                "noncommittal": bool(noncommittal_flags[i]),
+            })
+
+        avg_sim = round(float(cosine_sim.mean()), 3)
+        summary = f"Generated {len(generated_questions)} questions from the response. Average cosine similarity to original question: {avg_sim}."
+        if all_noncommittal:
+            summary += " Response was classified as noncommittal/evasive, score reduced to 0."
+
+        log_info(f"RAGAS answer_relevancy: {score} (avg_sim={avg_sim})", "ragas")
+        return {"score": score, "reasoning": summary, "details": question_details}
+    except Exception as e:
+        log_error(f"RAGAS answer_relevancy evaluation failed: {e}", "ragas")
+        return {"score": None, "reasoning": f"Evaluation error: {str(e)}"}
+
+
+async def _eval_context_precision(llm, user_input: str, response: str, retrieved_contexts: List[str]) -> Dict[str, Any]:
+    try:
+        from ragas.metrics.collections import ContextPrecisionWithoutReference
+        from ragas.metrics.collections.context_precision.util import ContextPrecisionInput, ContextPrecisionOutput
+        metric = ContextPrecisionWithoutReference(llm=llm)
+
+        verdicts = []
+        for context in retrieved_contexts:
+            input_data = ContextPrecisionInput(question=user_input, context=context, answer=response)
+            prompt_string = metric.prompt.to_string(input_data)
+            result = await metric.llm.agenerate(prompt_string, ContextPrecisionOutput)
+            verdicts.append(result.verdict)
+
+        score = _clamp_score(metric._calculate_average_precision(verdicts))
+
+        chunk_details = []
+        for i, v in enumerate(verdicts):
+            chunk_details.append({
+                "chunk_index": i + 1,
+                "relevant": bool(v),
+                "context_preview": retrieved_contexts[i][:150] + "..." if len(retrieved_contexts[i]) > 150 else retrieved_contexts[i],
+            })
+
+        relevant_count = sum(1 for v in verdicts if v)
+        summary = f"{relevant_count}/{len(verdicts)} retrieved chunks were judged relevant to answering the question. Average precision score: {score}."
+
+        log_info(f"RAGAS context_precision: {score} ({relevant_count}/{len(verdicts)} relevant)", "ragas")
+        return {"score": score, "reasoning": summary, "details": chunk_details}
+    except Exception as e:
+        log_error(f"RAGAS context_precision evaluation failed: {e}", "ragas")
+        return {"score": None, "reasoning": f"Evaluation error: {str(e)}"}
+
+
+async def _eval_context_relevance(llm, user_input: str, retrieved_contexts: List[str]) -> Dict[str, Any]:
+    try:
+        from ragas.metrics.collections import ContextRelevance
+        metric = ContextRelevance(llm=llm)
+        result = await metric.ascore(user_input=user_input, retrieved_contexts=retrieved_contexts)
+        score = _clamp_score(result)
+
+        summary = f"Context relevance evaluated using dual-judge scoring. Score: {score}. " \
+                  f"Measures how relevant the {len(retrieved_contexts)} retrieved context chunks are to the original question."
+        log_info(f"RAGAS context_relevance: {score}", "ragas")
+        return {"score": score, "reasoning": summary}
+    except Exception as e:
+        log_error(f"RAGAS context_relevance evaluation failed: {e}", "ragas")
+        return {"score": None, "reasoning": f"Evaluation error: {str(e)}"}
+
+
+async def _eval_groundedness(llm, response: str, retrieved_contexts: List[str]) -> Dict[str, Any]:
+    try:
+        from ragas.metrics.collections import ResponseGroundedness
+        metric = ResponseGroundedness(llm=llm)
+        result = await metric.ascore(response=response, retrieved_contexts=retrieved_contexts)
+        score = _clamp_score(result)
+
+        summary = f"Response groundedness evaluated using dual-judge scoring. Score: {score}. " \
+                  f"Measures how well the response is grounded in the {len(retrieved_contexts)} retrieved context chunks."
+        log_info(f"RAGAS groundedness: {score}", "ragas")
+        return {"score": score, "reasoning": summary}
+    except Exception as e:
+        log_error(f"RAGAS groundedness evaluation failed: {e}", "ragas")
         return {"score": None, "reasoning": f"Evaluation error: {str(e)}"}
 
 
@@ -155,23 +309,10 @@ async def _evaluate_with_ragas(
     response: str,
     retrieved_contexts: List[str],
 ) -> Dict[str, Any]:
-    from ragas.metrics.collections import (
-        Faithfulness,
-        ContextPrecisionWithoutReference,
-        AnswerRelevancy,
-        ContextRelevance,
-        ResponseGroundedness,
-    )
     from evaluation.pwc_ragas_llm import PwcGenAIRagasLLM, PwcGenAIRagasEmbedding
 
     llm = PwcGenAIRagasLLM(task_name="ragas_evaluation")
     embeddings = PwcGenAIRagasEmbedding(task_name="ragas_embedding")
-
-    faithfulness_metric = Faithfulness(llm=llm)
-    answer_relevancy_metric = AnswerRelevancy(llm=llm, embeddings=embeddings)
-    context_precision_metric = ContextPrecisionWithoutReference(llm=llm)
-    context_relevance_metric = ContextRelevance(llm=llm)
-    groundedness_metric = ResponseGroundedness(llm=llm)
 
     (
         faithfulness_result,
@@ -180,21 +321,31 @@ async def _evaluate_with_ragas(
         context_relevance_result,
         groundedness_result,
     ) = await asyncio.gather(
-        _safe_metric_ascore(faithfulness_metric, "faithfulness",
-                            user_input=user_input, response=response, retrieved_contexts=retrieved_contexts),
-        _safe_metric_ascore(answer_relevancy_metric, "answer_relevancy",
-                            user_input=user_input, response=response),
-        _safe_metric_ascore(context_precision_metric, "context_precision",
-                            user_input=user_input, response=response, retrieved_contexts=retrieved_contexts),
-        _safe_metric_ascore(context_relevance_metric, "context_relevance",
-                            user_input=user_input, retrieved_contexts=retrieved_contexts),
-        _safe_metric_ascore(groundedness_metric, "response_groundedness",
-                            response=response, retrieved_contexts=retrieved_contexts),
+        _eval_faithfulness(llm, user_input, response, retrieved_contexts),
+        _eval_answer_relevancy(llm, embeddings, user_input, response),
+        _eval_context_precision(llm, user_input, response, retrieved_contexts),
+        _eval_context_relevance(llm, user_input, retrieved_contexts),
+        _eval_groundedness(llm, response, retrieved_contexts),
         return_exceptions=False,
     )
 
     faithfulness_score = faithfulness_result["score"]
+    groundedness_score = groundedness_result["score"]
     hallucination_score = round(1.0 - faithfulness_score, 3) if faithfulness_score is not None else None
+
+    unfaithful_details = []
+    if faithfulness_result.get("details"):
+        unfaithful_details = [d for d in faithfulness_result["details"] if d["verdict"] == "not faithful"]
+
+    hallucination_reasoning = f"Derived from faithfulness (1 - {faithfulness_score}). "
+    hallucination_reasoning += f"Groundedness: {groundedness_score}. "
+    if unfaithful_details:
+        hallucination_reasoning += f"{len(unfaithful_details)} unfaithful statement(s) detected: "
+        hallucination_reasoning += "; ".join(
+            f'"{d["statement"][:100]}" — {d["reason"]}' for d in unfaithful_details[:5]
+        )
+    else:
+        hallucination_reasoning += "No fabricated claims detected in the response."
 
     return {
         "faithfulness": faithfulness_result,
@@ -203,22 +354,18 @@ async def _evaluate_with_ragas(
         "context_precision": context_precision_result,
         "hallucination": {
             "score": hallucination_score,
-            "reasoning": f"Derived from faithfulness (1 - {faithfulness_score}). "
-                         f"Groundedness check: {groundedness_result['score']}. "
-                         f"{groundedness_result['reasoning']}",
+            "reasoning": hallucination_reasoning,
+            "details": unfaithful_details if unfaithful_details else None,
         },
     }
 
 
 async def _evaluate_answer_relevancy_only(user_input: str, response: str) -> Dict[str, Any]:
-    from ragas.metrics.collections import AnswerRelevancy
     from evaluation.pwc_ragas_llm import PwcGenAIRagasLLM, PwcGenAIRagasEmbedding
 
     llm = PwcGenAIRagasLLM(task_name="ragas_evaluation")
     embeddings = PwcGenAIRagasEmbedding(task_name="ragas_embedding")
-    ar_metric = AnswerRelevancy(llm=llm, embeddings=embeddings)
-    return await _safe_metric_ascore(ar_metric, "answer_relevancy",
-                                     user_input=user_input, response=response)
+    return await _eval_answer_relevancy(llm, embeddings, user_input, response)
 
 
 async def run_ragas_evaluation(
