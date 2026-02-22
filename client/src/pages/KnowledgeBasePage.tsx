@@ -11,7 +11,9 @@ import {
   FileUp,
   Database,
   Cpu,
-  FileSearch
+  FileSearch,
+  Image,
+  Eye
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +33,12 @@ interface UploadProgress {
 
 const STEP_ICONS: Record<string, typeof Loader2> = {
   upload: FileUp,
+  parsing: FileSearch,
+  parsing_done: FileSearch,
+  captioning: Eye,
+  captioning_progress: Eye,
+  captioning_done: Eye,
+  captioning_warning: AlertCircle,
   document_created: Database,
   preparing: Database,
   chunking: FileSearch,
@@ -48,6 +56,12 @@ const STEP_ICONS: Record<string, typeof Loader2> = {
 
 const STEP_LABELS: Record<string, string> = {
   upload: "Uploading",
+  parsing: "Parsing Document",
+  parsing_done: "Document Parsed",
+  captioning: "Captioning Images",
+  captioning_progress: "Captioning Images",
+  captioning_done: "Images Captioned",
+  captioning_warning: "Captioning Warning",
   document_created: "Document Created",
   preparing: "Preparing Collection",
   chunking: "Chunking Document",
@@ -312,7 +326,7 @@ export default function KnowledgeBasePage() {
                 type="file"
                 className="hidden"
                 onChange={handleFileSelect}
-                accept=".txt,.md,.json,.csv,.pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                accept=".txt,.md,.json,.csv,.pdf,.docx,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
                 data-testid="input-file-upload"
               />
               {isUploading ? (
@@ -335,6 +349,7 @@ export default function KnowledgeBasePage() {
                       const StepIcon = STEP_ICONS[step.step] || Loader2;
                       const isComplete = step.step.endsWith("_done") || step.step === "done" || step.step === "complete";
                       const isError = step.step === "error";
+                      const isWarning = step.step.endsWith("_warning");
                       const isActive = idx === uploadSteps.length - 1 && !isComplete && !isError;
                       
                       return (
@@ -342,6 +357,7 @@ export default function KnowledgeBasePage() {
                           key={idx} 
                           className={`flex items-start gap-2 text-xs rounded-md px-3 py-1.5 ${
                             isError ? "text-destructive bg-destructive/10" : 
+                            isWarning ? "text-yellow-600 dark:text-yellow-400 bg-yellow-500/10" :
                             isComplete ? "text-green-600 dark:text-green-400 bg-green-500/10" : 
                             isActive ? "text-primary bg-primary/10" : 
                             "text-muted-foreground"
@@ -365,8 +381,11 @@ export default function KnowledgeBasePage() {
                   <p className="text-lg font-medium mb-1">
                     Drop files here or click to upload
                   </p>
-                  <p className="text-sm text-muted-foreground">
-                    Supports PDF, Word, TXT, MD, JSON, CSV files
+                  <p className="text-sm text-muted-foreground" data-testid="text-supported-formats">
+                    Supports PDF, Word, PowerPoint, TXT, MD, JSON, CSV files
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1" data-testid="text-image-processing-hint">
+                    Images in documents are automatically extracted and captioned by AI
                   </p>
                 </>
               )}
@@ -425,6 +444,15 @@ export default function KnowledgeBasePage() {
                               <>
                                 <span>•</span>
                                 <span>{doc.chunkCount} chunks</span>
+                              </>
+                            )}
+                            {doc.imageCount && doc.imageCount > 0 && (
+                              <>
+                                <span>•</span>
+                                <span className="flex items-center gap-0.5" data-testid={`text-image-count-${doc.id}`}>
+                                  <Image className="h-3 w-3" />
+                                  {doc.captionedImageCount || doc.imageCount} images
+                                </span>
                               </>
                             )}
                           </div>

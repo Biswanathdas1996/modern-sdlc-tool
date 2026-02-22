@@ -134,10 +134,18 @@ class KnowledgeBaseService:
         project_id: str, 
         filename: str, 
         content: str,
-        on_progress: Optional[callable] = None
+        on_progress: Optional[callable] = None,
+        image_count: int = 0,
+        captioned_image_count: int = 0,
     ) -> int:
         """Ingest a document with paragraph-based chunking, embedding generation,
-        and vector index creation/verification. Calls on_progress(step, detail) if provided."""
+        and vector index creation/verification.
+        
+        The `content` parameter should already include image captions merged into
+        the text stream (via ParsedContent.combined_text_with_captions) when
+        multimodal parsing is used.
+        
+        Calls on_progress(step, detail) if provided."""
         def report(step: str, detail: str = ""):
             if on_progress:
                 on_progress(step, detail)
@@ -159,7 +167,8 @@ class KnowledgeBaseService:
         total_chunks = len(chunks)
         avg_chars = sum(len(c) for c in chunks) // max(total_chunks, 1)
         log_info(f"Document '{filename}' split into {total_chunks} chunks (avg {avg_chars} chars)", "kb")
-        report("chunking_done", f"Created {total_chunks} chunks (avg {avg_chars} chars each)")
+        multimodal_note = f" (includes {captioned_image_count} image captions)" if captioned_image_count > 0 else ""
+        report("chunking_done", f"Created {total_chunks} chunks (avg {avg_chars} chars each){multimodal_note}")
         
         report("embedding", f"Generating vector embeddings for {total_chunks} chunks...")
         log_info(f"Generating embeddings for {total_chunks} chunks...", "kb")
@@ -173,6 +182,7 @@ class KnowledgeBaseService:
         
         for i, chunk in enumerate(chunks):
             try:
+                has_image_caption = "[Image on " in chunk
                 chunk_doc = {
                     "documentId": document_id,
                     "projectId": project_id,
@@ -183,6 +193,7 @@ class KnowledgeBaseService:
                         "filename": filename,
                         "section": f"Chunk {i + 1} of {total_chunks}",
                         "charCount": len(chunk),
+                        "hasImageCaption": has_image_caption,
                     },
                     "contentLower": chunk.lower(),
                 }
@@ -209,8 +220,9 @@ class KnowledgeBaseService:
         else:
             report("indexing_done", "Vector index setup encountered an issue; in-memory search will be used as fallback")
         
-        log_info(f"Ingested {inserted_count} chunks ({embedded_count} with embeddings) for '{filename}' into {chunks_name}", "kb")
-        report("complete", f"Successfully ingested '{filename}': {inserted_count} chunks with {embedded_count} embeddings, vector index {index_status}")
+        img_summary = f", {captioned_image_count} image captions" if captioned_image_count > 0 else ""
+        log_info(f"Ingested {inserted_count} chunks ({embedded_count} with embeddings{img_summary}) for '{filename}' into {chunks_name}", "kb")
+        report("complete", f"Successfully ingested '{filename}': {inserted_count} chunks with {embedded_count} embeddings{img_summary}, vector index {index_status}")
         return inserted_count
     
     def search_knowledge_base(

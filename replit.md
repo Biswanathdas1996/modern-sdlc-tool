@@ -32,7 +32,7 @@ The application uses a GitHub-inspired color palette, JetBrains Mono for code bl
 - **JIRA Integration**: Supports syncing user stories to JIRA, semantic search for related stories, and dynamic creation of Stories, Bugs, or Tasks.
 - **Confluence Integration**: Enables publishing generated BRDs to Confluence in Atlassian Document Format.
 - **BPMN Diagrams**: Automatically generates and renders BPMN business flow diagrams using Mermaid.js.
-- **Knowledge Base (RAG System)**: Integrates with MongoDB Atlas for a RAG system with per-project data isolation. Supports drag-and-drop document upload (TXT, MD, JSON, CSV), section-aware text chunking, and vector similarity search using fastembed (BAAI/bge-small-en-v1.5) with keyword fallback.
+- **Knowledge Base (RAG System)**: Integrates with MongoDB Atlas for a RAG system with per-project data isolation. Supports drag-and-drop document upload (PDF, Word, PowerPoint, TXT, MD, JSON, CSV) with multimodal processing. Images embedded in PDF/Word/PPT documents are automatically extracted (via PyMuPDF for PDF, python-docx for Word, python-pptx for PowerPoint) and captioned using Vision AI (vertex_ai.gemini-2.5-flash-image via PwC GenAI). Image captions are merged into the text stream before chunking, enabling semantic search over both text and visual content. Uses fastembed (BAAI/bge-small-en-v1.5, 384-dim) for vector embeddings. Key modules: `utils/doc_parsing.py` (multimodal parser), `utils/image_captioning.py` (vision LLM captioning), `services/knowledge_base_service.py` (ingestion), `api/v1/knowledge_base.py` (upload endpoint with SSE progress).
 - **External Database Schema Integration**: Connects to external PostgreSQL databases to fetch and store schema details for AI context.
 - **Session Management**: All session data is stored in PostgreSQL via `workflow_sessions` and `session_artifacts` tables.
 - **Project Management (Multi-Tenancy)**: Supports many-to-many user-project relationships, with access controls based on project assignment.
@@ -60,7 +60,7 @@ The application uses a GitHub-inspired color palette, JetBrains Mono for code bl
 - **Web Framework**: FastAPI, uvicorn, starlette.
 - **HTTP Client**: httpx.
 - **Validation**: pydantic.
-- **File Parsing**: PyPDF2, python-docx.
+- **File Parsing**: PyPDF2, python-docx, PyMuPDF (fitz), python-pptx.
 - **SSE**: sse-starlette.
 - **Database Connectors**: psycopg2-binary, pymongo.
 - **Utilities**: python-dotenv, aiofiles, python-multipart.

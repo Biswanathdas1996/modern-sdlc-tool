@@ -237,20 +237,20 @@ def parse_pptx(file_content: bytes) -> ParsedContent:
             slide_texts = []
 
             for shape in slide.shapes:
-                if shape.has_text_frame:
+                if getattr(shape, 'has_text_frame', False) and hasattr(shape, 'text_frame'):
                     for para in shape.text_frame.paragraphs:
                         text = para.text.strip()
                         if text:
                             slide_texts.append(text)
 
-                if shape.has_table:
+                if getattr(shape, 'has_table', False) and hasattr(shape, 'table'):
                     table = shape.table
                     for row in table.rows:
                         row_texts = [cell.text.strip() for cell in row.cells if cell.text.strip()]
                         if row_texts:
                             slide_texts.append(" | ".join(row_texts))
 
-                if shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
+                if shape.shape_type == MSO_SHAPE_TYPE.PICTURE and hasattr(shape, 'image'):
                     if len(result.images) >= MAX_IMAGES_PER_DOC:
                         continue
                     try:

@@ -12,6 +12,8 @@ from services.knowledge_base_service import get_kb_service
 from core.logging import log_info, log_error
 from utils.exceptions import bad_request, internal_error
 from utils.response import success_response
+from utils.doc_parsing import parse_document, ParsedContent
+from utils.image_captioning import caption_document_images
 
 router = APIRouter(prefix="/knowledge-base", tags=["knowledge-base"])
 
@@ -60,46 +62,18 @@ async def get_collection_info(project_id: str = Query(...)):
         raise internal_error("Failed to fetch collection info")
 
 
-def _parse_file_content(file_content: bytes, content_type: str) -> str:
-    """Parse file content based on content type."""
-    try:
-        if content_type in ["text/plain", "text/markdown", "text/csv"]:
-            return file_content.decode("utf-8", errors="ignore")
-        elif content_type == "application/json":
-            json_content = json.loads(file_content.decode("utf-8"))
-            return json.dumps(json_content, indent=2)
-        elif content_type == "application/pdf":
-            from PyPDF2 import PdfReader
-            reader = PdfReader(BytesIO(file_content))
-            return "\n".join([
-                page.extract_text() or "" 
-                for page in reader.pages
-            ])
-        elif content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-            from docx import Document
-            doc_obj = Document(BytesIO(file_content))
-            return "\n".join([para.text for para in doc_obj.paragraphs])
-        else:
-            return file_content.decode("utf-8", errors="ignore")
-    except Exception as parse_error:
-        log_error("Error parsing file", "api", parse_error)
-        return file_content.decode("utf-8", errors="ignore")
-
-
 @router.post("/upload", status_code=201)
 async def upload_knowledge_document(file: UploadFile = File(...), project_id: Optional[str] = Form(None)):
-    """Upload a document with SSE streaming progress updates."""
+    """Upload a document with multimodal processing and SSE streaming progress.
+    
+    Pipeline: Parse → Extract Images → Vision LLM Captioning → Chunk (text + captions) → Embed → Store
+    """
     if not file:
         raise bad_request("No file provided")
     if not project_id:
         raise bad_request("project_id is required")
     
     file_content = await file.read()
-    content = _parse_file_content(file_content, file.content_type or "text/plain")
-    
-    if not content or len(content.strip()) < 50:
-        raise bad_request("File content too short or could not be extracted")
-    
     filename = file.filename or "unknown"
     content_type = file.content_type or "text/plain"
     
@@ -112,8 +86,93 @@ async def upload_knowledge_document(file: UploadFile = File(...), project_id: Op
         def send_sse(data: dict) -> str:
             return f"data: {json.dumps(data)}\n\n"
         
-        yield send_sse({"step": "upload", "detail": f"File '{filename}' received, starting processing..."})
+        yield send_sse({"step": "upload", "detail": f"File '{filename}' received, starting multimodal processing..."})
         await asyncio.sleep(0)
+        
+        yield send_sse({"step": "parsing", "detail": f"Extracting text and images from '{filename}'..."})
+        await asyncio.sleep(0)
+        
+        loop = asyncio.get_event_loop()
+        parsed = await loop.run_in_executor(None, parse_document, file_content, content_type, filename)
+        
+        text_only = parsed.full_text
+        image_count = len(parsed.images)
+        text_block_count = len(parsed.text_blocks)
+        
+        parse_detail = f"Extracted {text_block_count} text blocks"
+        if image_count > 0:
+            parse_detail += f" and {image_count} images"
+        if parsed.metadata.get("page_count"):
+            parse_detail += f" from {parsed.metadata['page_count']} pages"
+        elif parsed.metadata.get("slide_count"):
+            parse_detail += f" from {parsed.metadata['slide_count']} slides"
+        
+        yield send_sse({"step": "parsing_done", "detail": parse_detail})
+        await asyncio.sleep(0)
+        
+        if not text_only or len(text_only.strip()) < 50:
+            if image_count == 0:
+                yield send_sse({"step": "error", "detail": "File content too short or could not be extracted"})
+                return
+        
+        captioned_count = 0
+        if image_count > 0:
+            yield send_sse({"step": "captioning", "detail": f"Captioning {image_count} images with Vision AI (gemini-2.5-flash)..."})
+            await asyncio.sleep(0)
+            
+            caption_done = asyncio.Event()
+            caption_error: List[Optional[str]] = [None]
+            
+            def sync_caption_progress(step: str, detail: str):
+                progress_queue.put({"step": step, "detail": detail})
+            
+            async def run_captioning():
+                nonlocal parsed
+                try:
+                    parsed = await caption_document_images(
+                        parsed,
+                        on_progress=sync_caption_progress,
+                        max_concurrent=3,
+                    )
+                except Exception as e:
+                    caption_error[0] = str(e)
+                    log_error("Error during image captioning", "api", e)
+                finally:
+                    caption_done.set()
+            
+            caption_task = asyncio.create_task(run_captioning())
+            
+            while not caption_done.is_set():
+                await asyncio.sleep(0.3)
+                while not progress_queue.empty():
+                    try:
+                        msg = progress_queue.get_nowait()
+                        yield send_sse(msg)
+                        await asyncio.sleep(0)
+                    except queue.Empty:
+                        break
+            
+            await caption_task
+            
+            while not progress_queue.empty():
+                try:
+                    msg = progress_queue.get_nowait()
+                    yield send_sse(msg)
+                    await asyncio.sleep(0)
+                except queue.Empty:
+                    break
+            
+            if caption_error[0]:
+                yield send_sse({"step": "captioning_warning", "detail": f"Image captioning partially failed: {caption_error[0][:100]}. Proceeding with text content..."})
+                await asyncio.sleep(0)
+            
+            captioned_count = sum(1 for img in parsed.images if img.caption)
+        
+        combined_content = parsed.combined_text_with_captions if captioned_count > 0 else text_only
+        
+        if not combined_content or len(combined_content.strip()) < 50:
+            yield send_sse({"step": "error", "detail": "Insufficient content extracted from document"})
+            return
         
         kb_service = get_kb_service()
         doc = kb_service.create_knowledge_document({
@@ -122,6 +181,8 @@ async def upload_knowledge_document(file: UploadFile = File(...), project_id: Op
             "originalName": filename,
             "contentType": content_type,
             "size": len(file_content),
+            "imageCount": image_count,
+            "captionedImageCount": captioned_count,
         })
         
         yield send_sse({"step": "document_created", "detail": f"Document record created (ID: {doc['id'][:8]}...)"})
@@ -132,12 +193,17 @@ async def upload_knowledge_document(file: UploadFile = File(...), project_id: Op
         def run_ingestion():
             try:
                 chunk_count = kb_service.ingest_document(
-                    doc["id"], project_id, filename, content,
-                    on_progress=on_progress
+                    doc["id"], project_id, filename, combined_content,
+                    on_progress=on_progress,
+                    image_count=image_count,
+                    captioned_image_count=captioned_count,
                 )
+                update_data = {"chunkCount": chunk_count, "status": "ready"}
+                if image_count > 0:
+                    update_data["imageCount"] = image_count
+                    update_data["captionedImageCount"] = captioned_count
                 kb_service.update_knowledge_document(
-                    doc["id"], project_id,
-                    {"chunkCount": chunk_count, "status": "ready"}
+                    doc["id"], project_id, update_data
                 )
                 result["doc"]["chunkCount"] = chunk_count
                 result["doc"]["status"] = "ready"
@@ -174,9 +240,10 @@ async def upload_knowledge_document(file: UploadFile = File(...), project_id: Op
                 "document": result["doc"]
             })
         else:
+            img_note = f" ({captioned_count} image captions included)" if captioned_count > 0 else ""
             yield send_sse({
                 "step": "done",
-                "detail": f"'{filename}' is ready for semantic search",
+                "detail": f"'{filename}' is ready for semantic search{img_note}",
                 "document": result["doc"]
             })
     

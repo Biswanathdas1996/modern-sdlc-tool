@@ -310,6 +310,8 @@ export const knowledgeDocumentSchema = z.object({
   chunkCount: z.number(),
   status: z.enum(["processing", "ready", "error"]),
   errorMessage: z.string().nullable().optional(),
+  imageCount: z.number().optional(),
+  captionedImageCount: z.number().optional(),
   createdAt: z.string(),
 });
 
